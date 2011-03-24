@@ -1,0 +1,1 @@
+git add <fichier> enregistre la version du fichier au moment ou le fichier a été ajouté. Il se peut que le fichier soit à la fois staged and modified.
