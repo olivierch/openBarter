@@ -1,5 +1,15 @@
-git add <fichier> enregistre la version du fichier au moment ou le fichier a �t� ajout�. 
-Il se peut que le fichier soit � la fois staged and modified.
+git add <fichier> enregistre la version du fichier au moment ou le fichier a été ajouté.
+Il se peut que le fichier soit à la fois staged and modified.
 
 git add -a -m "explication du commit" 
-	l'étape staged est ignorée.
+	l'étape staged est ignorée pour les fichiers modifiés
+	mais pas pour les fichiers ajoutés
+	
+	l'option -v ajoute le diff àl'explication du commit
+	
+pour supprimer un fichier:
+rm README
+git rm README
+
+si l'on veut indexer un fichier en suppression en le gardant en local
+git rm --cached README
