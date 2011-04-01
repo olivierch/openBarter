@@ -22,12 +22,12 @@ select ob_fcreate_quality('q5');
 select ob_fcreate_quality('q6');
 
 -- owners are created
-SELECT ob_fadd_account('o1','q1',1000); 
-SELECT ob_fadd_account('o1','q2',1000); 
-SELECT ob_fadd_account('o1','q3',1000); 
-SELECT ob_fsub_account('o1','q1',1000); 
-SELECT ob_fsub_account('o1','q2',1000); 
-SELECT ob_fsub_account('o1','q3',500); 
+SELECT ob_fadd_account('o1','olivier>q1',1000); 
+SELECT ob_fadd_account('o1','olivier>q2',1000); 
+SELECT ob_fadd_account('o1','olivier>q3',1000); 
+SELECT ob_fsub_account('o1','olivier>q1',1000); 
+SELECT ob_fsub_account('o1','olivier>q2',1000); 
+SELECT ob_fsub_account('o1','olivier>q3',500); 
 
 -- should be 0
 SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft as errors from ob_fstats();

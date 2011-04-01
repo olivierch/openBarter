@@ -1141,7 +1141,7 @@ DECLARE
 	acc ob_tstock%rowtype;
 	err	int :=0;
 BEGIN
-	SELECT id,qtt INTO _nf,_qtt_quality FROM ob_tquality WHERE name = (user || '>' || _quality);
+	SELECT id,qtt INTO _nf,_qtt_quality FROM ob_tquality WHERE name =  _quality;
 	IF NOT FOUND THEN 
 		err := -30405;
 		RAISE EXCEPTION '[-30405]The quality % does not exist or is not yours',_quality   USING ERRCODE='38000';
@@ -1205,7 +1205,7 @@ BEGIN
 	IF (NOT FOUND) THEN 
 		RAISE EXCEPTION '[-30412] The owner % does not exist',owner;
 	END IF;
-	SELECT id INTO _nf FROM ob_tquality WHERE name=(user || '>' || _quality);
+	SELECT id INTO _nf FROM ob_tquality WHERE name= _quality;
 	IF (NOT FOUND) THEN 
 		RAISE EXCEPTION '[-30413] The quality % does not exist or is not deposited by user',_quality   USING ERRCODE='38000';
 	END IF;
@@ -1374,10 +1374,10 @@ CREATE OR REPLACE FUNCTION ob_fdelete_bid(bid_id int8) RETURNS int AS $$
 DECLARE
 	ret		int;
 BEGIN
-	START TRANSACTION;
 	ret := ob_fdelete_bid_int(bid_id);
-	IF(ret <0) THEN ROLLBACK; 
-	ELSE COMMIT; END IF;
+	IF(ret <0) THEN 
+		RAISE EXCEPTION 'error % ' USING ERRCODE='38000'; 
+	END IF;
 	RETURN 0;
 END;
 $$ LANGUAGE plpgsql;
@@ -1499,29 +1499,21 @@ DECLARE
 	res 		int;
 	own_id		int8;
 BEGIN
-	START TRANSACTION;
 	SELECT d.* INTO draft FROM ob_tdraft d WHERE d.id=draft_id;
 	IF NOT FOUND THEN
-		RAISE INFO '[-30420] the draft % was not found',draft_id;
-		ROLLBACK;
-		RETURN -30420;
+		RAISE EXCEPTION '[-30420] the draft % was not found',draft_id USING ERRCODE='38000';
 	END IF;
 	SELECT id INTO own_id FROM ob_towner WHERE name=owner;
 	IF NOT FOUND THEN
-		RAISE INFO '[-30421] The owner % does not exist',owner;
-		ROLLBACK;
-		RETURN -30421;
+		RAISE EXCEPTION '[-30421] The owner % does not exist',owner USING ERRCODE='38000';
 	END IF;
 	res := ob_fread_status_draft(draft);
 	-- res=0 means it is a draft
 	IF (res <0) THEN
-		ROLLBACK;
-		RETURN res;
+		RAISE EXCEPTION '[%] in ob_fread_status_draft',res USING ERRCODE='38000';
 	END IF;
 	IF((NOT(draft.status = 'D')) OR res!=0 ) THEN 
-		RAISE INFO '[-30422] The draft % has a status %, whith res=%',draft.id,draft.status,res;
-		ROLLBACK;
-		RETURN -30422;
+		RAISE EXCEPTION '[-30422] The draft % has a status %, whith res=%',draft.id,draft.status,res USING ERRCODE='38000';
 	END IF;	
 
 	SELECT bit_and(flags&1) INTO accepted FROM ob_tcommit WHERE did = draft_id AND wid!=own_id;
@@ -1530,21 +1522,22 @@ BEGIN
 	------------- update status of commits ------------	
 	res := ob_fupdate_status_commits(draft_id,own_id,1,3);
 	IF (res < 0 ) THEN -- the owner was not found, draft unmodified
-		ROLLBACK;
-		RETURN res; 
+		RAISE EXCEPTION '[%] in ob_fupdate_status_commits',res USING ERRCODE='38000';
 	END IF;
 	
 	------------- execute ---------------------------
 	--    RAISE INFO 'accepted by others %',accepted;
 	if(accepted = 1) THEN
 		res := ob_fexecute_draft(draft_id);
-		IF (res<0) THEN ROLLBACK;RETURN res; END IF;
+		IF (res<0) THEN 
+			RAISE EXCEPTION '[%] in ob_fexecute_draft',res USING ERRCODE='38000';
+		END IF;
 		-- the draft is now empty, it can be deleted
 		res := ob_fdelete_draft(draft_id);
-		IF (res<0) THEN ROLLBACK;RETURN res; END IF;
+		IF (res<0) THEN 
+			RAISE EXCEPTION '[%] in ob_fdelete_draft',res USING ERRCODE='38000';
+		END IF;
 	END IF;
-
-	COMMIT;
 	RETURN 0;
 END;
 $$ LANGUAGE plpgsql;
@@ -1571,16 +1564,13 @@ DECLARE
 	own_id	int8;
 	res	int;
 BEGIN
-	START TRANSACTION;
-	SELECT id INTO own_id FROM ob_towner WHERE name=owner;
+	SELECT id INTO own_id FROM ob_towner WHERE name = owner;
 	IF NOT FOUND THEN
-		RAISE INFO '[-30421] The owner % does not exist',owner;
-		ROLLBACK;
-		RETURN -30421;
+		RAISE EXCEPTION '[-30421] The owner % does not exist',owner USING ERRCODE='38000';
 	END IF;
 	res := ob_frefuse_draft_int(draft_id,own_id);
-	IF(res <0) THEN ROLLBACK; 
-	ELSE COMMIT;
+	IF( res < 0 ) THEN
+		RAISE EXCEPTION '[%] in ob_frefuse_draft_int',res USING ERRCODE='38000';
 	END IF;
 	RETURN res;
 END;
@@ -1860,25 +1850,19 @@ DECLARE
 	cnt 		int4;
 	stock 	ob_tstock%rowtype;
 BEGIN
-	START TRANSACTION;
 	SELECT n.* INTO noeud FROM ob_tnoeud n WHERE n.id = bid_id;
 	IF NOT FOUND THEN
-		RAISE INFO '[-30403] the bid % was not found',bid_id;
-		ROLLBACK;
-		RETURN -30403;
+		RAISE EXCEPTION '[-30403] the bid % was not found',bid_id USING ERRCODE='38000';
 	END IF;
 	-- controls
 	SELECT s.* INTO stock FROM ob_tstock s WHERE  s.id = noeud.sid ;
 	IF NOT FOUND THEN
-		RAISE INFO '[-30404] the stock % was not found',noeud.sid,user;
-		ROLLBACK;
-		RETURN -30404;
+		RAISE EXCEPTION '[-30404] the stock % was not found',noeud.sid USING ERRCODE='38000';
 	END IF;
 	
 	cnt := ob_finsert_bid_int(noeud.sid,_qttrequired,_qttprovided,_qualityrequired);
 	if cnt <0 THEN 
-		ROLLBACK;
-	ELSE COMMIT;
+		RAISE EXCEPTION '[%] in ob_finsert_bid_int',cnt USING ERRCODE='38000';
 	END IF;
 	RETURN cnt;
 END; 
@@ -1915,25 +1899,21 @@ DECLARE
 	stock ob_tstock%rowtype;
 BEGIN
 	-- controls
-	START TRANSACTION;
 	SELECT s.* INTO stock FROM ob_tstock s INNER JOIN ob_towner w ON (w.id=s.own ) INNER JOIN ob_tquality q ON ( s.nf=q.id )
 		WHERE s.type='A' and (s.qtt >=_qttprovided) AND q.name=_qualityprovided and w.name=_owner;
 	IF NOT FOUND THEN
-		RAISE INFO '[-30404] the account was not found or not big enough';
-		ROLLBACK;
-		RETURN -30404;
+		RAISE EXCEPTION '[-30404] the account was not found or not big enough' USING ERRCODE='38000';
 	END IF;
 	
 	-- stock with qtt=0 does not exist.
 	mvt := ob_finsert_das(stock,_qttprovided,'S');
 	-- RAISE INFO 'la % ',stock.id;
 	IF(mvt.id <0) THEN 
-		ROLLBACK;
-		RETURN mvt.id; 
+		RAISE EXCEPTION '[%] in ob_finsert_das',mvt.id USING ERRCODE='38000';
 	END IF;
 	cnt := ob_finsert_bid_int(mvt.dst,_qttprovided,_qttrequired,_qualityrequired);
-	if cnt <0 THEN ROLLBACK;
-	ELSE COMMIT;
+	if cnt <0 THEN 
+		RAISE EXCEPTION '[%] in ob_finsert_bid_int',cnt USING ERRCODE='38000';
 	END IF;
 	RETURN cnt;
 END; 
@@ -2063,23 +2043,18 @@ BEGIN
 		select nr,nf into _nr,_nf from ob_tomega group by nr,nf order by max(
 			CASE WHEN updated IS NULL THEN created ELSE updated END) asc limit 1;
 		IF NOT FOUND THEN
-			RAISE NOTICE '[-30401] no candidate ob_fread_omega(nr,nf)';
-			ROLLBACK;
-			RETURN -30401;
+			RAISE EXCEPTION '[-30401] no candidate ob_fread_omega(nr,nf)' USING ERRCODE='38000';
 		END IF;
 	END IF;
 	
 	err = ob_fread_omega(_nr,_nf);
 	IF(err<0) THEN 
 		IF (err = -30144) THEN
-			COMMIT;
+			RAISE LOG '[%] in ob_fread_omega',err;
 		ELSE
-			ROLLBACK; 
+			RAISE EXCEPTION '[%] in ob_fread_omega',err USING ERRCODE='38000'; 
 		END IF;
-		RETURN err; 
-	END IF;
-	
-	COMMIT;
+	END IF;	
 	RETURN err;
 END; 
 $$ LANGUAGE plpgsql;
