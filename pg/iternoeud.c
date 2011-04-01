@@ -205,7 +205,7 @@ fin:
 }
 /****************************************************************************
  * performs:
- * SELECT NOX.*,S.* FROM ob_tnoeud NOX INNER JOIN ob_stock S ON (NOX.sid =S.id) WHERE NOX.nf=Y_nR
+ * SELECT NOX.*,S.* FROM ob_tnoeud NOX INNER JOIN ob_tstock S ON (NOX.sid =S.id) WHERE NOX.nf=Y_nR
 	and returns NO.*,S.* into offreX and Xoid
 
  *
@@ -228,7 +228,7 @@ fin:
 ******************************************************************************/
 
 static int _ob_iternoeud_PrepareIterNoeuds2(void) { // called by _SPI_init->_ob_iternoeud_Init()
-	char cmde[] = "SELECT NOX.*,S.* FROM ob_tnoeud NOX INNER JOIN ob_stock S ON (NOX.sid =S.id) WHERE NOX.nf=$2 AND S.qtt!=0";
+	char cmde[] = "SELECT NOX.*,S.* FROM ob_tnoeud NOX INNER JOIN ob_tstock S ON (NOX.sid =S.id) WHERE NOX.nf=$2 AND S.qtt!=0";
 	Oid oids[2];
 	ob_tGlob *ob = &openbarter_g;
 	const char s_Yid[] = "id";

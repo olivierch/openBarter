@@ -16,7 +16,7 @@ select setval('ob_tdraft_id_seq',1);
 --------------------------------------------------------
 -- TRIGGERS
 --------------------------------------------------------
-CREATE FUNCTION ob_ftime_created() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION ob_ftime_created() RETURNS trigger AS $$
 BEGIN
 	NEW.created := statement_timestamp();
 	RETURN NEW;
@@ -26,7 +26,7 @@ $$ LANGUAGE plpgsql;
 -- ob_ftime_updated 
 --	trigger before insert on ob_tquality, ob_towner, ob_tomega, ob_tstock
 --------------------------------------------------------
-CREATE FUNCTION ob_ftime_updated() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION ob_ftime_updated() RETURNS trigger AS $$
 BEGIN
 	IF (TG_OP = 'INSERT') THEN
 		NEW.created := statement_timestamp();
@@ -39,7 +39,7 @@ $$ LANGUAGE plpgsql;
 --------------------------------------------------------
 -- ob_ins_version
 --------------------------------------------------------
-CREATE FUNCTION ob_ins_version() RETURNS trigger AS $$
+CREATE OR REPLACE FUNCTION ob_ins_version() RETURNS trigger AS $$
 BEGIN
 	SELECT last_value INTO NEW.version from ob_tdraft_id_seq;
 	RETURN NEW;
@@ -384,7 +384,7 @@ ob_fstats
 	ob_fread_status_draft
 
  the name of a depositary is a user name.
-the role rdepository has read access on ob_tmvt,ob_tstock
+the role rdepositary has read access on ob_tmvt,ob_tstock
 and can execute ob_fadd_account
 
 error codes are 'OBxxxx' 
@@ -426,6 +426,7 @@ error codes are 'OBxxxx'
 -30435	Cannot delete the draft
 -30436	Cannot delete the draft
 -30437	StockD % for the draft % not found
+-30438  Internal Error
 
 -30100 to -30299 internal error
 	-30144 loopOnOffer
@@ -435,7 +436,7 @@ error codes are 'OBxxxx'
 */
 -------------------------------------------------------------------------------------------------------------------
 create or replace function ob_getdraft_get(int8,double precision,int8,int8) returns setof ob_tldraft
-	as '$libdir/openBarter/pg','ob_getdraft_get' language C strict;
+	as '$libdir/openbarter','ob_getdraft_get' language C strict;
 /*
 create or replace function ob_getdraft_get(int8,double precision,int8,int8) returns setof ob_tldraft
 	as '$libdir/openbarter','ob_appel_from_master' language C strict;
@@ -447,7 +448,7 @@ create or replace function ob_getdraft_get(int8,double precision,int8,int8) retu
 /* usage: 
 	ob_fcreate_quality(_owner text,_name text)
 		the market should call ob_fcreate_quality('owner>qualityName')
-		a depository should call ob_fcreate_quality('qualityName')
+		a depositary should call ob_fcreate_quality('qualityName')
 	
 	returns 0 or 
 		[-30432] The quality already exists
@@ -458,22 +459,19 @@ DECLARE
 	_q 	ob_tquality%rowtype;
 	_n	text;
 BEGIN
-	BEGIN;
 	_n := user || '>' || _name;
-	SELECT q.* INTO _q FROM ob_tquality s WHERE q.name=_n and q.own=user LIMIT 1;
+	SELECT q.* INTO _q FROM ob_tquality q WHERE q.name=_n and q.own=user LIMIT 1;
 	IF NOT FOUND THEN
 		INSERT INTO ob_tquality(name,own,qtt) VALUES (_n,user,0) RETURNING * INTO _q;
 	ELSE
 		RAISE NOTICE '[-30432] The quality % already exists',_n;
-		ROLLBACK;
 		RETURN -30432;
 	END IF;
-	COMMIT;
 	RETURN 0;
 END;
 $$ LANGUAGE plpgsql;
 
-GRANT EXECUTE ON FUNCTION ob_fcreate_quality(_name text) TO market,depository;
+GRANT EXECUTE ON FUNCTION ob_fcreate_quality(_name text) TO market,depositary;
 ----------------------------------------------------------------------------------------------------------------
 -- ob_fupdate_status_commits
 ----------------------------------------------------------------------------------------------------------------
@@ -601,9 +599,10 @@ CREATE TYPE ob_tret_stats AS (
 	
 	-- should be all 0
 	
-	unbananced_qualities int8,
-	corrupted_draft	int8,
+	unbananced_qualities 	int8,
+	corrupted_draft		int8,
 	corrupted_stock_s	int8,
+	corrupted_stock_a	int8,
 	
 	created timestamp
 );
@@ -617,7 +616,6 @@ DECLARE
 	_draft ob_tdraft%rowtype;
 	res int;
 BEGIN
-	BEGIN;
 	ret.created := statement_timestamp();
 	
 	-- mean time of draft
@@ -642,11 +640,10 @@ BEGIN
 
 	-- number of unbalanced qualities 
 	-- for a given quality:
-	-- 	sum(stock_S.qtt)+sum(stock_D.qtt) = quality.qtt 
-	-- 	sum(stock_A.qtt) = -quality.qtt
+	-- 	sum(stock_A.qtt)+sum(stock_S.qtt)+sum(stock_D.qtt) = quality.qtt 
 	SELECT count(*) INTO cnt FROM (
 		SELECT sum(abs(s.qtt)) FROM ob_tstock s,ob_tquality q where s.nf=q.id
-		GROUP BY s.nf,q.qtt having sum(s.qtt)!=0 or (sum(abs(s.qtt))!= 2*q.qtt)
+		GROUP BY s.nf,q.qtt having (sum(abs(s.qtt))!= q.qtt)
 	) as q;
 	ret.unbananced_qualities := cnt;
 	
@@ -673,12 +670,16 @@ BEGIN
 	SELECT count(s.id) INTO err FROM ob_tstock s LEFT JOIN ob_tnoeud n ON n.sid=s.id
 	WHERE s.type='S' AND n.id is NULL;
 	ret.corrupted_stock_s := err;
-	COMMIT;
+	-- Stock_A not unique
+	SELECT count(*) INTO err FROM(
+		SELECT count(s.id) FROM ob_tstock s WHERE s.type='A'
+		GROUP BY s.nf,s.own HAVING count(s.id)>1) as c;
+	ret.corrupted_stock_a := err;
 	RETURN ret;
 END; 
 $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION ob_fstats() TO market;
-
+-- TODO
 ----------------------------------------------------------------------------------------------------------------
 -- ob_fexecute_commit
 ----------------------------------------------------------------------------------------------------------------
@@ -777,6 +778,8 @@ $$ LANGUAGE plpgsql;
 CREATE OR REPLACE FUNCTION ob_finsert_omegap(_nr int8,_nf int8) RETURNS int AS $$
 DECLARE
 	t		int8;
+	namef		text;
+	namer		text;
 
 BEGIN
 	SELECT o.nf INTO t FROM ob_tomega o WHERE o.nr = _nr and o.nf = _nf;
@@ -806,6 +809,7 @@ DECLARE
 	namer	text;
 	t		int8;
 	_flags		int4 :=2;
+	ret		int;
 
 BEGIN
 	SELECT nf,qtt INTO _nf,_flux_src FROM ob_tstock WHERE id=sid_src;
@@ -818,7 +822,7 @@ BEGIN
 		RAISE NOTICE '[-30409] stock % not found',sid_dst;
 		RETURN -30409;
 	END IF;
-	ob_finsert_omegap(_nr,_nf);
+	ret := ob_finsert_omegap(_nr,_nf);
 	INSERT INTO ob_tlomega(nr,nf,qttr,qttf,flags) VALUES (_nr,_nf,_flux_src,_flux_dst,_flags);
 	RETURN 0;
 END; 
@@ -863,7 +867,7 @@ BEGIN
 	END LOOP;
 	IF( cnt <=1 ) THEN
 		RAISE INFO '[-30428] The draft % has less than two commits',draft_id;
-		RETURN 
+		RETURN -30428; 
 	END IF;	
 	err := ob_finsert_omega_int(_commot.sid_dst,first_commit.sid_dst);
 	if(err <0) THEN
@@ -904,6 +908,7 @@ DECLARE
 	namef	text;
 	namer	text;
 	_flags   	int4;
+	ret		int;
 
 BEGIN
 	IF (sid_src is NULL) THEN _nf = _dnf;
@@ -923,7 +928,7 @@ BEGIN
 		END IF;
 	END IF;
 
-	ob_finsert_omegap(_nr,_nf); -- insert (_nr,_nf) record in ob_tomega
+	ret := ob_finsert_omegap(_nr,_nf); -- insert (_nr,_nf) record in ob_tomega
 	
 	IF(_nr=_dnr AND _nf=_dnf) THEN
 		_flags := 1;
@@ -964,7 +969,7 @@ CREATE OR REPLACE VIEW ob_vowned AS SELECT
     	FROM ob_tstock s INNER JOIN ob_towner o ON (s.own=o.id) INNER JOIN ob_tquality q on (s.nf=q.id) 
 	GROUP BY s.own,s.nf,q.name,o.name,q.own ORDER BY q.own ASC,q.name ASC,o.name ASC;
 	
-GRANT SELECT ON TABLE ob_vowned TO market,depository;
+GRANT SELECT ON TABLE ob_vowned TO market,depositary;
 ----------------------------------------------------------------------------------------------------------------
 -- ob_vbalance 
 ----------------------------------------------------------------------------------------------------------------
@@ -995,7 +1000,7 @@ CREATE OR REPLACE VIEW ob_vbalance AS SELECT
     	FROM ob_tstock s INNER JOIN ob_tquality q on (s.nf=q.id)
 	GROUP BY q.name,q.own ORDER BY q.own ASC, q.name ASC;
 	
-GRANT SELECT ON TABLE ob_vbalance TO depository,market;
+GRANT SELECT ON TABLE ob_vbalance TO depositary,market;
 
 ----------------------------------------------------------------------------------------------------------------
 -- ob_vdraft
@@ -1029,10 +1034,10 @@ CREATE OR REPLACE VIEW ob_vdraft AS
 			FROM ob_tcommit c GROUP BY c.wid,c.did 
 				) AS co 
 		INNER JOIN ob_tdraft dr ON co.did = dr.id
-		INNER JOIN ob_towner w ON w.id = s.own
+		INNER JOIN ob_towner w ON w.id = co.wid
 		ORDER BY dr.id ASC;
 	
-GRANT SELECT ON TABLE ob_vdraft TO depository,market;
+GRANT SELECT ON TABLE ob_vdraft TO depositary,market;
 ----------------------------------------------------------------------------------------------------------------
 -- ob_vbid
 ----------------------------------------------------------------------------------------------------------------
@@ -1074,7 +1079,7 @@ CREATE OR REPLACE VIEW ob_vbid AS
 	INNER JOIN ob_towner w on s.own = w.id
 	ORDER BY n.created DESC;
 	
-GRANT SELECT ON TABLE ob_vbid TO depository,market;
+GRANT SELECT ON TABLE ob_vbid TO depositary,market;
 ----------------------------------------------------------------------------------------------------------------
 -- ob_vmvt R
 ----------------------------------------------------------------------------------------------------------------
@@ -1097,16 +1102,15 @@ CREATE OR REPLACE VIEW ob_vmvt AS
 		m.did as did,
 		w_src.name as provider,
 		q.name as nat,
-		m.qtt END as qtt,
+		m.qtt as qtt,
 		w_dst.name as receiver,
 		m.created as created
 	FROM ob_tmvt m
 	INNER JOIN ob_towner w_src ON (m.own_src=w_src.id)
 	INNER JOIN ob_towner w_dst ON (m.own_dst=w_dst.id) 
-	INNER JOIN ob_tquality q ON (m.nat = q.id) 
-	ORDER BY w.name ASC, m.created ASC;
+	INNER JOIN ob_tquality q ON (m.nat = q.id);
 	
-GRANT SELECT ON TABLE ob_vmvt() TO depository,market;
+GRANT SELECT ON TABLE ob_vmvt TO depositary,market;
 
 ----------------------------------------------------------------------------------------------------------------
 -- ob_fadd_account 
@@ -1135,48 +1139,41 @@ DECLARE
 	_new_qtt_quality int8;
 	mvt ob_tmvt%rowtype;
 	acc ob_tstock%rowtype;
+	err	int :=0;
 BEGIN
-	BEGIN;
-	SELECT id,qtt INTO _nf,_qtt_quality FROM ob_tquality WHERE name = _quality and own = user;
+	SELECT id,qtt INTO _nf,_qtt_quality FROM ob_tquality WHERE name = (user || '>' || _quality);
 	IF NOT FOUND THEN 
-		RAISE INFO '[-30405]The quality % does not exist or is not yours',_quality;
-		ROLLBACK;
-		RETURN -30405;
+		err := -30405;
+		RAISE EXCEPTION '[-30405]The quality % does not exist or is not yours',_quality   USING ERRCODE='38000';
 	END IF;
 	IF (_qtt <= 0) THEN
-		RAISE INFO '[-30414] the quantity cannot be negative or null';
-		ROLLBACK;
-		RETURN -30414;
+		err := -30414;
+		RAISE EXCEPTION '[-30414] the quantity cannot be negative or null'   USING ERRCODE='38000';
 	END IF;
-	SELECT id INTO _wid FROM ob_towner WHERE name= _owner;
-	IF NOT FOUND THEN 
+	BEGIN
 		INSERT INTO ob_towner (name) VALUES ( _owner) RETURNING id INTO _wid;
-	END IF;
+	EXCEPTION WHEN unique_violation THEN 
+	END;
+	SELECT id INTO _wid from ob_towner where name=_owner;
 
-	UPDATE ob_tquality SET qtt = qtt + _qtt where id=acc.nf RETURNING qtt INTO _new_qtt_quality;
-	IF (_qtt_quality > _new_qtt_quality ) THEN 
-		RAISE INFO '[-30433] Quality % owerflows',_quality;
-		ROLLBACK;
-		RETURN -30433;
+	UPDATE ob_tquality SET qtt = qtt + _qtt where id= _nf RETURNING qtt INTO _new_qtt_quality;
+	IF (_qtt_quality >= _new_qtt_quality ) THEN 
+		err := -30433;
+		RAISE EXCEPTION '[-30433] Quality % owerflows',_quality   USING ERRCODE='38000';
 	END IF;
 	
 	-- foreign keys of quality and owner protects form insertion of unknown keys
-	SELECT s.id INTO acc FROM ob_tstock s WHERE s.own=_wid AND s.nf=_nf AND s.type='A' LIMIT 1;
+	UPDATE ob_tstock SET qtt = qtt+_qtt  WHERE own=_wid AND nf=_nf AND type='A' RETURNING * INTO acc;
 	IF NOT FOUND THEN
 		INSERT INTO ob_tstock (own,qtt,nf,type) VALUES (_wid,_qtt,_nf,'A') RETURNING * INTO acc;
-	ELSE 
-		UPDATE ob_tstock SET qtt = qtt+_qtt WHERE id = acc.id RETURNING * INTO acc;
 	END IF;
-
 	INSERT INTO ob_tmvt (own_src,own_dst,qtt,nat) 
 		VALUES (1,acc.own, _qtt,acc.nf) RETURNING * INTO mvt;
-	
-	COMMIT;
 	RETURN 0;
 END; 
 $$ LANGUAGE plpgsql;
 
-GRANT EXECUTE ON FUNCTION ob_fadd_account(_owner text,_quality text,_qtt int8) TO market,depository;
+GRANT EXECUTE ON FUNCTION ob_fadd_account(_owner text,_quality text,_qtt int8) TO market,depositary;
 ----------------------------------------------------------------------------------------------------------------
 -- ob_fsub_account R
 -- PUBLIC
@@ -1204,46 +1201,32 @@ DECLARE
 	mar ob_tstock%rowtype;
 	mvt ob_tmvt%rowtype;
 BEGIN
-	BEGIN;
-	
 	SELECT id INTO _wid FROM ob_towner WHERE name=_owner;
 	IF (NOT FOUND) THEN 
-		RAISE INFO '[-30412] The owner % does not exist',owner;
-		ROLLBACK;
-		RETURN -30412;
+		RAISE EXCEPTION '[-30412] The owner % does not exist',owner;
 	END IF;
-	SELECT id INTO _nf FROM ob_tquality WHERE name=_quality and own = user;
+	SELECT id INTO _nf FROM ob_tquality WHERE name=(user || '>' || _quality);
 	IF (NOT FOUND) THEN 
-		RAISE INFO '[-30413] The quality % does not exist or is not deposited by user',quality;
-		ROLLBACK;
-		RETURN -30413;
+		RAISE EXCEPTION '[-30413] The quality % does not exist or is not deposited by user',_quality   USING ERRCODE='38000';
 	END IF;
 	IF (_qtt <= 0) THEN
-		RAISE INFO '[-30414] the quantity cannot be negative or null';
-		ROLLBACK;
-		RETURN -30414;
+		RAISE EXCEPTION '[-30414] the quantity cannot be negative or null'  USING ERRCODE='38000';
 	END IF;
 
 	-- foreign keys of quality and owner protects form insertion of unknown keys
 	SELECT s.* INTO acc FROM ob_tstock s WHERE s.own=_wid AND s.nf=_nf AND s.type='A' LIMIT 1;
 	IF NOT FOUND THEN
-		RAISE INFO '[-30404] the account is empty';
-		ROLLBACK;
-		RETURN -30404;
+		RAISE EXCEPTION '[-30404] the account is empty'  USING ERRCODE='38000';
 	END IF;
 
 	UPDATE ob_tstock SET qtt = qtt-_qtt WHERE id = acc.id RETURNING * INTO acc;
 	IF(acc.qtt < 0) THEN
-		RAISE INFO '[-30404] the account is not big enough';
-		ROLLBACK;
-		RETURN -30404;	
+		RAISE EXCEPTION '[-30404] the account is not big enough'  USING ERRCODE='38000';	
 	END IF;	
 		
 	UPDATE ob_tquality SET qtt = qtt - _qtt where id=acc.nf RETURNING qtt INTO _qtt_quality;
 	IF (_qtt_quality < 0) THEN
-		RAISE INFO '[-30434] the quality % underflows ',_quality;
-		ROLLBACK;
-		RETURN -30434;
+		RAISE EXCEPTION '[-30434] the quality % underflows ',_quality  USING ERRCODE='38000';
 	END IF;	
 	
 	INSERT INTO ob_tmvt (own_src,own_dst,qtt,nat) 
@@ -1252,12 +1235,11 @@ BEGIN
 	IF(acc.qtt = 0) THEN 
 		DELETE FROM ob_tstock WHERE id=acc.id;
 	END IF;
-	
-	COMMIT;
+
 	RETURN 0;
 END;
 $$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION ob_fsub_account(_owner text,_quality text,_qtt int8) TO market,depository;
+GRANT EXECUTE ON FUNCTION ob_fsub_account(_owner text,_quality text,_qtt int8) TO market,depositary;
 ----------------------------------------------------------------------------------------------------------------
 -- ob_fremove_das
 ----------------------------------------------------------------------------------------------------------------
@@ -1392,7 +1374,7 @@ CREATE OR REPLACE FUNCTION ob_fdelete_bid(bid_id int8) RETURNS int AS $$
 DECLARE
 	ret		int;
 BEGIN
-	BEGIN;
+	START TRANSACTION;
 	ret := ob_fdelete_bid_int(bid_id);
 	IF(ret <0) THEN ROLLBACK; 
 	ELSE COMMIT; END IF;
@@ -1517,7 +1499,7 @@ DECLARE
 	res 		int;
 	own_id		int8;
 BEGIN
-	BEGIN;
+	START TRANSACTION;
 	SELECT d.* INTO draft FROM ob_tdraft d WHERE d.id=draft_id;
 	IF NOT FOUND THEN
 		RAISE INFO '[-30420] the draft % was not found',draft_id;
@@ -1589,7 +1571,7 @@ DECLARE
 	own_id	int8;
 	res	int;
 BEGIN
-	BEGIN;
+	START TRANSACTION;
 	SELECT id INTO own_id FROM ob_towner WHERE name=owner;
 	IF NOT FOUND THEN
 		RAISE INFO '[-30421] The owner % does not exist',owner;
@@ -1724,7 +1706,7 @@ BEGIN
 	END IF;
 	IF(_qttprovided <= 0 ) THEN
 		RAISE NOTICE '[-30415] _qttrprovided % should be > 0',_qttprovided;
-		RETURN --30415;
+		RETURN -30415;
 	END IF;
 	_omega := CAST(_qttprovided as double precision)/CAST(_qttrequired as double precision);
 	IF(_omega <= 0.) THEN
@@ -1878,7 +1860,7 @@ DECLARE
 	cnt 		int4;
 	stock 	ob_tstock%rowtype;
 BEGIN
-	BEGIN;
+	START TRANSACTION;
 	SELECT n.* INTO noeud FROM ob_tnoeud n WHERE n.id = bid_id;
 	IF NOT FOUND THEN
 		RAISE INFO '[-30403] the bid % was not found',bid_id;
@@ -1933,7 +1915,7 @@ DECLARE
 	stock ob_tstock%rowtype;
 BEGIN
 	-- controls
-	BEGIN;
+	START TRANSACTION;
 	SELECT s.* INTO stock FROM ob_tstock s INNER JOIN ob_towner w ON (w.id=s.own ) INNER JOIN ob_tquality q ON ( s.nf=q.id )
 		WHERE s.type='A' and (s.qtt >=_qttprovided) AND q.name=_qualityprovided and w.name=_owner;
 	IF NOT FOUND THEN
@@ -2066,7 +2048,7 @@ DECLARE
 	namer	text;
 	t	int8;
 BEGIN
-	BEGIN;
+	START TRANSACTION;
 	-- a couple (nr,nf) such as ob_tomega[nr,nf] does not exist,
 	select pq.nr,pq.nf into _nr,_nf from (
 		select q1.id as nr,q2.id as nf 
@@ -2103,7 +2085,7 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- privileges of depositary are granted to market
--- GRANT ROLE depository TO market;
+-- GRANT ROLE depositary TO market;
 
 
 

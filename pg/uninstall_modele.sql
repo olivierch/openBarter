@@ -42,7 +42,7 @@ DROP FUNCTION IF EXISTS ob_fcurrval(text) CASCADE;
 DROP FUNCTION IF EXISTS ob_fcreate_quality(text) CASCADE;
 
 DROP TABLE IF EXISTS ob_tquality,ob_towner,ob_tstock,ob_tnoeud,ob_tdraft,
-	ob_tcommit,ob_tldraft,ob_tomega,ob_tlomega,ob_tmvt CASCADE;
+	ob_tcommit,ob_tldraft,ob_tomega,ob_tlomega,ob_tmvt,ob_tconnectdesc CASCADE;
 DROP TABLE IF EXISTS ob_vowned,ob_vbalance,ob_vmvt,ob_vdraft,ob_vbid CASCADE;
 
 
