@@ -1,0 +1,27 @@
+modifications des callbacks
+point_get_mar
+point_get_mav
+
+parcours_arriere
+la gestion des layer est modifiée
+quand on atteint un noeud déjà inséré, son layer n'est pas modifié, mais le point_trait est inséré
+ceci évite de reparcourir des chemins déjà faits.
+
+parcours_avant
+la gestion des layer est modifiée
+
+les fonctions inutiles de dbe.c sont supprimées
+
+dans iternoeud.c, ajout de ob_iternoeud_Next2,ob_iternoeud_GetPortal2 et ob_iternoeud_put_stocktemp3
+
+dans chemin, parcours_arriere intégration
+
+dans modele.sql, 
+
+
+gestion de ob_tdraft_id_seq:
+	quand un stock est mis à jour , stock.version := ob_tdraft_id_seq
+	quand un sous graphe est constitué, versionsg := MAX(stock[.].version)
+	un projet de draft est outdated quand pour l'un des commits, versionsg < commit.stock.version
+	
+	au moment

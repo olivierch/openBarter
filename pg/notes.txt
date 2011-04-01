@@ -1,0 +1,52 @@
+VALIDATION:
+\i getdrafttest2.sql
+/* test with SELECT ob_getdraft_get(3,2.1,3,2);  ob_getdraft(stockId,omega,nF,nR)
+			   ->q2 S3 q3-> 
+expected 2 draft à 3 et à 4 */
+
+******************************************************************************
+ret int = ob_fadd_account(owner text,quality text,_qtt int8)
+nb_draft int8 = ob_finsert_bid(_owner text,_qualityprovided text,qttprovided int8,_qttrequired int8,_qualityrequired text)
+	ret int = ob_fomega_draft(draft_id int8)
+	mvt ob_tmvt = ob_finsert_das(stock_src ob_tstock,_qtt bigint,_type char)
+		le delete est suprimé!!
+	nb_draft int8 = ob_finsert_bid_int(_sid int8,_qttrequired,_qualityrequired text)
+
+
+\i getdrafttest5.sql 	2 drafts
+******************************************************************************
+ob_fbalance()
+\i getdrafttest6.sql	1 loop 1 draft
+
+*******************************************************************************
+\i getdrafttest5.sql 	2 drafts
+lancer à la main
+select * from  ob_faccount_owned(0);
+	liste les positions pour le user
+puis 
+select * from ob_fmvt_of_own('market',0);
+	liste les mouvement pour l'owner
+puis 
+select * from ob_fdraft_of_own('',0);
+select * from ob_fdraft_of_own('o3',0);
+puis 
+select * from ob_fstats();
+pour voir les drafts, faire
+select c.did,c.bid,s.qtt,w.name,c.flags,q.name from ob_tcommit c inner join ob_tstock s on (c.sid_dst=s.id) inner join ob_towner w on (s.own=w.id) inner join ob_tquality q on (s.nf=q.id) order by c.did,c.id;
+
+*******************************************************************************
+\i getdrafttest4.sql 	1 drafts accepted
+select ob_fsub_account('o1','olivier>q1',5);
+******************************************************************************
+\i getdrafttest7.sql	1 draft - with only one partner
+******************************************************************************
+\i getdrafttest8.sql	1 draft refused
+******************************************************************************
+\i getdrafttest9.sql	1 draft - with ob_finsert_sbid
+only one bid is deleted after execution, because stocks are not empty
+******************************************************************************
+select ob_fbatch_omega()
+
+
+
+
