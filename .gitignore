@@ -1,4 +1,5 @@
 *.[oa]
 *~
 *.so
+*.dblite
 pg/.deps/
