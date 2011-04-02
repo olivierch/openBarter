@@ -45,7 +45,17 @@ BEGIN
 	RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
-
+--------------------------------------------------------
+-- ob_fcurrval_tdraft
+--------------------------------------------------------
+CREATE OR REPLACE FUNCTION ob_fcurrval_tdraft() RETURNS int8 AS $$
+DECLARE
+	res	int8;
+BEGIN
+	SELECT last_value INTO res from ob_tdraft_id_seq;
+	RETURN res;
+END;
+$$ LANGUAGE plpgsql;
 ---------------------------------------------------------------
 -- OB_TQUALITY
 ---------------------------------------------------------------
@@ -1705,11 +1715,11 @@ BEGIN
 	END IF;
 	--
 
-	version_cur := ob_fcurrval('ob_tdraft_id_seq');
+	version_cur := ob_fcurrval_tdraft();
 
 	cnt := 0;err := 0; first_commit :=0; first_draft := 0;
 	time_begin := clock_timestamp(); err := 0;
-
+	RAISE INFO 'ob_getdraft_get(%,%,%,%)',pivot.id,_omega,pivot.nf,_nr;
 	FOR r IN SELECT * FROM ob_getdraft_get(pivot.id,_omega,pivot.nf,_nr) LOOP
 		-- RAISE INFO 'err %',r.ret_algo;	
 		err := r.ret_algo;

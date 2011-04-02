@@ -45,10 +45,11 @@ parcours_arriere
 	return 0 or an error
 
 *****************************************************************************/
-int ob_chemin_parcours_arriere(envt,txn,nblayer)
+int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 	DB_ENV *envt;
 	DB_TXN *txn;
 	int *nblayer;
+	ob_tStock *stockPivot;
 {
 	// ob_tPrivate *priv = env->app_private;
 	// ob_tPrivateTemp *privt = priv->envt->app_private;
@@ -110,11 +111,12 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer)
 
 	// the stock of the pivot is inserted
 	if(privt->deposOffre) {
-		stock.sid = pivot->stockId;
+		//stock.sid = pivot->stockId;
+		memcpy(&stock,stockPivot,sizeof(ob_tStock));
 	} else {
 		// the stock of the pivot is created temporarily
 		memset(&stock,0,sizeof(ob_tStock));
-		stock.sid =0;
+		stock.sid = 0;
 		stock.nF = pivot->nF;
 		// stock.own = stock.qtt = stock.sid = stock.version = 0
 	}
@@ -173,6 +175,7 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer)
 					// elog(INFO,"offreX.id = %lli was not found",Xoid);
 					layerX_vide = false;
 					// the stock is inserted into privt->stocktemps[sid]
+
 					ret = ob_iternoeud_put_stocktemp3(envt,&stock);
 					if(ret) {obMTRACE(ret);goto fin;}
 
@@ -689,69 +692,6 @@ for an omega calulation:
 		this array must be freed when nbAccord!=0
 *******************************************************************************/
 
-
-/***************************************************************************************
-* called by ob_getdraft_getcommit_init2
-ctx is NULL except ctx->pivot filled by ob_getdraft_getcommit_init2
-***************************************************************************************/
-int ob_chemin_get_draft_init(ob_getdraft_ctx *ctx) {
-
-	ob_tNoeud	*pivot;
-	ob_tStock 	stock;
-	ob_tPrivateTemp *privt;
-	int ret;
-
-	if(ctx->envt != 0) {
-		ob_dbe_closeEnvTemp(ctx->envt);
-		ctx->envt = NULL; 
-	}
-
-	ret = ob_dbe_openEnvTemp1(&ctx->envt);
-	if(ret) {
-		elog(INFO,"could not open EnvTemp1");
-		return ret;
-	}
-
-	privt = ctx->envt->app_private;
-
-	privt->cflags = 0;
-	pivot = &ctx->pivot;
-	privt->pivot 	= pivot;
-	if(pivot->stockId == 0) { 
-		privt->cflags |= ob_flux_CLastIgnore;
-		privt->deposOffre = false;
-	} else  {
-		privt->cflags &= ~ob_flux_CLastIgnore;
-		privt->deposOffre = true;
-
-		stock.sid = pivot->stockId;
-		ret = ob_iternoeud_getStock(&stock);
-		if(ret) {
-			if(ret == DB_NOTFOUND) {
-				elog(INFO,"stockId not found");
-			} else
-				elog(NOTICE,"error %i in ob_iternoeud_getStock",ret);
-			goto err;
-		}
-		pivot->own = stock.own;
-	}
-
-	//elog(INFO,"pivotx stockId %016llx nF %llx nR %llx omega %f own %llx oid %llx",pivot->stockId,pivot->nF,pivot->nR,pivot->omega,pivot->own,pivot->oid);
-
-	ret = ob_chemin_parcours_arriere(ctx->envt,NULL,&ctx->nblayer);
-	if (ret) {
-		elog(INFO,"Error %i in _parcours_arriere",ret);
-		goto err;
-	}
-	elog(INFO,"parcours_arriere %i layer",ctx->nblayer);
-	if (ctx->nblayer < 1) goto err; 
-	ctx->i_graph = -1;
-	return 0;
-err:
-	ob_dbe_closeEnvTemp(ctx->envt);
-	ctx->envt = NULL; 
-	return ret;	
-}
 /***************************************************************************************
 * called by ob_getdraft_get_commit and then by ob_getdraft_getcommit_next
 ***************************************************************************************/

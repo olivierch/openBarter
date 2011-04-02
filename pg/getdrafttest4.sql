@@ -29,15 +29,22 @@ select ob_fadd_account('o3','olivier>q3',1000);
 select ob_finsert_bid('o1','olivier>q1',100,50,'olivier>q3');
 select ob_finsert_bid('o2','olivier>q2',100,50,'olivier>q1');
 select ob_finsert_bid('o3','olivier>q3',100,50,'olivier>q2');
+-- executes ob_getdraft_get(6,2,3,2)
 
-select * from ob_fbalance(); /* corrupted account olivier expected empty */
+-- should be 0
+SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft as errors from ob_fstats();
+/*
 select ob_faccept_draft(100,'o1');
 select ob_faccept_draft(100,'o2');
 select ob_faccept_draft(100,'o3');
-select * from ob_fbalance(); 
 
-select ob_fsub_account('o1','olivier>q1',5);
+-- should be 0
+SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft as errors from ob_fstats();
 
+select * from ob_vowned;
+select * from ob_vbalance;
+select * from ob_vmvt;
+*/
 
 
 

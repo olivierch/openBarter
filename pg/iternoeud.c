@@ -1,6 +1,7 @@
 
 #include "openbarter.h"
 #include "iternoeud.h"
+#include "point.h"
 // #include "funcapi.h"
 /*********************************************************************
  * implements two utilities
@@ -199,7 +200,8 @@ int ob_iternoeud_put_stocktemp3(envt,pstock)
 		privt->versionSg = pstock->version;
 	ret = privt->stocktemps->put(privt->stocktemps, 0,&ks_sid, &du_stock, 0);
 	if (ret) { obMTRACE(ret); goto fin; }
-
+	//elog(INFO,"stocktemp[%lli] inserted with putstocktemp3",pstock->sid);
+	// ob_point_voirStock(pstock);
 fin: 
 	return ret;
 }
@@ -228,7 +230,7 @@ fin:
 ******************************************************************************/
 
 static int _ob_iternoeud_PrepareIterNoeuds2(void) { // called by _SPI_init->_ob_iternoeud_Init()
-	char cmde[] = "SELECT NOX.*,S.* FROM ob_tnoeud NOX INNER JOIN ob_tstock S ON (NOX.sid =S.id) WHERE NOX.nf=$2 AND S.qtt!=0";
+	char cmde[] = "SELECT NOX.id,NOX.sid,NOX.omega,NOX.nr,NOX.nf,NOX.own,S.qtt,S.version FROM ob_tnoeud NOX INNER JOIN ob_tstock S ON (NOX.sid =S.id) WHERE NOX.nf=$2 AND S.qtt!=0 and S.type='S'";
 	Oid oids[2];
 	ob_tGlob *ob = &openbarter_g;
 	const char s_Yid[] = "id";
@@ -312,13 +314,15 @@ int ob_iternoeud_Next2(portal,Xoid,offreX,stock)
 		ob_iternoeud_getBinValue(offreX->nF,5,ob_tId);
 		ob_iternoeud_getBinValue(offreX->own,6,ob_tId);
 		
-		ob_iternoeud_getBinValue(stock->sid,7,ob_tId);
-		ob_iternoeud_getBinValue(stock->own,8,ob_tId);
-		ob_iternoeud_getBinValue(stock->qtt,9,ob_tQtt);
-		ob_iternoeud_getBinValue(stock->nF,10,ob_tId);
-		ob_iternoeud_getBinValue(stock->version,11,ob_tId);
+		ob_iternoeud_getBinValue(stock->qtt,7,ob_tQtt);
+		ob_iternoeud_getBinValue(stock->version,8,ob_tId);
+
+		stock->sid = offreX->stockId;
+		stock->own = offreX->own;
+		stock->nF = offreX->nF;
+
 		//elog(INFO,"offreX oid=%lli stockId=%lli omega=%f nR=%lli nF=%lli own=%lli",offreX->oid,offreX->stockId,offreX->omega,offreX->nR,offreX->nF,offreX->own);
-	
+		//elog(INFO,"stock sid=%lli, own=%lli, qtt=%lli, nF=%lli,version=%lli",stock->sid,stock->own,stock->qtt,stock->nF,stock->version);
 		memcpy(Xoid,&offreX->oid,sizeof(ob_tId));
 
 		SPI_freetuptable(SPI_tuptable);

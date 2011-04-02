@@ -101,6 +101,7 @@ int ob_point_initPoint(ob_tPrivateTemp *privt, ob_tPoint *point) {
 	ret = privt->stocktemps->get(privt->stocktemps, 0, &ks_sid, &du_stock, 0);
 	if (ret) {
 		obMTRACE(ret);
+		elog(INFO,"for stocktemp[%lli]",point->mo.offre.stockId);
 		// voirDBT(&point->mo.offre.stockId);
 		goto fin;
 	}
@@ -358,13 +359,7 @@ fin:
 }
 */
 void ob_point_voirStock(ob_tStock *ps) {
-	printf("Stock :");
-	ob_flux_MVoirDBT(&ps->sid);
-	printf("\tnF ");
-	ob_flux_MVoirDBT(&ps->nF);
-	printf("\tqtt %lli\n", ps->qtt);
-	printf("\town ");
-	ob_flux_MVoirDBT(&ps->own);
+	elog(INFO,"Stock[%lli] nF=%lli qtt=%lli own=%lli version=%lli",ps->sid,ps->nF,ps->own,ps->version);
 	return;
 }
 void ob_point_voirInterdit(ob_tInterdit *pi) {
@@ -378,17 +373,8 @@ void ob_point_voirInterdit(ob_tInterdit *pi) {
 	return;
 }
 void ob_point_voirNoeud(ob_tNoeud *pn) {
-	printf("Noeud:");
-	ob_flux_MVoirDBT(&pn->oid);
-	printf("\tsid ");
-	ob_flux_MVoirDBT(&pn->stockId);
-	printf("\tnR ");
-	ob_flux_MVoirDBT(&pn->nR);
-	printf("\tnF ");
-	ob_flux_MVoirDBT(&pn->nF);
-	printf("\tomega %f\n", pn->omega);
-	printf("\town ");
-	ob_flux_MVoirDBT(&pn->own);
+	elog(INFO,"Noeud[%lli] sid=%lli nR=%lli nF=%lli omega=%f own=%lli",
+			pn->oid,pn->stockId,pn->nR,pn->nF,pn->omega,pn->own);
 	return;
 }
 /******************************************************************************/

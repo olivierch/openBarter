@@ -21,6 +21,7 @@
 #include <flux.h>
 #include <math.h> /* pow(x,y), sqrt(x),floor(x)s */
 #include <tests.h>
+//#include <point.h>
 
 
 /*******************************************************************************
@@ -584,6 +585,7 @@ int ob_flux_cheminError(ob_tChemin *pchemin) {
 		}
 	}
 	if (_err) {
+		elog(INFO,"_err=%i",_err);
 		ret = ob_flux_CerCheminCuillere;
 		goto fin;
 		printf("_err = %i\n",_err);

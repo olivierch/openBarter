@@ -232,7 +232,7 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 
 	//elog(INFO,"pivotx stockId %016llx nF %llx nR %llx omega %f own %llx oid %llx",pivot->stockId,pivot->nF,pivot->nR,pivot->omega,pivot->own,pivot->oid);
 
-	ret = ob_chemin_parcours_arriere(ctx->envt,NULL,&ctx->nblayer);
+	ret = ob_chemin_parcours_arriere(ctx->envt,NULL,&ctx->nblayer,&stock);
 	if (ret) {
 		elog(INFO,"Error %i in _parcours_arriere",ret);
 		goto err;
