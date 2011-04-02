@@ -715,19 +715,34 @@ DECLARE
 	m ob_tstock%rowtype;
 	stock_src ob_tstock%rowtype;
 	id_mvt int8;
+	res int8;
 BEGIN
-	SELECT s.* INTO stock_src FROM ob_tstock s WHERE s.id = commit_src.sid_dst;
+	SELECT s.* INTO stock_src FROM ob_tstock s WHERE s.id = commit_src.sid_dst and s.type='D';
 	IF NOT FOUND THEN
 		RAISE NOTICE '[-30429] for commit % the stock_src % was not found',commit_src.id,commit_src.sid_dst;  
 		RETURN -30429;
 	END IF;
+	UPDATE ob_tstock SET qtt = qtt - stock_src.qtt WHERE id = commit_src.sid_dst and type='D' RETURNING qtt INTO res;
+	IF NOT(res = 0) THEN
+		RAISE NOTICE '[-30429] for commit % the stock_src % was not found',commit_src.id,commit_src.sid_dst;  
+		RETURN -30429;
+	END IF;	
+	-- should become 0
+/*
 	SELECT s.* INTO m FROM ob_tstock s WHERE s.own = commit_dst.wid AND s.nf = stock_src.nf AND s.type = 'A' LIMIT 1;
 	IF NOT FOUND THEN
 		INSERT INTO ob_tstock (own,qtt,nf,type) VALUES (commit_dst.wid,stock_src.qtt,stock_src.nf,'A') RETURNING * INTO m;
 	ELSE
 		UPDATE ob_tstock SET qtt = qtt + stock_src.qtt WHERE id = m.id RETURNING * INTO m;
 	END IF;
-
+*/
+	UPDATE ob_tstock SET qtt = qtt + stock_src.qtt 
+		WHERE own = commit_dst.wid AND nf = stock_src.nf AND type = 'A'  
+		RETURNING * INTO m;
+	IF NOT FOUND THEN
+		INSERT INTO ob_tstock (own,qtt,nf,type) VALUES (commit_dst.wid,stock_src.qtt,stock_src.nf,'A') 
+			RETURNING * INTO m; 
+	END IF;
 	INSERT INTO ob_tmvt (own_src,own_dst,qtt,nat) 
 		VALUES (commit_src.wid,commit_dst.wid,stock_src.qtt,stock_src.nf) 
 		RETURNING id INTO id_mvt;
