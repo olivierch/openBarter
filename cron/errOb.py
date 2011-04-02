@@ -1,0 +1,30 @@
+#!/usr/bin/python
+#-*- coding: utf8 -*-
+
+psql = {
+-1:"no candidate ob_fread_omega(nr,nf)"
+,-2:"the quality.id was not found"
+,-3:"the bid.id was not found"
+,-4:"the account  was not found or not big enough or it's quality not owned by user"
+,-5:"the quality.name was not found"
+,-6:"omega should be >=0"
+,-7:"the pivot was not found or it's quality not owned by user"
+,-8:"the stock is not big ebough"
+,-9:"the stock.id is not found"
+,-10:"commit.id sequence is not 0..N"
+,-11:""
+,-12:"the owner.name is not found"
+,-13:"The quality does not exist or is not owned by user"
+,-14:"the qtt sould be >0"
+,-15:"the market account is not big enough"
+,-16:"No stock of this draft is both owned by owner and of a quality owned by user"
+,-17:"The owner is not partner of the Draft"
+,-18:"Less than 2 commit found for the draft"
+,-19:"The draft status is corrupted"
+,-20:"the draft.id was not found"
+,-21:"The owner.name does not exist"
+,-22:"The draft has a status that does not allow the transition to this status"
+,-23:"Abort in bid removal"
+,-24:"The stock of a quality owned by user is not found"
+,-25:"the stock sid_dst was not found for the draft"
+,-30:"the stock.type should be different" }

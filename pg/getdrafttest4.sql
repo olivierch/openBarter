@@ -13,7 +13,6 @@ truncate table ob_tquality restart identity cascade;
 truncate table ob_tmvt restart identity cascade;
 truncate table ob_tldraft restart identity cascade;
 select setval('ob_tdraft_id_seq',100);
-insert into ob_towner (name) values ('market');
 
 select ob_fcreate_quality('q1');
 select ob_fcreate_quality('q2');
