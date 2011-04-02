@@ -5,6 +5,7 @@ import logging
 import logging.handlers
 from datetime import datetime
 import settings
+import os
 logger_time_start = None
 
 class DelayInfo:
@@ -29,6 +30,9 @@ def getLogger(name="to_be_named"):
 	
 def start(name="to_be_named",direct = settings.LOGGINGDIR,maxBytes = settings.LOGGINGmaxBytes, backupCount= settings.LOGGINGbackupCount):
 	global logger_time_start
+	
+	if not os.path.exists(direct):
+		os.makedirs(direct,0777)
 	logger_time_start = datetime.now()
 	logger = logging.getLogger()
 	logger.setLevel(logging.DEBUG)

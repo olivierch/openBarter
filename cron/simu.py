@@ -52,7 +52,7 @@ def exitError(log,msg,ret_code=-1):
 ############################################################	
 
 def clear_base(conn,log):
-	file_name = settings.PGSQLOBDIR+'getdrafttest1.sql'
+	file_name = os.path.join(settings.PGSQLOBDIR,'getdrafttest1.sql')
 	with open(file_name, 'r') as f:
 		sql_init = f.read()
 		f.close()
@@ -62,12 +62,11 @@ def clear_base(conn,log):
 	log.debug('most tables truncated')
 
 def add_qualities(conn,log):
-	sql = 'INSERT INTO ob_tquality (name) VALUES (%s)'
 	# with closing(conn.cursor()) as cursor:
 	with db.Cursor(conn,log) as cursor:
 		for i in range(NBQUALITY ):
 			# log.info(getQualityName(i))
-			cursor.execute(sql,[getQualitySufName(i)])
+			cursor.callproc("ob_fcreate_quality",(getQualitySufName(i),))
 	log.debug("%i qualities added" % NBQUALITY)
 
 def add_owners(conn,log):
@@ -90,7 +89,7 @@ def statMarket(conn,log):
 		cursor.execute(sql)
 		for d in getDictsFromCursor(cursor):
 			for k,v in d.iteritems():
-				if k in ('unbalanced_qualities','corrupted_draft','coorupted_stock_s'):
+				if k in ('unbalanced_qualities','corrupted_draft','corrupted_stock_s','corrupted_stock_a'):
 					if v!=0:
 						exitError(log,'ob_fstats().%s = %i',k,v)
 	# log.info('statMarket Ok')
