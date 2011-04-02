@@ -199,7 +199,7 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 					obMTRACE(ret); goto fin;
 				}
 				
-				elog(INFO,"trait %lli->%lli inserted",offreX.oid,moY.offre.oid);
+				//elog(INFO,"trait %lli->%lli inserted",offreX.oid,moY.offre.oid);
 			} while(!ret); // ob_iternoeud_Next
 			SPI_cursor_close(cvy_offreX);cvy_offreX = NULL;
 			if (ret == DB_NOTFOUND) ret = 0;
@@ -235,10 +235,10 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 	// and the pivot is into points
 	if(sources) {
 		*nblayer = layer;
-		elog(INFO,"%i layers found",layer);
+		//elog(INFO,"%i layers found",layer);
 	} else {
 		*nblayer = 1; // there is no clients of pivot
-		elog(INFO,"no sources found with layer %i",layer);
+		//elog(INFO,"no sources found with layer %i",layer);
 	}
 fin:
 	// obMCloseCursor(cvy_offreX);

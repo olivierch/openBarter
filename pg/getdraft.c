@@ -46,15 +46,7 @@ void ob_getdraft_init(void) {
 	openbarter_g.pathEnv[0] = 0;
 	memset(ctx,0,sizeof(ob_getdraft_ctx));
 }
-static TupleDesc _get_tuple_resdraft(void) {
-	TupleDesc tupledesc;
 
-	/* Construct a tuple descriptor for the result rows. */
-	tupledesc = CreateTemplateTupleDesc(2, false);
-	TupleDescInitEntry(tupledesc, (AttrNumber) 1, "id",INT8OID, -1, 0);
-	TupleDescInitEntry(tupledesc, (AttrNumber) 2, "status",CHAROID, -1, 0);
-	return tupledesc;
-}
 /*
 
 drop table ob_tldraft2 cascade;
@@ -135,37 +127,6 @@ iterator ob_getdraft_getcommit
 	}
 ***************************************************************************************/
 
-static ob_getdraft_ctx* ob_getdraft_getcommit_init2(TupleDesc tuple_desc,PG_FUNCTION_ARGS)
-{
-	ob_getdraft_ctx *ctx;
-	ob_tNoeud	*pivot;
-	int ret;
-	
-	ctx = &openbarter_g.ctx;
-	
-	memset(ctx,0,sizeof(ob_getdraft_ctx));
-	ctx->tuple_desc = tuple_desc;
-	ctx->end = false;
-
-	pivot = &ctx->pivot;
-
-	pivot->stockId 	= PG_GETARG_INT64(0);
-	pivot->omega	= PG_GETARG_FLOAT8(1);
-	pivot->nF 		= PG_GETARG_INT64(2);
-	pivot->nR 		= PG_GETARG_INT64(3);
-	if(pivot->nF == pivot->nR) {
-		elog(INFO,"nF should be different from nR");
-		return NULL;
-	}
-	ret = ob_chemin_get_draft_init(ctx);
-	if(ret) {
-		elog(NOTICE,"internal error %i in ob_getdraft_getcommit_init2",ret);
-		return NULL;
-	}
-	return ctx;
-	
-}
-
 static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCTION_ARGS)
 {
 	ob_getdraft_ctx *ctx;
@@ -237,7 +198,7 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 		elog(INFO,"Error %i in _parcours_arriere",ret);
 		goto err;
 	}
-	elog(INFO,"parcours_arriere %i layer",ctx->nblayer);
+	//elog(INFO,"parcours_arriere %i layer",ctx->nblayer);
 	if (ctx->nblayer < 1) goto err; 
 	ctx->i_graph = -1;
 	return ctx;

@@ -33,7 +33,7 @@ select ob_finsert_bid('o3','olivier>q3',100,50,'olivier>q2');
 
 -- should be 0
 SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft as errors from ob_fstats();
-/*
+
 select ob_faccept_draft(100,'o1');
 select ob_faccept_draft(100,'o2');
 select ob_faccept_draft(100,'o3');
@@ -44,7 +44,7 @@ SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft 
 select * from ob_vowned;
 select * from ob_vbalance;
 select * from ob_vmvt;
-*/
+
 
 
 

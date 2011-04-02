@@ -718,7 +718,7 @@ DECLARE
 BEGIN
 	SELECT s.* INTO stock_src FROM ob_tstock s WHERE s.id = commit_src.sid_dst;
 	IF NOT FOUND THEN
-		RAISE NOTICE '[-30429] for commit % the stock % was not found',commit_src.id,commit_src.sid_dst;  
+		RAISE NOTICE '[-30429] for commit % the stock_src % was not found',commit_src.id,commit_src.sid_dst;  
 		RETURN -30429;
 	END IF;
 	SELECT s.* INTO m FROM ob_tstock s WHERE s.own = commit_dst.wid AND s.nf = stock_src.nf AND s.type = 'A' LIMIT 1;
@@ -1719,7 +1719,7 @@ BEGIN
 
 	cnt := 0;err := 0; first_commit :=0; first_draft := 0;
 	time_begin := clock_timestamp(); err := 0;
-	RAISE INFO 'ob_getdraft_get(%,%,%,%)',pivot.id,_omega,pivot.nf,_nr;
+	-- RAISE INFO 'ob_getdraft_get(%,%,%,%)',pivot.id,_omega,pivot.nf,_nr;
 	FOR r IN SELECT * FROM ob_getdraft_get(pivot.id,_omega,pivot.nf,_nr) LOOP
 		-- RAISE INFO 'err %',r.ret_algo;	
 		err := r.ret_algo;

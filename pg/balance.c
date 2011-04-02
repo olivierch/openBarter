@@ -139,8 +139,7 @@ Returns NULL when no record is found.
 *************************************************************************/
 static ob_tConnectDescp* _ob_balance_getConnect(void)
 {	
-	int ret,i,j;
-	ob_tConnectDescp _connect;
+	int ret,j;
 	ob_tConnectDescp *_tabconnect = NULL;
 	size_t _s;
 	TupleDesc tupdesc;
@@ -213,6 +212,8 @@ static ob_tConnectDescp* _ob_balance_getConnect(void)
 	SPI_freetuptable(SPI_tuptable);
 	//elog(INFO, "retour de tabconnect avec '%s'",_tabconnect[0]->conninfo);
 	return _tabconnect;
+
+/*	// free _tabconnect
 err:
 	i = 0;
 	while((_connect = _tabconnect[i])) {
@@ -221,6 +222,7 @@ err:
 	}
 	pfree(_tabconnect);
 	return NULL;
+*/
 }
 void ob_balance_free_connect(ob_tConnectDescp connect) {
 	pfree(connect->conninfo);
