@@ -110,7 +110,7 @@ def lirePrix(conn,log,natr,natf):
 			if(cix == 0): pr = fluxarrondi
 			elif(cix == nbnoeud -1): 
 				omega = float(fluxarrondi)/float(pr)
-				log.debug(str([omega,fluxarrondi]))
+				log.debug('dans lirePrix '+str([omega,fluxarrondi]))
 				prices.append([omega,fluxarrondi])
 	#log.debug(str(prices))
 	if(len(prices) != 0): 
@@ -127,6 +127,7 @@ def insertBid(conn,log,owner,natf,qttf,qttr,natr):
 		# nb_draft int8 = ob_finsert_bid(_owner text,_qualityprovided text,qttprovided int8,_qttrequired int8,_qualityrequired text)
 		# omega = qttf/qttr => qttr = qttf/omega
 		sql,pars = 'ob_finsert_bid',[owner,natf,qttf,qttr,natr]
+		log.info( sql+str(pars))
 		cursor.callproc(sql,pars)
 		res = cursor.fetchone()
 		res = res[0]
@@ -136,13 +137,13 @@ def insertBid(conn,log,owner,natf,qttf,qttr,natr):
 			log.info('%i draft created',res)
 	return 
 	
-def insertSbib(conn,log,owner,bidId,qttr,natr):
+def insertSbib(conn,log,owner,bidId,qttf,qttr,natr):
 	""" inserts a bid with ob_finsert_bid
 	"""
 	with db.Cursor(conn,log) as cursor:
 		# nb_draft int8 = ob_finsert_sbid(bid_id int8,_qttrequired int8,_qualityrequired text)
 		# omega = qttf/qttr => qttr = qttf/omega
-		sql,pars = 'ob_finsert_sbid',[bidId,qttr,natr]
+		sql,pars = 'ob_finsert_sbid',[bidId,qttf,qttr,natr]
 		cursor.callproc(sql,pars)
 		res = cursor.fetchone()
 		res = res[0]
@@ -182,25 +183,15 @@ def traiteOwner(conn,log,owner):
 	
 	
 	def ob_draft_of_own(cursor,owner):
-		off = 0
-		while True:
-			cursor.callproc("ob_fdraft_of_own",[owner,off])
-			rows = cursor.fetchall()
-			l = len(rows)
-			if(l == 0): break
-			for col in rows:
-				yield col
-			off += l+1
+		cursor.execute("select * from ob_vdraft where owner=%s",[owner])
+		return cursor.fetchall()
 
 	
 	# Pour les drafts dont il est partenaire
-	with db.Cursor(conn,log) as cursor:		
-		for res in ob_draft_of_own(cursor,owner):
-			did,status,cid,nat,qtt,ownerProviding,flags,created = res
-			if(did <0):
-				exitError(log,'Error into ob_fdraft_of_own() with err=%i %s' %(did,errOb.psql.get(did,'?')))
-			if(not (status == 'D')):
-				exitError(log,'The draft %i has not the status D' % (did))
+	with db.Cursor(conn,log) as cursor:
+		resu = ob_draft_of_own(cursor,owner)
+		for res in resu:
+			did,status,owner,cntcommit,flags,created = res
 				
 			#accept 9 fois sur 10, sinon refuse
 			accept = not( random.randint(0,9)==0)
@@ -250,7 +241,7 @@ def traiteOwner(conn,log,owner):
 		natr,natrId = getRandQuality(natfId)
 		omegaLu,fluxLu = lirePrix(conn,log,natrId,natfId)
 		qttr = getFromPrix(omegaLu,qttf)
-		insertSbib(conn,log,owner,bidId,qttr,natr)
+		insertSbib(conn,log,owner,bidId,qttf,qttr,natr)
 	else:
 		# en choisissant une qualité qu'il possède
 		valf = sOwned[random.randint(0,nbOwned-1) if nbOwned >1 else 0 ] # valf={'quality':..,'qtt': .. }

@@ -7,15 +7,13 @@ DROP FUNCTION IF EXISTS ob_ins_version() CASCADE;
 DROP SEQUENCE IF EXISTS ob_tquality_id_seq,ob_towner_id_seq,ob_tdraft_id_seq,ob_tstock_id_seq,
 	ob_tnoeud_id_seq,ob_tcommit_id_seq,ob_tmvt_id_seq CASCADE;
 
-/* roles */
-DROP ROLE IF EXISTS market,depositary;
 
 /* functions */
 DROP TYPE IF EXISTS ob_tlmvt CASCADE; --used evrywhere
 DROP FUNCTION IF EXISTS ob_fbatch_omega() CASCADE;
 DROP FUNCTION IF EXISTS ob_fread_omega(int8,int8) CASCADE;
 DROP FUNCTION IF EXISTS ob_finsert_sbid(int8,int8,int8,text) CASCADE;
-DROP FUNCTION IF EXISTS ob_finsert_bid(text,text,int8,int8,int8,text) CASCADE;
+DROP FUNCTION IF EXISTS ob_finsert_bid(text,text,int8,int8,text) CASCADE;
 DROP FUNCTION IF EXISTS ob_finsert_bid_int(int8,int8,int8,text) CASCADE;
 DROP FUNCTION IF EXISTS ob_faccept_draft(int8,text) CASCADE;
 DROP FUNCTION IF EXISTS ob_frefuse_draft(int8,text) CASCADE;
@@ -41,9 +39,13 @@ DROP FUNCTION IF EXISTS ob_fdelete_draft(int8) CASCADE;
 DROP FUNCTION IF EXISTS ob_fcurrval(text) CASCADE;
 DROP FUNCTION IF EXISTS ob_fcreate_quality(text) CASCADE;
 
+DROP VIEW IF EXISTS ob_vowned,ob_vbalance,ob_vmvt,ob_vdraft,ob_vbid CASCADE;
+
+
 DROP TABLE IF EXISTS ob_tquality,ob_towner,ob_tstock,ob_tnoeud,ob_tdraft,
 	ob_tcommit,ob_tldraft,ob_tomega,ob_tlomega,ob_tmvt,ob_tconnectdesc CASCADE;
-DROP TABLE IF EXISTS ob_vowned,ob_vbalance,ob_vmvt,ob_vdraft,ob_vbid CASCADE;
 
+/* roles */
+DROP ROLE IF EXISTS market,depositary;
 
 	

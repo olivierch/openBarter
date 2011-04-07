@@ -595,9 +595,6 @@ CREATE TYPE ob_tret_stats AS (
 	mean_time_drafts int8, -- mean of delay for every drafts
 	
 	nb_drafts		int8,
-	nb_drafts_c	int8,
-	nb_drafts_d	int8,
-	nb_drafts_a	int8,
 	nb_noeuds		int8,
 	nb_stocks		int8,
 	nb_stocks_s	int8,
@@ -631,7 +628,7 @@ BEGIN
 	-- mean time of draft
 	SELECT SUM(delay),count(*) INTO delays,cnt FROM ob_tdraft;
 	ret.nb_drafts := cnt;
-	ret.mean_time_drafts = delays/cnt;
+	ret.mean_time_drafts = CAST( delays/cnt AS INT8);
 	
 	SELECT count(*) INTO cnt FROM ob_tnoeud;
 	ret.nb_noeuds := cnt;
@@ -659,19 +656,13 @@ BEGIN
 	
 	-- number of draft corrupted
 	ret.corrupted_draft := 0;
-	ret.nb_drafts_d := 0;
-	ret.nb_drafts_a := 0;
-	ret.nb_drafts_c := 0;
+	ret.nb_drafts := 0;
 	FOR _draft IN SELECT * FROM ob_tdraft LOOP
 		res := ob_fread_status_draft(_draft);
 		IF(res < 0) THEN 
 			ret.corrupted_draft := ret.corrupted_draft +1;
-		ELSIF (res = 0) THEN 
-			ret.nb_drafts_d := ret.nb_drafts_d +1;
-		ELSIF (res = 1) THEN 
-			ret.nb_drafts_a := ret.nb_drafts_a +1;
-		ELSIF (res = 2) THEN 
-			ret.nb_drafts_c := ret.nb_drafts_c +1;
+		ELSE  
+			ret.nb_drafts := ret.nb_drafts +1;
 		END IF;
 	END LOOP;
 	
@@ -858,7 +849,8 @@ $$ LANGUAGE plpgsql;
 -- PRIVATE called by ob_finsert_bid_int
 
 /* usage: 
-	ret int = ob_fomega_draft(draft_id int8)
+	ret int = o
+	(draft_id int8)
 		
 conditions:
 	draft exists with more than 1 commit
@@ -884,6 +876,7 @@ BEGIN
 		ELSE
 			err := ob_finsert_omega_int(prev_commit.sid_dst,_commot.sid_dst);
 			if(err <0) THEN
+				RAISE INFO '[%] ob_finsert_omega_int1',err;
 				RETURN err;
 			END IF;
 		END IF;
@@ -896,6 +889,7 @@ BEGIN
 	END IF;	
 	err := ob_finsert_omega_int(_commot.sid_dst,first_commit.sid_dst);
 	if(err <0) THEN
+		RAISE INFO '[%] ob_finsert_omega_int2',err;
 		RETURN err;
 	END IF;
 	RETURN cnt;
@@ -992,7 +986,7 @@ CREATE OR REPLACE VIEW ob_vowned AS SELECT
 		min(s.created) as created,
 		max(CASE WHEN s.updated IS NULL THEN s.created ELSE s.updated END) as updated
     	FROM ob_tstock s INNER JOIN ob_towner o ON (s.own=o.id) INNER JOIN ob_tquality q on (s.nf=q.id) 
-	GROUP BY s.own,s.nf,q.name,o.name,q.own ORDER BY q.own ASC,q.name ASC,o.name ASC;
+	GROUP BY s.own,s.nf,q.name,o.name,q.own;
 	
 GRANT SELECT ON TABLE ob_vowned TO market,depositary;
 ----------------------------------------------------------------------------------------------------------------
@@ -1023,7 +1017,7 @@ CREATE OR REPLACE VIEW ob_vbalance AS SELECT
     		min(s.created) as created,
     		max(CASE WHEN s.updated IS NULL THEN s.created ELSE s.updated END)  as updated
     	FROM ob_tstock s INNER JOIN ob_tquality q on (s.nf=q.id)
-	GROUP BY q.name,q.own ORDER BY q.own ASC, q.name ASC;
+	GROUP BY q.name,q.own;
 	
 GRANT SELECT ON TABLE ob_vbalance TO depositary,market;
 
@@ -1059,8 +1053,7 @@ CREATE OR REPLACE VIEW ob_vdraft AS
 			FROM ob_tcommit c GROUP BY c.wid,c.did 
 				) AS co 
 		INNER JOIN ob_tdraft dr ON co.did = dr.id
-		INNER JOIN ob_towner w ON w.id = co.wid
-		ORDER BY dr.id ASC;
+		INNER JOIN ob_towner w ON w.id = co.wid;
 	
 GRANT SELECT ON TABLE ob_vdraft TO depositary,market;
 ----------------------------------------------------------------------------------------------------------------
@@ -1678,7 +1671,7 @@ $$ LANGUAGE plpgsql;
 		-30407 the pivot was not found or not deposited to user
 */
 ----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_finsert_bid_int(_sid int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) RETURNS int4 AS $$
+CREATE OR REPLACE FUNCTION ob_finsert_bid_int(_sid int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) RETURNS int AS $$
 DECLARE
 	cnt int;
 	draft_id int8;
@@ -1690,8 +1683,8 @@ DECLARE
 	mvt ob_tlmvt%rowtype;
 	acc_id int8;
 	version_cur int8;
-	err int4;
-	_err int4;
+	err int;
+	_err int;
 	first_commit int8;
 	first_draft int8;
 	_commot ob_tcommit%rowtype;
@@ -1700,7 +1693,7 @@ DECLARE
 	_nr	int8;
 	_omega double precision;
 	cnt2	int;
-	_delay  int4;
+	_delay  int8;
 	new_noeud_id int8;
 BEGIN
 	-- controls
@@ -1734,24 +1727,24 @@ BEGIN
 
 	cnt := 0;err := 0; first_commit :=0; first_draft := 0;
 	time_begin := clock_timestamp(); err := 0;
-	-- RAISE INFO 'ob_getdraft_get(%,%,%,%)',pivot.id,_omega,pivot.nf,_nr;
+	/*-- RAISE INFO 'ob_getdraft_get(%,%,%,%)',pivot.id,_omega,pivot.nf,_nr; */
 	FOR r IN SELECT * FROM ob_getdraft_get(pivot.id,_omega,pivot.nf,_nr) LOOP
-		-- RAISE INFO 'err %',r.ret_algo;	
-		err := r.ret_algo;
+		/* -- RAISE INFO 'err %',r.ret_algo;	*/
+		err := CAST(r.ret_algo as INT);
 		IF (err != 0) THEN
 			IF ( err = -30144 ) THEN -- arc forbidden
 				RAISE NOTICE '[-30144] Loop found for arc (Xoid,Yoid)=(%,%)',r.bid,r.sid;
 				_err := ob_fdelete_bid_int(r.bid);
 				IF(_err !=0) THEN
-					RAISE NOTICE '[%s] Error in ob_finsert_bid_int()',_err;
+					RAISE NOTICE '[%] Error in ob_finsert_bid_int()',_err;
 				END IF;
 			END IF;
-			RAISE NOTICE '[%s] Error in ob_getdraft_get()',err;
+			RAISE NOTICE '[%] Error in ob_getdraft_get()',err;
 			RETURN err;
 		END IF;
 	
 		IF (cnt != (r.id+1)) THEN -- r.id starts from 0
-			-- starts a new draft
+			/* -- starts a new draft */
 			cnt := cnt+1;
 			IF(cnt != (r.id+1)) THEN -- should not append
 				RAISE  NOTICE '[-30410] r.id sequence is not 0..N';
@@ -1760,7 +1753,7 @@ BEGIN
 			IF(cnt !=1) THEN -- omega's of the previous draft are recorded 
 				_err := ob_fomega_draft(draft_id); --records omegas of the previous draft
 				if(_err <0) THEN
-					RAISE NOTICE '[%s] Error in ob_finsert_bid_int()',_err;
+					RAISE NOTICE '[%] Error in ob_finsert_bid_int()',_err;
 					RETURN _err;
 				END IF;
 			END IF;
@@ -1785,28 +1778,30 @@ BEGIN
 		*/				
 		SELECT * INTO stockb FROM ob_tstock s WHERE s.id = r.sid;
 		IF (NOT FOUND or (stockb.qtt < r.fluxarrondi) or (stockb.version > r.versionsg)) THEN
-			-- when the stock used by the commit does not exist or not big enough, the draft is outdated
-			err := -30411;
+			
+			err := -30411; -- when the stock used by the commit does not exist or not big enough, the draft is outdated
 			RETURN err;
 		END IF;
 
-		-- stock_draft created
-		mvt := ob_finsert_das(stockb,r.fluxarrondi,'D'); 
+		
+		mvt := ob_finsert_das(stockb,r.fluxarrondi,'D'); -- stock_draft created
+		/*
 		-- if stockb[r.sid] becomes empty, it is not deleted,
 		-- it will be when the draft is executed or refused
 		-- the trigger updates stock.version to 'ob_tdraft_id_seq'= version_cur
+		*/
 		IF(mvt.id <0) THEN 
-			_err := mvt.id;
+			_err := CAST(mvt.id AS INT);
 			IF (_err = -30408) THEN
 				RAISE NOTICE 'stock.qtt=% < fluxarrondi=%',stockb.qtt,r.fluxarrondi;
 			END IF;
-			RAISE NOTICE '[%s] Error in ob_finsert_bid_int()',_err;
+			RAISE NOTICE '[%] Error in ob_finsert_bid_int()',_err;
 			return _err;
 		END IF;
 		
-		-- RAISE NOTICE 'mvt % r.sid %,r.fluxarrondi %',mvt.id,r.sid,r.fluxarrondi;
+		/*-- RAISE NOTICE 'mvt % r.sid %,r.fluxarrondi %',mvt.id,r.sid,r.fluxarrondi;
 		-- update ob_tstock set version = version_cur where id=mvt.src;
-		-- RAISE INFO 'commit % % % % % %',draft_id,r.bid,r.sid,mvt.dst,r.wid,r.flags;				
+		-- RAISE INFO 'commit % % % % % %',draft_id,r.bid,r.sid,mvt.dst,r.wid,r.flags;	*/			
 		INSERT INTO ob_tcommit(did,bid,sid_src,sid_dst,wid,flags)
 			VALUES (draft_id,r.bid,r.sid,mvt.dst,r.wid,r.flags) 
 			RETURNING id INTO commit_id;
@@ -1821,23 +1816,24 @@ BEGIN
 		VALUES (pivot.id,_omega,_nr,pivot.nf,pivot.own,_qttprovided,_qttrequired)
 		RETURNING id INTO new_noeud_id;
 	
+	
 	IF(cnt != 0) THEN -- some draft were found
-		-- omega's of the last draft are recorded
-		_err := ob_fomega_draft(draft_id);
+		RAISE NOTICE 'appel de ob_fomega_draft(%)',draft_id;
+		
+		_err := ob_fomega_draft(draft_id); -- TODO omega's of the last draft are recorded
 		IF(_err <0) THEN
-			RAISE NOTICE '[%s] Error in ob_finsert_bid_int()',_err;
+			RAISE NOTICE '[%] Error in ob_finsert_bid_int()',_err;
 			RETURN _err;
 		END IF;
 		
-		-- _delay int4 stores up to 30 minutes in microseconds
-		_delay := EXTRACT(microseconds FROM (clock_timestamp() - time_begin))/cnt;
+		_delay := CAST(EXTRACT(microseconds FROM (clock_timestamp() - time_begin))/cnt AS INT8);
 		UPDATE ob_tdraft SET delay = _delay WHERE id >= first_draft;
 		
-		-- sets the noeud.id 
-		UPDATE ob_tcommit  SET bid = new_noeud_id 
-		WHERE   id >= first_commit and bid is NULL;
 		
-		-- empty stocks are NOT deleted
+		UPDATE ob_tcommit  SET bid = new_noeud_id 
+		WHERE   id >= first_commit and bid is NULL; -- sets the noeud.id 
+		
+		/* empty stocks are NOT deleted */
 		
 		SELECT setval('ob_tdraft_id_seq',version_cur+cnt) INTO version_cur;
 	END IF;
@@ -1869,10 +1865,10 @@ $$ LANGUAGE plpgsql;
 		or error returned by ob_finsert_bid_int
 */
 ----------------------------------------------------------------------------------------------------------------		
-CREATE OR REPLACE FUNCTION ob_finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) RETURNS int4 AS $$
+CREATE OR REPLACE FUNCTION ob_finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) RETURNS int AS $$
 DECLARE
 	noeud	ob_tnoeud%rowtype;
-	cnt 		int4;
+	cnt 		int;
 	stock 	ob_tstock%rowtype;
 BEGIN
 	SELECT n.* INTO noeud FROM ob_tnoeud n WHERE n.id = bid_id;
@@ -1916,9 +1912,9 @@ GRANT EXECUTE ON FUNCTION ob_finsert_sbid(bid_id int8,_qttprovided int8,_qttrequ
 
 */
 ----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_finsert_bid(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text) RETURNS int4 AS $$
+CREATE OR REPLACE FUNCTION ob_finsert_bid(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text) RETURNS int AS $$
 DECLARE
-	cnt int4;
+	cnt int;
 	i	int8;
 	mvt ob_tlmvt%rowtype;
 	stock ob_tstock%rowtype;
@@ -1959,14 +1955,14 @@ actions:
 */
 ----------------------------------------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION ob_fread_omega(_nr int8,_nf int8) RETURNS int4 AS $$
+CREATE OR REPLACE FUNCTION ob_fread_omega(_nr int8,_nf int8) RETURNS int AS $$
 DECLARE
 	prem_r ob_tldraft%rowtype;
 	der_r ob_tldraft%rowtype;
 	r ob_tldraft%rowtype;
 	cnt_draft int;
-	ret int4;
-	_err int4;
+	ret int;
+	_err int;
 	qu int8;
 	retry bool;
 	_nrn text;
@@ -1986,13 +1982,13 @@ BEGIN
 	cnt_draft := 0;
 	<<DRAFT_LINES>>
 	FOR r IN SELECT * FROM ob_getdraft_get(0,1.0,_nr,_nf) LOOP
-		ret := r.ret_algo;
+		ret := CAST(r.ret_algo AS INT);
 		IF(ret <0 ) THEN
 			IF ( ret = -30144 ) THEN -- arc forbidden
 				RAISE NOTICE '[%] Loop found for arc (Xoid,Yoid)=(%,%)',ret,r.bid,r.sid;
 				_err := ob_fdelete_bid_int(r.bid);
 				IF(_err !=0) THEN
-					RAISE NOTICE '[%s] Error in ob_fread_omega()',_err;
+					RAISE NOTICE '[%] Error in ob_fread_omega()',_err;
 				END IF;
 				RETURN ret;
 			END IF;
