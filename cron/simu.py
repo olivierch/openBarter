@@ -31,12 +31,12 @@ def getDictsFromCursor(cursor):
 		yield d
 
 
+def getQualitySufName(i):
+	return 'qual'+str(i+1)
 
 def getQualityName(i):
-	return 'olivier>qual'+str(i+1)
-
-def getQualitySufName(i):
-	return 'qual'+str(i+1)	
+	return settings.DATABASE_USER+'>'+getQualitySufName(i)
+	
 	
 def getOwnerName(i):
 	return 'owner'+str(i+1)
@@ -64,13 +64,12 @@ def clear_base(conn,log):
 def add_qualities(conn,log):
 	# with closing(conn.cursor()) as cursor:
 	with db.Cursor(conn,log) as cursor:
-		for i in range(NBQUALITY ):
-			# log.info(getQualityName(i))
+		for i in range(NBQUALITY):
 			cursor.callproc("ob_fcreate_quality",(getQualitySufName(i),))
 	log.debug("%i qualities added" % NBQUALITY)
 
 def add_owners(conn,log):
-	""" on attribue à chaque owner une quantité 1000 d'une qualité prise au hasard """
+	""" We allocate to each owner a quantity 1000 of a random quality"""
 	with db.Cursor(conn,log) as cursor:
 		for i in range(NBOWNER):
 			qlt = getQualityName(random.randint(0,NBQUALITY-1))
@@ -156,6 +155,8 @@ def insertSbib(conn,log,owner,bidId,qttf,qttr,natr):
 def getRanBidId(conn,log,owner):
 	""" returns id,natfId,natf for a random noeud of owner
 	"""
+	l = 0
+	
 	with closing(conn.cursor()) as cursor:
 		cursor.execute("""SELECT n.id,q.id,q.name,q.qtt from ob_tnoeud n
 						inner join ob_towner o on (o.id=n.own) 
@@ -163,8 +164,23 @@ def getRanBidId(conn,log,owner):
 						where o.name=%s """,[owner])
 		res = [e for e in cursor]
 		l = len(res)
-		if(l == 0): return (None,None,None,None)
-		return res[random.randint(0,l-1)] 
+		
+	if(l == 0): return (None,None,None,None)
+	return res[random.randint(0,l-1)] 
+		
+def keepReserve(conn,log,owner):
+	""" the oldest bid is removed
+	"""
+	with closing(conn.cursor()) as cursor:
+		cursor.execute("""SELECT n.id from ob_tnoeud
+			where o.name=%s  order by n.created asc
+			limit 1 """,[owner,nf])	
+		res = cursor.fetchall()
+		if(len(res) == 0):
+			return	
+		cursor.callproc("ob_fdelete_bid",res[0])
+	return
+	
 
 def traiteOwner(conn,log,owner):
 	
@@ -187,15 +203,16 @@ def traiteOwner(conn,log,owner):
 		return cursor.fetchall()
 
 	
-	# Pour les drafts dont il est partenaire
+	# For drafts where he is a partner
 	with db.Cursor(conn,log) as cursor:
 		resu = ob_draft_of_own(cursor,owner)
 		for res in resu:
 			did,status,owner,cntcommit,flags,created = res
 				
-			#accept 9 fois sur 10, sinon refuse
+			#accepted 9 times on 10, else refused
 			accept = not( random.randint(0,9)==0)
 			
+			res = -1
 			with closing(conn.cursor()) as cursor2:
 				pars = [did,owner]
 				if(accept):
@@ -206,13 +223,17 @@ def traiteOwner(conn,log,owner):
 					# retourne 1: cancelled, <0 erreur		
 				cursor2.callproc(sql2,pars)
 				res = cursor2.fetchone()
-			res = res[0]
+				res = res[0]
+				
 			if (res ==1): 
 				log.info("A draft %i was %s" % (did,"accepted" if accept else "refused"))
 			elif (res <0): 
 				exitError(log,(sql2+" returned %i") % tuple(pars+[res]) )
 	
-	# ce qu'il a 
+	# remove oldest bid
+	keepReserve(conn,log,owner)
+
+	# what he owns 
 	sql = """SELECT q.id as qualityid,q.name as quality,sum(s.qtt) as qtt 
 		from ob_tstock s 
 		inner join ob_tquality q on (q.id=s.nf)
@@ -232,9 +253,11 @@ def traiteOwner(conn,log,owner):
 	if(nbOwned <1):		
 		log.warning('traiteOwner terminated, %s does nt own anything!' % owner)
 		return
-				
-	# effectue une offre
+
+	
+	# makes a bid
 	makeSbid = (random.randint(0,5)==0) # 1 fois sur 5
+	
 	bidId,natfId,natf,qttf = getRanBidId(conn,log,owner)
 	
 	if(bidId and makeSbid):
@@ -243,9 +266,9 @@ def traiteOwner(conn,log,owner):
 		qttr = getFromPrix(omegaLu,qttf)
 		insertSbib(conn,log,owner,bidId,qttf,qttr,natr)
 	else:
-		# en choisissant une qualité qu'il possède
+		# chooses a quality owned
 		valf = sOwned[random.randint(0,nbOwned-1) if nbOwned >1 else 0 ] # valf={'quality':..,'qtt': .. }
-		# on en prend une partie
+		# takes a part of it
 		natfId = valf['qualityid']
 		natf = valf['quality']
 		if(valf['qtt'] >1):
@@ -263,7 +286,7 @@ def traiteOwner(conn,log,owner):
 	return
 	
 def loopSimu(conn,log):
-	"""  choix d'un owner au hasard """
+	"""  chooses a random owner """
 	while True:
 		owner = getOwnerName(random.randint(1,NBOWNER)-1)
 		traiteOwner(conn,log,owner)
@@ -272,16 +295,17 @@ def loopSimu(conn,log):
 def simu():
 	logger.start("simu")
 	log = logger.getLogger(name="simu")
-	random.seed(0) #initialisation pour que les jeux soient reproductibles
+	random.seed(0) #for reproductibility of playings
 	try:
 		with db.Connection(log) as conn:
 			clear_base(conn,log)
 			add_qualities(conn,log)
 			add_owners(conn,log)
 			loopSimu(conn,log)
-		log.info("Db connection closed")	
+		log.info("Db connection closed")
+		
 	except Exception,e:
-		exitError(log,"Terminaison Anormale")
+		exitError(log,"Abnormal termination")
 
 if __name__ == "__main__":
 	simu()
