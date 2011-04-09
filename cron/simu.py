@@ -172,9 +172,10 @@ def keepReserve(conn,log,owner):
 	""" the oldest bid is removed
 	"""
 	with closing(conn.cursor()) as cursor:
-		cursor.execute("""SELECT n.id from ob_tnoeud
+		cursor.execute("""SELECT n.id from ob_tnoeud n
+			inner join ob_towner o on (o.id=n.own)
 			where o.name=%s  order by n.created asc
-			limit 1 """,[owner,nf])	
+			limit 1 """,[owner])	
 		res = cursor.fetchall()
 		if(len(res) == 0):
 			return	
