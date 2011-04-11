@@ -37,9 +37,6 @@ select ob_finsert_bid('o6','olivier>q2',50 ,50,'olivier>q5'); /* ->q5 S6 q2-> */
 select ob_finsert_bid('o3','olivier>q3',200,50,'olivier>q2'); /* ->q2 S3 q3-> */
 /* expected 2 draft with 3 and 4 partners */
 
--- should be 0
-SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft as errors from ob_fstats();
-
 
 select ob_faccept_draft(100,'o1');
 select ob_faccept_draft(100,'o2');
@@ -49,5 +46,9 @@ select ob_faccept_draft(101,'o3');
 select ob_faccept_draft(101,'o4');
 select ob_faccept_draft(101,'o5');
 select ob_faccept_draft(101,'o6');
+
+
+-- should be 0
+SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft as errors from ob_fstats();
 
 

@@ -10,6 +10,10 @@ LOGGINGDIR = os.path.join(WORKDIR,"logs/")
 LOGGINGmaxBytes = 1000 * 1000
 LOGGINGbackupCount = 5
 
+# simulation
+NBQUALITY = 10
+NBOWNER = 1000
+
 #output
 JSONDIR = os.path.join(WORKDIR,"media/json/")
 

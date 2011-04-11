@@ -10,10 +10,6 @@ from contextlib import closing
 import os,sys
 import errOb
 
-#########################################################
-
-NBQUALITY = 100
-NBOWNER = 1000
 
 #########################################################
 # tools
@@ -64,15 +60,15 @@ def clear_base(conn,log):
 def add_qualities(conn,log):
 	# with closing(conn.cursor()) as cursor:
 	with db.Cursor(conn,log) as cursor:
-		for i in range(NBQUALITY):
+		for i in range(settings.NBQUALITY):
 			cursor.callproc("ob_fcreate_quality",(getQualitySufName(i),))
-	log.debug("%i qualities added" % NBQUALITY)
+	log.debug("%i qualities added" % settings.NBQUALITY)
 
 def add_owners(conn,log):
 	""" We allocate to each owner a quantity 1000 of a random quality"""
 	with db.Cursor(conn,log) as cursor:
-		for i in range(NBOWNER):
-			qlt = getQualityName(random.randint(0,NBQUALITY-1))
+		for i in range(settings.NBOWNER):
+			qlt = getQualityName(random.randint(0,settings.NBQUALITY-1))
 			qtt = 1000
 			owner = getOwnerName(i)
 			cursor.callproc("ob_fadd_account",(owner,qlt,qtt))
@@ -80,7 +76,7 @@ def add_owners(conn,log):
 			if(res[0] <0):
 				log.info(str((owner,qlt,qtt)))
 				log.warning(errOb.psql.get(res[0],"psql error "+str(res[0])))
-	log.debug("%i owners added" % NBOWNER)
+	log.debug("%i owners added" % settings.NBOWNER)
 
 def statMarket(conn,log):
 	sql = 'SELECT * from ob_fstats()'
@@ -109,7 +105,7 @@ def lirePrix(conn,log,natr,natf):
 			if(cix == 0): pr = fluxarrondi
 			elif(cix == nbnoeud -1): 
 				omega = float(fluxarrondi)/float(pr)
-				log.debug('dans lirePrix '+str([omega,fluxarrondi]))
+				# log.debug('dans lirePrix '+str([omega,fluxarrondi]))
 				prices.append([omega,fluxarrondi])
 	#log.debug(str(prices))
 	if(len(prices) != 0): 
@@ -126,14 +122,15 @@ def insertBid(conn,log,owner,natf,qttf,qttr,natr):
 		# nb_draft int8 = ob_finsert_bid(_owner text,_qualityprovided text,qttprovided int8,_qttrequired int8,_qualityrequired text)
 		# omega = qttf/qttr => qttr = qttf/omega
 		sql,pars = 'ob_finsert_bid',[owner,natf,qttf,qttr,natr]
-		log.info( sql+str(pars))
+		# log.info( sql+str(pars))
 		cursor.callproc(sql,pars)
 		res = cursor.fetchone()
 		res = res[0]
 		if res < 0:
 			exitError(log,(sql+"(%s,%s,%i,%i,%s) returned %i") % tuple(pars+[res]))
-		elif res > 0:
-			log.info('%i draft created',res)
+		# elif res > 0:
+			# log.info('%i draft created',res)
+			
 	return 
 	
 def insertSbib(conn,log,owner,bidId,qttf,qttr,natr):
@@ -148,8 +145,8 @@ def insertSbib(conn,log,owner,bidId,qttf,qttr,natr):
 		res = res[0]
 		if res < 0:
 			exitError(log,(sql+"(%i,%i,%i) returned %i") % tuple(pars+[res]))
-		elif res > 0:
-			log.info('%i draft created',res)
+		# elif res > 0:
+			# log.info('%i draft created',res)
 	return 
 
 def getRanBidId(conn,log,owner):
@@ -169,9 +166,24 @@ def getRanBidId(conn,log,owner):
 	return res[random.randint(0,l-1)] 
 		
 def keepReserve(conn,log,owner):
-	""" the oldest bid is removed
+	""" the oldest bid is removed, if too much bids are made
 	"""
 	with closing(conn.cursor()) as cursor:
+		sql = """SELECT 
+			sum(CASE WHEN s.type='A' THEN s.qtt ELSE 0 END) as sA,
+			sum(CASE WHEN s.type!='A' THEN s.qtt ELSE 0 END) as sDS
+			from ob_tstock s
+			inner join ob_towner o on (o.id=s.own)
+			where o.name=%s  """
+		cursor.execute(sql,[owner])
+		res = cursor.fetchall()
+		if(len(res) == 0):
+			exitError(log,(sql+" Should return a result"))
+				
+		sA,sDS = res[0]	
+		if(sA > sDS):
+			return
+			
 		cursor.execute("""SELECT n.id from ob_tnoeud n
 			inner join ob_towner o on (o.id=n.own)
 			where o.name=%s  order by n.created asc
@@ -188,7 +200,7 @@ def traiteOwner(conn,log,owner):
 	def getRandQuality(natfId):
 		# natr,natrId = getRandQuality(natfId)
 		while True:
-			natrId = random.randint(1,NBQUALITY) 
+			natrId = random.randint(1,settings.NBQUALITY) 
 			natr = getQualityName(natrId - 1)	
 			if natrId != natfId: return natr,natrId
 	
@@ -201,7 +213,10 @@ def traiteOwner(conn,log,owner):
 	
 	def ob_draft_of_own(cursor,owner):
 		cursor.execute("select * from ob_vdraft where owner=%s",[owner])
-		return cursor.fetchall()
+		res = cursor.fetchall()
+		if(len(res)):
+			log.info("%i draft where found for %s" % (len(res),owner))
+		return res
 
 	
 	# For drafts where he is a partner
@@ -223,11 +238,12 @@ def traiteOwner(conn,log,owner):
 					sql2 = """ob_frefuse_draft""" # (%i,%s) did,owner, 
 					# retourne 1: cancelled, <0 erreur		
 				cursor2.callproc(sql2,pars)
+				log.info("%s(%s)" % (sql2,str(pars)))
 				res = cursor2.fetchone()
 				res = res[0]
 				
 			if (res ==1): 
-				log.info("A draft %i was %s" % (did,"accepted" if accept else "refused"))
+				log.info("A draft %i was %s" % (did,"executed" if accept else "refused"))
 			elif (res <0): 
 				exitError(log,(sql2+" returned %i") % tuple(pars+[res]) )
 	
@@ -289,7 +305,7 @@ def traiteOwner(conn,log,owner):
 def loopSimu(conn,log):
 	"""  chooses a random owner """
 	while True:
-		owner = getOwnerName(random.randint(1,NBOWNER)-1)
+		owner = getOwnerName(random.randint(1,settings.NBOWNER)-1)
 		traiteOwner(conn,log,owner)
 		statMarket(conn,log)
 

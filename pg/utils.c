@@ -28,6 +28,8 @@ int ob_makeEnvDir(char *direnv)
 	join_path_components(direnv,DataDir,"openbarter");
 	ret = ob_makeEnvDir_int(direnv);
 	if(ret) return ret;
+	return ret;
+	/*
 	pid = getpid();
 	ret = snprintf(pid_str,32,"%d",pid);
 	if(ret >=32) {
@@ -37,7 +39,7 @@ int ob_makeEnvDir(char *direnv)
 	}
 	join_path_components(direnv,direnv,pid_str);
 	ret = ob_makeEnvDir_int(direnv);
-	return ret;
+	return ret; */
 }
 /* removes recursively all files under a directory.
  * the directory is removed when also_me=true */

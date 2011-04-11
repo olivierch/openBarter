@@ -63,7 +63,7 @@ static int trait_get_marque(DB *sdbp, const DBT *pkey, const DBT *pdata,
 //static int message_get_own(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
 static void errcallback(const DB_ENV *dbenv, const char *errpfx,
 		const char *msg);
-static int ob_dbe_openEnvTemp(char *path,DB_ENV **penvt);
+// static int ob_dbe_openEnvTemp(char *path,DB_ENV **penvt);
 static int openBasesTemp(DB_ENV *envt, u_int32_t flagsdb);
 static int closeBasesTemp(ob_tPrivateTemp *privt);
 // int openBasesDurable(DB_ENV *env,DB_TXN *txn,u_int32_t flagsdb);
@@ -179,11 +179,14 @@ static void *_palloc(Size size) {
 	return palloc(size);
 }
 */
-static int ob_dbe_openEnvTemp(char *path_db, DB_ENV **penvt) {
+int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 	int ret = 0, ret_t;
 	DB_ENV *envt = NULL;
 	u_int32_t _flagsdb, _flagsenv;
 	ob_tPrivateTemp *privt;
+
+	ret = ob_makeEnvDir(openbarter_g.pathEnv);
+	if(ret) return(ob_dbe_CerDirErr);
 
 	ret = db_env_create(&envt, 0);
 	if (ret) {
@@ -210,7 +213,7 @@ static int ob_dbe_openEnvTemp(char *path_db, DB_ENV **penvt) {
 	// to activate TXN
 	// _flagsenv |= DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN;
 
-	ret = envt->open(envt, path_db, _flagsenv, 0);
+	ret = envt->open(envt, openbarter_g.pathEnv, _flagsenv, 0);
 	if (ret) {
 		obMTRACE(ret);
 		goto abort;
@@ -247,15 +250,7 @@ abort:
 	}
 	return (ret);
 }
-/******************************************************************************/
-int ob_dbe_openEnvTemp1(DB_ENV **penvt) {
-	int ret;
 
-	ret = ob_makeEnvDir(openbarter_g.pathEnv);
-	if(ret) return(ob_dbe_CerDirErr);
-	return (ob_dbe_openEnvTemp(openbarter_g.pathEnv,penvt));
-
-}
 /******************************************************************************
  close the temporary environment
  envt
@@ -274,9 +269,8 @@ int ob_dbe_closeEnvTemp(DB_ENV *envt) {
 	ret_t = envt->close(envt, 0);
 	if (ret_t != 0 && ret == 0)
 		ret = ret_t;
-	//elog( ERROR,"Appel de ob_rmPath avec %s",openbarter_g.pathEnv );
-	ob_rmPath(openbarter_g.pathEnv,true);
-
+	// elog( ERROR,"Appel de ob_rmPath avec %s",openbarter_g.pathEnv );
+	// ob_rmPath(openbarter_g.pathEnv,true);
 	return ret;
 }
 
@@ -424,8 +418,27 @@ static int createBasesTemp(ob_tPrivateTemp *privt, DB_ENV *envt) {
 	return 0;
 	fin: return (ret);
 }
+static char *extendPid(char *res,char *name){
+	int ret;
+	size_t l;
+	pid_t pid;
+	char *str;
+
+	l =strlen(name);
+	memcpy(res,name,l);
+	str = res+l;
+	pid = getpid();
+	ret = snprintf(str,32,"%d",pid);
+	if(ret >=32) {
+		ereport(ERROR,
+				(errmsg("32 char was not enough to print the pid")));
+		return name;
+	}
+	return res;
+}
 static int openBasesTemp(DB_ENV *envt, u_int32_t flagsdb) {
 	int ret;
+	char nam[obCMAXPATH];
 
 	ob_tPrivateTemp *privt = envt->app_private;
 	if (!privt) {
@@ -438,57 +451,57 @@ static int openBasesTemp(DB_ENV *envt, u_int32_t flagsdb) {
 	if(ret) goto fin;
 
 	// traits
-	ret = open_db(envt, false, privt->traits, "traits", NULL, 0, DB_BTREE,flagsdb, NULL, NULL);
+	ret = open_db(envt, false, privt->traits, extendPid(nam,"traits"), NULL, 0, DB_BTREE,flagsdb, NULL, NULL);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->m_traits, "m_traits", NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->m_traits, extendPid(nam,"m_traits"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 
 	ret = privt->traits->associate(privt->traits, 0, privt->m_traits,trait_get_marque, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->px_traits, "px_traits", NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->px_traits, extendPid(nam,"px_traits"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->traits->associate(privt->traits, 0, privt->px_traits,trait_get_Xoid, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->py_traits, "py_traits", NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->py_traits,extendPid(nam, "py_traits"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->traits->associate(privt->traits, 0, privt->py_traits,trait_get_Yoid, 0);
 	if(ret) goto fin;
 
 	//points
-	ret = open_db(envt, false, privt->points, "points", NULL, 0, DB_BTREE,flagsdb, NULL, NULL);
+	ret = open_db(envt, false, privt->points,extendPid(nam, "points"), NULL, 0, DB_BTREE,flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	// the size of points is not constant
 
-	ret = open_db(envt, true, privt->mar_points, "mar_points", NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->mar_points, extendPid(nam,"mar_points"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->mar_points,point_get_mar, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->mav_points, "mav_points", NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->mav_points, extendPid(nam,"mav_points"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->mav_points,point_get_mav, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->vx_points, "vx_points", NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->vx_points, extendPid(nam,"vx_points"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->vx_points,point_get_nX, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->vy_points, "vy_points", NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->vy_points, extendPid(nam,"vy_points"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->vy_points,point_get_nY, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->st_points, "st_points", NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->st_points,extendPid(nam, "st_points"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->st_points,point_get_stockId, 0);
 	if(ret) goto fin;
 
 	// stocktemps
-	ret = open_db(envt, false, privt->stocktemps, "stocktemps", NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, false, privt->stocktemps, extendPid(nam,"stocktemps"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 
 	return 0;

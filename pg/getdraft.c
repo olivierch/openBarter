@@ -151,7 +151,7 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 	ctx->i_graph = -1;
 	ctx->tuple_desc = tuple_desc;
 	ctx->end = false;
-	if(ob_dbe_openEnvTemp1(&ctx->envt)) {
+	if(ob_dbe_openEnvTemp(&ctx->envt)) {
 		// pfree(ctx);
 		elog(INFO,"could not open EnvTemp1");
 		return NULL;
