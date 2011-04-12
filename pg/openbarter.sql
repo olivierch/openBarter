@@ -8,9 +8,10 @@ double precision		float8		8, long float
 char				char		1 			(postgres.h)
 
 */
+/*
 CREATE ROLE market LOGIN;
 CREATE ROLE depositary LOGIN;
-
+*/
 create sequence ob_tdraft_id_seq; 
 select setval('ob_tdraft_id_seq',1);
 --------------------------------------------------------

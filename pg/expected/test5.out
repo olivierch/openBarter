@@ -1,0 +1,226 @@
+SET client_min_messages = warning;
+\set ECHO none
+ setval 
+--------
+      1
+(1 row)
+
+RESET client_min_messages;
+select setval('ob_tdraft_id_seq',100);
+ setval 
+--------
+    100
+(1 row)
+
+select ob_fcreate_quality('q1');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fcreate_quality('q2');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fcreate_quality('q3');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fcreate_quality('q4');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fcreate_quality('q5');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fadd_account('o1','olivier>q1',1000);
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+select ob_fadd_account('o2','olivier>q2',1000);
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+select ob_fadd_account('o3','olivier>q3',1000);
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+select ob_fadd_account('o4','olivier>q4',1000);
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+select ob_fadd_account('o5','olivier>q5',1000);
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+select ob_fadd_account('o6','olivier>q2',1000);
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+select ob_finsert_bid('o1','olivier>q1',100,50,'olivier>q3'); /* ->q3 S1 q1-> */
+ ob_finsert_bid 
+----------------
+              0
+(1 row)
+
+select ob_finsert_bid('o2','olivier>q2',100,50,'olivier>q1'); /* ->q1 S2 q2-> */
+ ob_finsert_bid 
+----------------
+              0
+(1 row)
+
+select ob_finsert_bid('o4','olivier>q4',50 ,50,'olivier>q3'); /* ->q3 S4 q4-> */
+ ob_finsert_bid 
+----------------
+              0
+(1 row)
+
+select ob_finsert_bid('o5','olivier>q5',50 ,50,'olivier>q4'); /* ->q4 S5 q5-> */
+ ob_finsert_bid 
+----------------
+              0
+(1 row)
+
+select ob_finsert_bid('o6','olivier>q2',50 ,50,'olivier>q5'); /* ->q5 S6 q2-> */
+ ob_finsert_bid 
+----------------
+              0
+(1 row)
+
+select ob_finsert_bid('o3','olivier>q3',200,100,'olivier>q2'); /* ->q2 S3 q3-> */
+NOTICE:  appel de ob_fomega_draft(101)
+CONTEXT:  PL/pgSQL function "ob_finsert_bid" line 20 at assignment
+ ob_finsert_bid 
+----------------
+              2
+(1 row)
+
+/* expected 2 draft with 3 and 4 partners */
+select did,status,owner,cntcommit,flags from ob_vdraft order by did,owner;
+ did | status | owner | cntcommit | flags 
+-----+--------+-------+-----------+-------
+ 100 | D      | o1    |         1 |     0
+ 100 | D      | o2    |         1 |     0
+ 100 | D      | o3    |         1 |     0
+ 101 | D      | o3    |         1 |     0
+ 101 | D      | o4    |         1 |     0
+ 101 | D      | o5    |         1 |     0
+ 101 | D      | o6    |         1 |     0
+(7 rows)
+
+select id,status,versionsg,nbsource,nbnoeud,cflags from ob_tdraft;
+ id  | status | versionsg | nbsource | nbnoeud | cflags 
+-----+--------+-----------+----------+---------+--------
+ 100 | D      |       100 |        2 |       3 |      4
+ 101 | D      |       100 |        1 |       4 |      4
+(2 rows)
+
+select * from ob_tcommit where did=100;
+ id | did | bid | sid_src | sid_dst | wid | flags 
+----+-----+-----+---------+---------+-----+-------
+  1 | 100 |   1 |       7 |      13 |   2 |     0
+  2 | 100 |   2 |       8 |      14 |   3 |     0
+  3 | 100 |   6 |      12 |      15 |   4 |     0
+(3 rows)
+
+select id,did,provider,nat,qtt,receiver from ob_vmvt where provider!='market' and receiver!='market';
+ id | did | provider | nat | qtt | receiver 
+----+-----+----------+-----+-----+----------
+(0 rows)
+
+select ob_faccept_draft(100,'o1');
+ ob_faccept_draft 
+------------------
+                0
+(1 row)
+
+select id,did,provider,nat,qtt,receiver from ob_tcommit where did=100;
+ERROR:  column "provider" does not exist
+LINE 1: select id,did,provider,nat,qtt,receiver from ob_tcommit wher...
+                      ^
+select ob_faccept_draft(100,'o2');
+ ob_faccept_draft 
+------------------
+                0
+(1 row)
+
+select ob_faccept_draft(100,'o3');
+ ob_faccept_draft 
+------------------
+                0
+(1 row)
+
+/* draft 100 accepted */
+select id,did,provider,nat,qtt,receiver from ob_vmvt where provider!='market' and receiver!='market';
+ id | did | provider |    nat     | qtt | receiver 
+----+-----+----------+------------+-----+----------
+  7 |   7 | o1       | olivier>q1 | 100 | o2
+  8 |   7 | o2       | olivier>q2 | 100 | o3
+  9 |   7 | o3       | olivier>q3 | 100 | o1
+(3 rows)
+
+select ob_faccept_draft(101,'o3');
+ ob_faccept_draft 
+------------------
+                0
+(1 row)
+
+select ob_faccept_draft(101,'o4');
+ ob_faccept_draft 
+------------------
+                0
+(1 row)
+
+select ob_faccept_draft(101,'o5');
+ ob_faccept_draft 
+------------------
+                0
+(1 row)
+
+select ob_faccept_draft(101,'o6');
+ ob_faccept_draft 
+------------------
+                0
+(1 row)
+
+/* draft 101 accepted */
+select id,did,provider,nat,qtt,receiver from ob_vmvt where provider!='market' and receiver!='market';
+ id | did | provider |    nat     | qtt | receiver 
+----+-----+----------+------------+-----+----------
+  7 |   7 | o1       | olivier>q1 | 100 | o2
+  8 |   7 | o2       | olivier>q2 | 100 | o3
+  9 |   7 | o3       | olivier>q3 | 100 | o1
+ 10 |  10 | o4       | olivier>q4 |  50 | o5
+ 11 |  10 | o5       | olivier>q5 |  42 | o6
+ 12 |  10 | o6       | olivier>q2 |  35 | o3
+ 13 |  10 | o3       | olivier>q3 |  59 | o4
+(7 rows)
+
+-- should be 0
+SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft as errors from ob_fstats();
+ errors 
+--------
+      0
+(1 row)
+

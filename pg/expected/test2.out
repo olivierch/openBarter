@@ -1,0 +1,129 @@
+SET client_min_messages = warning;
+\set ECHO none
+ setval 
+--------
+      1
+(1 row)
+
+RESET client_min_messages;
+/*
+truncate table ob_tlomega restart identity cascade;
+truncate table ob_tomega restart identity cascade;
+
+truncate table ob_tcommit restart identity ;
+truncate table ob_tdraft restart identity cascade;
+
+truncate table ob_tnoeud restart identity cascade;
+truncate table ob_tstock restart identity cascade;
+truncate table ob_towner restart identity cascade;
+truncate table ob_tquality restart identity cascade;
+-- truncate table ob_tdepositary restart identity cascade;
+truncate table ob_tmvt restart identity cascade;
+truncate table ob_tldraft restart identity cascade;
+select setval('ob_tdraft_id_seq',1);
+*/
+insert into ob_towner (name) values ('market');
+ERROR:  duplicate key value violates unique constraint "ob_towner_name_key"
+select ob_fcreate_quality('q1');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fcreate_quality('q2');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fcreate_quality('q3');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fcreate_quality('q4');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fcreate_quality('q5');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fcreate_quality('q6');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+-- owners are created
+SELECT ob_fadd_account('o1','olivier>q1',1000); 
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+SELECT ob_fadd_account('o1','olivier>q2',1000); 
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+SELECT ob_fadd_account('o1','olivier>q3',1000); 
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+SELECT ob_fsub_account('o1','olivier>q1',1000); 
+ ob_fsub_account 
+-----------------
+               0
+(1 row)
+
+SELECT ob_fsub_account('o1','olivier>q2',1000); 
+ ob_fsub_account 
+-----------------
+               0
+(1 row)
+
+SELECT ob_fsub_account('o1','olivier>q3',500); 
+ ob_fsub_account 
+-----------------
+               0
+(1 row)
+
+-- should be 0
+SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft as errors from ob_fstats();
+ errors 
+--------
+      0
+(1 row)
+
+select qown,qname,owner,qtt from ob_vowned;
+  qown   |   qname    | owner | qtt 
+---------+------------+-------+-----
+ olivier | olivier>q3 | o1    | 500
+(1 row)
+
+select qown,qname,qtt from ob_vbalance;
+  qown   |   qname    | qtt 
+---------+------------+-----
+ olivier | olivier>q3 | 500
+(1 row)
+
+select id,did,provider,nat,qtt,receiver from ob_vmvt;
+ id | did | provider |    nat     | qtt  | receiver 
+----+-----+----------+------------+------+----------
+  1 |     | market   | olivier>q1 | 1000 | o1
+  2 |     | market   | olivier>q2 | 1000 | o1
+  3 |     | market   | olivier>q3 | 1000 | o1
+  4 |     | o1       | olivier>q1 | 1000 | market
+  5 |     | o1       | olivier>q2 | 1000 | market
+  6 |     | o1       | olivier>q3 |  500 | market
+(6 rows)
+
