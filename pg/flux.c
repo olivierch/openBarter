@@ -815,7 +815,7 @@ void ob_flux_voirChemin(FILE *stream, ob_tChemin *pchemin, int flags) {
 	}
 	return;
 }
-
+/*
 static bool verify_fluxMaximum(const ob_tChemin *pchemin, double *fluxExact) {
 	unsigned char _is, _jn, _lon,_jm;
 	double _cumul[obCMAXCYCLE];
@@ -837,4 +837,4 @@ static bool verify_fluxMaximum(const ob_tChemin *pchemin, double *fluxExact) {
 	}
 	return true;
 	
-}
+}*/

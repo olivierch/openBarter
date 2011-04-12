@@ -359,7 +359,7 @@ fin:
 }
 */
 void ob_point_voirStock(ob_tStock *ps) {
-	elog(INFO,"Stock[%lli] nF=%lli qtt=%lli own=%lli version=%lli",ps->sid,ps->nF,ps->own,ps->version);
+	elog(INFO,"Stock[%lli] nF=%lli qtt=%lli own=%lli version=%lli",ps->sid,ps->nF,ps->qtt,ps->own,ps->version);
 	return;
 }
 void ob_point_voirInterdit(ob_tInterdit *pi) {

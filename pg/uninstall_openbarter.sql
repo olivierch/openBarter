@@ -46,6 +46,6 @@ DROP TABLE IF EXISTS ob_tquality,ob_towner,ob_tstock,ob_tnoeud,ob_tdraft,
 	ob_tcommit,ob_tldraft,ob_tomega,ob_tlomega,ob_tmvt,ob_tconnectdesc CASCADE;
 
 /* roles */
-DROP ROLE IF EXISTS market,depositary;
+-- DROP ROLE IF EXISTS market,depositary;
 
 	

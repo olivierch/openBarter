@@ -4,5 +4,6 @@
 *.dblite
 *.pyc
 pg/.deps/
+pg/results/
 logs/
 media/

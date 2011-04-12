@@ -22,8 +22,8 @@ static int ob_makeEnvDir_int(char *direnv);
 int ob_makeEnvDir(char *direnv)
 {
 	int ret;
-	pid_t pid;
-	char pid_str[32];
+	//pid_t pid;
+	//char pid_str[32];
 
 	join_path_components(direnv,DataDir,"openbarter");
 	ret = ob_makeEnvDir_int(direnv);

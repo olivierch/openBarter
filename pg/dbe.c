@@ -23,28 +23,7 @@
 //#include <errno.h>
 #include <sys/stat.h>
 //#include <utils.h>
-/******************************************************************************/
 
-//ob_tGlobal global;
-//static int compare_dup_points(DB *db, const DBT *data1, const DBT *data2);
-/*
-static int stock_get_nF(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
-static int stock_get_own(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
-static int offre_get_nY(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
-static int offre_get_nX(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
-static int offre_get_stockId(DB *sdbp, const DBT *pkey, const DBT *pdata,
-		DBT *skey);
-*/
-/*static int accord_get_oid(DB *sdbp, const DBT *pkey, const DBT *pdata,
-		DBT *skey);
-static int accord_get_own(DB *sdbp, const DBT *pkey, const DBT *pdata, 
-		DBT *skey);*/
-/*
-static int interdit_get_Xoid(DB *sdbp, const DBT *pkey, const DBT *pdata,
-		DBT *skey);
-static int interdit_get_Yoid(DB *sdbp, const DBT *pkey, const DBT *pdata,
-		DBT *skey);
-*/
 static int point_get_nX(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
 static int point_get_nY(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
 static int
@@ -59,16 +38,13 @@ static int trait_get_Yoid(DB *sdbp, const DBT *pkey, const DBT *pdata,
 		DBT *skey);
 static int trait_get_marque(DB *sdbp, const DBT *pkey, const DBT *pdata,
 		DBT *skey);
-//static int nom_get_nom(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
-//static int message_get_own(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
+
 static void errcallback(const DB_ENV *dbenv, const char *errpfx,
 		const char *msg);
-// static int ob_dbe_openEnvTemp(char *path,DB_ENV **penvt);
+
 static int openBasesTemp(DB_ENV *envt, u_int32_t flagsdb);
 static int closeBasesTemp(ob_tPrivateTemp *privt);
-// int openBasesDurable(DB_ENV *env,DB_TXN *txn,u_int32_t flagsdb);
-// static int closeBasesDurable(ob_tPrivate *priv);
-static int ob_dbe_fermeture(FILE *flog, FILE *ferr);
+
 /******************************************************************************
  directory creation
  ******************************************************************************/
@@ -90,77 +66,6 @@ int ob_dbe_dircreate(char * path) {
 	fin: return (ret);
 }
 
-/******************************************************************************
- initializations
- ******************************************************************************/
-static int ob_dbe_ouverture(char *path_environ, FILE **pflog, FILE **pferr) {
-	int ret;
-	char *file_log = "/ob.log", *file_err = "/ob.err";
-	char _file_log[obCMAXPATH], _file_err[obCMAXPATH];
-	FILE *_log = NULL, *_err = NULL;
-
-	openlog("ob", LOG_CONS, LOG_DAEMON);
-
-	// ouverture du log
-	ret = snprintf(_file_log, obCMAXPATH, "%s%s", path_environ, file_log);
-	if (ret		>= obCMAXPATH) {
-		obMTRACE(EINVAL);
-		goto abort;
-	}
-	_log = fopen(_file_log, "w+");
-	if (errno < 0) {
-		ret = errno;
-		obMTRACE(ret);
-		goto abort;
-	}
-
-	// ouverture du err
-	ret = snprintf(_file_err, obCMAXPATH, "%s%s", path_environ, file_err);
-	if(ret		>= obCMAXPATH) {
-		obMTRACE(EINVAL);
-		goto abort;
-	}
-	_err = fopen(_file_err, "w+");
-	if (errno < 0) {
-		ret = errno;
-		obMTRACE(ret);
-		goto abort;
-	}
-
-	*pflog = _log;
-	*pferr = _err;
-	return 0;
-
-abort: (void) ob_dbe_fermeture(_log, _err);
-	*pflog = NULL;
-	*pferr = NULL;
-	return ret;
-}
-/******************************************************************************
- closures
- ******************************************************************************/
-static int ob_dbe_fermeture(FILE *flog, FILE *ferr) {
-	int ret, ret_t;
-
-	ret = 0;
-	if (flog) {
-		ret = fclose(flog);
-		if (ret) {
-			obMTRACE(errno);
-			ret = errno;
-		}
-	}
-	if (ferr) {
-		ret_t = fclose(ferr);
-		if (ret_t) {
-			obMTRACE(errno);
-			if (!ret)
-				ret = errno;
-		}
-	}
-	closelog();
-	return ret;
-}
 
 /*******************************************************************************
  * open temporary env, next tables
