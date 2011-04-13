@@ -114,10 +114,11 @@ int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 		goto abort;
 	}
 
-	_flagsenv = DB_CREATE | DB_INIT_MPOOL | DB_PRIVATE;
-	// to activate TXN
-	// _flagsenv |= DB_INIT_LOCK | DB_INIT_LOG | DB_INIT_TXN;
-
+	_flagsenv = DB_CREATE | DB_INIT_MPOOL;
+	// DB_INIT_LOCK,DB_INIT_TXN unused <= each database accessed by only one process/thread
+	// DB_INIT_LOG unused <= no database recovery necessary
+	//  DB_PRIVATE unused <= env accessed by multiple process
+	// => region files created
 	ret = envt->open(envt, openbarter_g.pathEnv, _flagsenv, 0);
 	if (ret) {
 		obMTRACE(ret);
@@ -133,9 +134,10 @@ int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 	memset(privt, 0, sizeof(ob_tPrivateTemp));
 	envt->app_private = privt;
 
-	// DB_PRIVATE is not used to open db,
-	// but to avoid the opening transaction
-	_flagsdb = DB_CREATE | DB_PRIVATE | DB_TRUNCATE;
+	// how do we avoid the opening transaction ?
+	// DB_PRIVATE => one process,
+	// otherwise, region files are backed to file system
+	_flagsdb = DB_CREATE | DB_TRUNCATE | DB_PRIVATE;
 	// to activate  TXN
 	// _flagsdb |= DB_AUTO_COMMIT;
 
@@ -423,27 +425,41 @@ fin:
 		} \
 		(base) = NULL; \
 	}
+#define ob_dbe_MTruncateBase(base) if((base)!=NULL) { \
+		ret_t = (base)->truncate(NULL,(base),&cnt,0); \
+		if( ret_t) { \
+			if(!ret) ret = ret_t; \
+		} \
+		(base) = NULL; \
+	} 
 /******************************************************************************/
 /******************************************************************************/
 static int closeBasesTemp(ob_tPrivateTemp *privt) {
 	int ret = 0, ret_t;
+	u_int32_t cnt;
+	
 	if (!privt) {
 		ret = ob_dbe_CerPrivUndefined;
 		return ret;
 	}
-
+	ob_dbe_MTruncateBase(privt->traits);
+	// secondary index are also truncated
 	ob_dbe_MCloseBase(privt->px_traits);
 	ob_dbe_MCloseBase(privt->py_traits);
 	ob_dbe_MCloseBase(privt->m_traits);
 	ob_dbe_MCloseBase(privt->traits);
 
+	ob_dbe_MTruncateBase(privt->points);
+	//
 	ob_dbe_MCloseBase(privt->vx_points);
 	ob_dbe_MCloseBase(privt->vy_points);
 	ob_dbe_MCloseBase(privt->mar_points);
 	ob_dbe_MCloseBase(privt->mav_points);
 	ob_dbe_MCloseBase(privt->st_points);
 	ob_dbe_MCloseBase(privt->points);
-
+	
+	ob_dbe_MTruncateBase(privt->stocktemps);
+	//
 	ob_dbe_MCloseBase(privt->stocktemps);
 
 	// stat_env(envit->env,0);
