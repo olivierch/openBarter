@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf8 -*-
+
 import daemon
 import logger
 from write_load_path import write_path
@@ -10,21 +11,9 @@ from contextlib import closing
 import os,sys
 import errOb
 
-
 #########################################################
 # tools
-def getDictsFromCursor(cursor):
-	""" usage:
-	for d in getDictsFromCursor(cursor):
-		print d
-	"""
-	while True:
-		nextRow = cursor.fetchone()
-		if not nextRow: break
-		d = {}
-		for (i,coldesc) in enumerate(cursor.description):
-			d[coldesc[0]] = nextRow[i]
-		yield d
+
 
 
 def getQualitySufName(i):
@@ -82,7 +71,7 @@ def statMarket(conn,log):
 	sql = 'SELECT * from ob_fstats()'
 	with closing(conn.cursor()) as cursor:
 		cursor.execute(sql)
-		for d in getDictsFromCursor(cursor):
+		for d in db.getDictsFromCursor(cursor):
 			for k,v in d.iteritems():
 				if k in ('unbalanced_qualities','corrupted_draft','corrupted_stock_s','corrupted_stock_a'):
 					if v!=0:
