@@ -4,6 +4,7 @@
 import psycopg2
 import psycopg2.extras
 import settings
+import sys
 """
 with Connection(log) as conn:
 	with Cursor(conn,'name') as cursor:
@@ -13,7 +14,7 @@ with Connection(log) as conn:
 """
 
 class Connection():
-	def __init__(self,log):
+	def __init__(self,log = None):
 		self.dbcon = None
 		self.log = log
 		
@@ -27,16 +28,22 @@ class Connection():
 				port = settings.DATABASE_PORT
 			)
 		except psycopg2.Error,e:
-			self.log.error("could not connect to the database")
+			self.error("could not connect to the database")
 			raise e
 		return self.dbcon
 	
 	def __exit__(self, type, value, tb):
 		if(type):
-			self.log.error("An error %s occured" % (str( type),))
+			self.error("An error %s occured" % (str( type),))
 		self.dbcon.close()
 		self.dbcon = None
 		return False
+		
+	def error(str):
+		if(self.log):
+			self.log.error(str)	
+		else:
+			print >> sys.stderr,str
 			
 class Cursor():
 	"""
@@ -73,4 +80,15 @@ class Cursor():
 		self.cursor.close()
 		return False # exception is propagated
 		
-
+def getDictsFromCursor(cursor):
+	""" usage:
+	for d in getDictsFromCursor(cursor):
+		print d
+	"""
+	while True:
+		nextRow = cursor.fetchone()
+		if not nextRow: break
+		d = {}
+		for (i,coldesc) in enumerate(cursor.description):
+			d[coldesc[0]] = nextRow[i]
+		yield d

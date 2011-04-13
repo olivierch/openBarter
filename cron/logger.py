@@ -27,7 +27,11 @@ def getLogger(name="to_be_named"):
 	logger = logging.LoggerAdapter(logging.getLogger(name), DelayInfo())
 	#logger = logging.LoggerAdapter(logger,DelayInfo())
 	return logger
-	
+
+LOG_FORMAT = "%(delay)-15s - %(name)-5s - %(levelname)-8s - %(message)s"
+LOG_OFFSETS= 15,3,5,3,8,3
+LOG_OFFSET = reduce(labda a,b:a+b,LOG_OFFSET)
+
 def start(name="to_be_named",direct = settings.LOGGINGDIR,maxBytes = settings.LOGGINGmaxBytes, backupCount= settings.LOGGINGbackupCount):
 	global logger_time_start
 	
@@ -36,7 +40,7 @@ def start(name="to_be_named",direct = settings.LOGGINGDIR,maxBytes = settings.LO
 	logger_time_start = datetime.now()
 	logger = logging.getLogger()
 	logger.setLevel(logging.DEBUG)
-	formatter = logging.Formatter("%(delay)-15s - %(name)-5s - %(levelname)-8s - %(message)s")
+	formatter = logging.Formatter(LOG_FORMAT)
 	# Add the log message handler to the logger
 	handler = logging.handlers.RotatingFileHandler(direct+name+".log",maxBytes=maxBytes, backupCount=backupCount)
 	handler.setFormatter(formatter)

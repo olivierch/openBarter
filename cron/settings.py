@@ -17,12 +17,15 @@ NBOWNER = 1000
 #output
 JSONDIR = os.path.join(WORKDIR,"media/json/")
 
-#database
+#postgres database
 DATABASE_NAME = 'ob'
 DATABASE_USER = 'olivier'         
 DATABASE_PASSWORD = '' 
 DATABASE_HOST = 'localhost'     
 DATABASE_PORT = '5432' 
+
+#berkeleydb database
+BDB_HOME = "~/project/DemoDir/openbarter"
 
 def init():
 	""" unused """
