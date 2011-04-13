@@ -19,6 +19,7 @@ class Connection():
 		self.log = log
 		
 	def __enter__(self):
+		self.dbcon = None
 		try:
 			self.dbcon = psycopg2.connect(
 				database  = settings.DATABASE_NAME,
@@ -27,6 +28,8 @@ class Connection():
 				host = settings.DATABASE_HOST,
 				port = settings.DATABASE_PORT
 			)
+			self.dbcon.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+
 		except psycopg2.Error,e:
 			self.error("could not connect to the database")
 			raise e
@@ -55,7 +58,7 @@ class Cursor():
 		self.log = log
 	def __enter__(self):
 		self.cursor = self.conn.cursor()
-		self.cursor.execute("BEGIN")
+		# self.cursor.execute("BEGIN")
 		# self.log.info("BEGIN")
 		# HERE IS THE IMPORTANT PART, by specifying a name for the cursor
 		# psycopg2 creates a server-side cursor, which prevents all of the
@@ -68,15 +71,17 @@ class Cursor():
 		return self.cursor
 
 	def __exit__(self,exc_type, exc_val, exc_tb):
-		
+		"""
 		if(exc_type==None):
 			self.cursor.execute("COMMIT")
 			# self.log.info("COMMIT")
 		else:
 			self.cursor.execute("ROLLBACK")
 			self.log.error("ROLLBACK",exc_info=True)
-			if(exc_type == psycopg2.Error):
-				self.log.error(exc_val.pgerror)
+
+		"""
+		if(exc_type == psycopg2.Error):
+			self.log.error(exc_val.pgerror)
 		self.cursor.close()
 		return False # exception is propagated
 		
