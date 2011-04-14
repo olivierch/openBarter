@@ -426,7 +426,7 @@ fin:
 		(base) = NULL; \
 	}
 #define ob_dbe_MTruncateBase(base) if((base)!=NULL) { \
-		ret_t = (base)->truncate(NULL,(base),&cnt,0); \
+		ret_t = (base)->truncate((base),NULL,&cnt,0); \
 		if( ret_t) { \
 			if(!ret) ret = ret_t; \
 		} \
