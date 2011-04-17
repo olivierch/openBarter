@@ -610,7 +610,7 @@ static int _diminuer(privt,pchemin)
 				&ks_sid,&ds_stock,0);
 			if(ret) {obMTRACE(ret);goto fin;}
 			continue;
-		} /* otherwise, the stock is empty.
+		} /* otherwise, the stock is empty: stock.qtt == pflux->qtt.
 		it is useless to update it, since points and traits that use it
 		will not belong to the next graph.
 		The stock is now empty */
@@ -626,31 +626,30 @@ static int _diminuer(privt,pchemin)
 		if(!ret) do {
 
 #ifndef NDEBUG // mise au point
+			// elog(INFO,"NDEBUG is undefined"); IT IS UNDEFINED
 			if(point.mo.offre.oid != *((ob_tId*)ku_oid.data))
 			{ret = ob_chemin_CerPointIncoherent;obMTRACE(ret); goto fin;}
 			if(point.mo.offre.stockId != pflux->sid)
 			{ret = ob_chemin_CerPointIncoherent;obMTRACE(ret); goto fin;}
 #endif
+			// all points that touch this point are deleted
 			ret = privt->points->del(privt->points,0,&ku_oid,0);
 			if (ret) {obMTRACE(ret); goto fin;}
 
-			// all points that touch this point are deleted
-			ret = privt->px_traits->del(privt->px_traits,
-					0,&ku_oid,0);
+			// all traits that touch this trait are deleted
+			ret = privt->px_traits->del(privt->px_traits,0,&ku_oid,0);
 			if (ret) {
 				if(ret==DB_NOTFOUND) ret = 0;
 				else {obMTRACE(ret); goto fin;}
 			}
-			// all traits that touch this trait are deleted
-			ret = privt->py_traits->del(privt->py_traits,
-					0,&ku_oid,0);
+
+			ret = privt->py_traits->del(privt->py_traits,0,&ku_oid,0);
 			if (ret) {
 				if(ret == DB_NOTFOUND) ret = 0;
 				else {obMTRACE(ret); goto fin;}
 			}
 
-			ret = cst_point->pget(cst_point,
-					&ks_sid,&ku_oid,&du_point,DB_NEXT_DUP);
+			ret = cst_point->pget(cst_point,&ks_sid,&ku_oid,&du_point,DB_NEXT_DUP);
 		} while (!ret); if(ret == DB_NOTFOUND) ret = 0;
 		else {obMTRACE(ret);goto fin;}
 		// end loop cst_point
