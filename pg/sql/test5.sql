@@ -34,7 +34,7 @@ select * from ob_tcommit where did=100;
 select id,did,provider,nat,qtt,receiver from ob_vmvt where provider!='market' and receiver!='market';
 
 select ob_faccept_draft(100,'o1');
-select id,did,provider,nat,qtt,receiver from ob_tcommit where did=100;
+-- select id,did,provider,nat,qtt,receiver from ob_tcommit where did=100;
 select ob_faccept_draft(100,'o2');
 select ob_faccept_draft(100,'o3');
 /* draft 100 accepted */

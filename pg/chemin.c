@@ -153,7 +153,7 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 				ret = ob_chemin_CerIterNoeudErr;
 				goto fin;
 			}
-			// elog(INFO,"ob_iternoeud_GetPortal2(Yoid=%lli,nR=%lli)",Yoid,moY.offre.nR);
+			//elog(INFO,"ob_iternoeud_GetPortal2(Yoid=%lli,nR=%lli)",Yoid,moY.offre.nR);
 
 			do {
 				/* next element of the select [1], result: Xoid<-NOX.id ,offreX<-NOX.* stock<-S.*	*/
@@ -245,7 +245,7 @@ fin:
 	obMCloseCursor(cmar_pointY);
 	obMCloseCursor(c_point);
 	if(cvy_offreX != NULL) SPI_cursor_close(cvy_offreX);
-
+	// elog(INFO,"%i nblayers found",*nblayer);
 	return (ret);
 }
 /*******************************************************************************
@@ -411,15 +411,14 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 		else {obMTRACE(ret); goto fin;}
 		// end loop cmav_point
 
+		// elog(INFO,"parcours_avant layer=%i nblayer=%i seuil %i",layer,nblayer,obCMAXCYCLE-1);
 		// a loop was found if layer > nblayer
-		if(layer >= obCMAXCYCLE-1) {
-			/*
+
+		if(layer > nblayer) {
 			ret = ob_chemin_CerLoopOnOffer;
-			elog(INFO,"ob_chemin_CerLoopOnOffer layer=%i nblayer=%i",layer,nblayer);
+			//elog(INFO,"ob_chemin_CerLoopOnOffer layer=%i nblayer=%i",layer,nblayer);
 			memcpy(&loop->rid,&fleche,sizeof(ob_tFleche));
 			elog(INFO,"for Xoid=%lli Yoid=%lli",loop->rid.Xoid,loop->rid.Yoid);
-			*/
-			ret = 0;
 			goto fin;
 		}
 		layer +=1;

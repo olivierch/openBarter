@@ -75,7 +75,7 @@ def statMarket(conn,log):
 			for k,v in d.iteritems():
 				if k in ('unbalanced_qualities','corrupted_draft','corrupted_stock_s','corrupted_stock_a'):
 					if v!=0:
-						exitError(log,'ob_fstats().%s = %i',k,v)
+						exitError(log,'ob_fstats().%s = %i'%(k,v))
 	# log.info('statMarket Ok')
 	
 def lirePrix(conn,log,natr,natf):
@@ -153,7 +153,34 @@ def getRanBidId(conn,log,owner):
 		
 	if(l == 0): return (None,None,None,None)
 	return res[random.randint(0,l-1)] 
-		
+	
+def verifLoops(conn,log,sql):
+	"""
+	"""
+	with closing(conn.cursor()) as cursor:
+		cursor.execute(sql,[])
+		res = cursor.fetchall()
+		if(len(res) == 0):
+			exitError(log,(sql+" Should return a result"))	
+		(nb,) = res[0]
+	if(nb!=0):
+		exitError(log,(sql+" Should return 0"))
+	return				
+
+def verifLoops23(conn,log):
+	sql2 = """SELECT count(*) 
+		from ob_tnoeud n1 inner join ob_tstock s1 on (n1.sid=s1.id and s1.qtt!=0)
+		inner join ob_tnoeud n2 on (n1.nf=n2.nr)  inner join ob_tstock s2 on (n2.sid=s2.id and s2.qtt!=0)
+		where n1.nr=n2.nf and n1.id < n2.id """
+	verifLoops(conn,log,sql2)
+	sql3 = """SELECT count(*) from ob_tnoeud n1 inner join ob_tstock s1 on (n1.sid=s1.id and s1.qtt!=0)
+		inner join ob_tnoeud n2 on (n1.nf=n2.nr)  inner join ob_tstock s2 on (n2.sid=s2.id and s2.qtt!=0)
+		inner join ob_tnoeud n3 on (n2.nf=n3.nr)  inner join ob_tstock s3 on (n3.sid=s3.id and s3.qtt!=0)
+		where n1.nr=n3.nf and n1.id < n2.id """
+	# and n2.id <n3.id ???
+	verifLoops(conn,log,sql3)
+	return
+	
 def keepReserve(conn,log,owner):
 	""" the oldest bid is removed, if too much bids are made
 	"""
@@ -263,6 +290,7 @@ def traiteOwner(conn,log,owner):
 	
 	# makes a bid
 	makeSbid = (random.randint(0,5)==0) # 1 fois sur 5
+	makeSbid = False
 	
 	bidId,natfId,natf,qttf = getRanBidId(conn,log,owner)
 	
@@ -297,6 +325,7 @@ def loopSimu(conn,log):
 		owner = getOwnerName(random.randint(1,settings.NBOWNER)-1)
 		traiteOwner(conn,log,owner)
 		statMarket(conn,log)
+		verifLoops23(conn,log)
 
 def simu():
 	logger.start("simu")

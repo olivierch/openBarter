@@ -42,11 +42,21 @@ class Connection():
 		self.dbcon = None
 		return False
 		
-	def error(str):
+	def error(self,str):
 		if(self.log):
 			self.log.error(str)	
 		else:
 			print >> sys.stderr,str
+			
+class CurorInt():
+	""" pas fini """
+	def __init__(self,conn):
+		self.conn = conn
+		self.cur = self.conn.cursor()
+		
+	def execute(self,argv):
+		self.execute(argv)
+	
 			
 class Cursor():
 	"""
@@ -57,7 +67,7 @@ class Cursor():
 		# self.name = name
 		self.log = log
 	def __enter__(self):
-		self.cursor = self.conn.cursor()
+		self.cursor = self.conn.cursor() # AUTOCOMMIT
 		# self.cursor.execute("BEGIN")
 		# self.log.info("BEGIN")
 		# HERE IS THE IMPORTANT PART, by specifying a name for the cursor

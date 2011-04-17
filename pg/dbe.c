@@ -418,20 +418,21 @@ fin:
 	return (ret);
 }
 /******************************************************************************/
-#define ob_dbe_MCloseBase(base) if((base)!=NULL) { \
+#define ob_dbe_MCloseBase(base) do { if ((base)!=NULL){ \
 		ret_t = (base)->close((base),0); \
 		if( ret_t) { \
 			if(!ret) ret = ret_t; \
 		} \
 		(base) = NULL; \
-	}
-#define ob_dbe_MTruncateBase(base) if((base)!=NULL) { \
+	} else elog(ERROR,"batabase is null- could not close"); \
+	} while (0)
+#define ob_dbe_MTruncateBase(base) do { if ((base)!=NULL) { \
 		ret_t = (base)->truncate((base),NULL,&cnt,0); \
 		if( ret_t) { \
 			if(!ret) ret = ret_t; \
 		} \
-		(base) = NULL; \
-	} 
+	} else elog(ERROR,"batabase is null - could not truncate"); \
+	} while(0)
 /******************************************************************************/
 /******************************************************************************/
 static int closeBasesTemp(ob_tPrivateTemp *privt) {
@@ -444,6 +445,7 @@ static int closeBasesTemp(ob_tPrivateTemp *privt) {
 	}
 	ob_dbe_MTruncateBase(privt->traits);
 	// secondary index are also truncated
+
 	ob_dbe_MCloseBase(privt->px_traits);
 	ob_dbe_MCloseBase(privt->py_traits);
 	ob_dbe_MCloseBase(privt->m_traits);
@@ -457,11 +459,10 @@ static int closeBasesTemp(ob_tPrivateTemp *privt) {
 	ob_dbe_MCloseBase(privt->mav_points);
 	ob_dbe_MCloseBase(privt->st_points);
 	ob_dbe_MCloseBase(privt->points);
-	
+
 	ob_dbe_MTruncateBase(privt->stocktemps);
 	//
 	ob_dbe_MCloseBase(privt->stocktemps);
-
 	// stat_env(envit->env,0);
 
 	return (ret);

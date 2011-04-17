@@ -30,7 +30,7 @@ def getLogger(name="to_be_named"):
 
 LOG_FORMAT = "%(delay)-15s - %(name)-5s - %(levelname)-8s - %(message)s"
 LOG_OFFSETS= 15,3,5,3,8,3
-LOG_OFFSET = reduce(labda a,b:a+b,LOG_OFFSET)
+LOG_OFFSET = reduce(lambda a,b:a+b,LOG_OFFSETS)
 
 def start(name="to_be_named",direct = settings.LOGGINGDIR,maxBytes = settings.LOGGINGmaxBytes, backupCount= settings.LOGGINGbackupCount):
 	global logger_time_start

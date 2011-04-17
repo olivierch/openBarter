@@ -13,7 +13,7 @@ SHLIB_LINK +=  $(filter -l%, $(LIBS)) -ldb -lpq -lpthread #  -lpthread  -print-s
 DATA_built = openbarter.sql 
 DATA = uninstall_openbarter.sql 
 # DOCS = README.openbarter
-REGRESS = test2 test5
+REGRESS = test2 test3 test4 test5
 
 ifdef USE_PGXS
 PG_CONFIG = pg_config

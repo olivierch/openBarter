@@ -1513,6 +1513,7 @@ DECLARE
 	_commot	ob_tcommit%rowtype;
 	accepted	int4; -- 1 when accepted by others
 	_nbcommit	int :=0;
+	_nbpartner	int;
 	ownfound	bool := false;
 	d_status	char;
 	res 		int;
@@ -1535,7 +1536,10 @@ BEGIN
 		RAISE EXCEPTION '[-30422] The draft % has a status %, whith res=%',draft.id,draft.status,res USING ERRCODE='38000';
 	END IF;	
 
-	SELECT bit_and(flags&1) INTO accepted FROM ob_tcommit WHERE did = draft_id AND wid!=own_id;
+	SELECT bit_and(flags&1),count(*) INTO accepted,_nbpartner FROM ob_tcommit WHERE did = draft_id AND wid!=own_id;
+	if(_nbpartner = 0) THEN -- only one partner for this draft
+		accepted := 1; 
+	END IF;
 	-- accepted=1 when is it accepted by others
 	
 	------------- update status of commits ------------	
@@ -1819,7 +1823,7 @@ BEGIN
 	
 	
 	IF(cnt != 0) THEN -- some draft were found
-		RAISE NOTICE 'appel de ob_fomega_draft(%)',draft_id;
+		-- RAISE NOTICE 'appel de ob_fomega_draft(%)',draft_id;
 		
 		_err := ob_fomega_draft(draft_id); -- TODO omega's of the last draft are recorded
 		IF(_err <0) THEN

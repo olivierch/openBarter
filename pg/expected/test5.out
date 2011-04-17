@@ -109,8 +109,6 @@ select ob_finsert_bid('o6','olivier>q2',50 ,50,'olivier>q5'); /* ->q5 S6 q2-> */
 (1 row)
 
 select ob_finsert_bid('o3','olivier>q3',200,100,'olivier>q2'); /* ->q2 S3 q3-> */
-NOTICE:  appel de ob_fomega_draft(101)
-CONTEXT:  PL/pgSQL function "ob_finsert_bid" line 20 at assignment
  ob_finsert_bid 
 ----------------
               2
@@ -155,10 +153,7 @@ select ob_faccept_draft(100,'o1');
                 0
 (1 row)
 
-select id,did,provider,nat,qtt,receiver from ob_tcommit where did=100;
-ERROR:  column "provider" does not exist
-LINE 1: select id,did,provider,nat,qtt,receiver from ob_tcommit wher...
-                      ^
+-- select id,did,provider,nat,qtt,receiver from ob_tcommit where did=100;
 select ob_faccept_draft(100,'o2');
  ob_faccept_draft 
 ------------------
