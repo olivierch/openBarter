@@ -1,0 +1,117 @@
+/*truncate table ob_tlomega restart identity cascade;
+truncate table ob_tomega restart identity cascade;
+
+truncate table ob_tcommit restart identity ;
+truncate table ob_tdraft restart identity cascade;
+
+truncate table ob_tnoeud restart identity cascade;
+truncate table ob_tstock restart identity cascade;
+truncate table ob_towner restart identity cascade;
+insert into ob_towner (name) values ('market');
+truncate table ob_tquality restart identity cascade;
+-- truncate table ob_tdepositary restart identity cascade;
+truncate table ob_tmvt restart identity cascade;
+truncate table ob_tldraft restart identity cascade;
+*/
+SET client_min_messages = warning;
+\set ECHO none
+ setval 
+--------
+      1
+(1 row)
+
+RESET client_min_messages;
+select setval('ob_tdraft_id_seq',100);
+ setval 
+--------
+    100
+(1 row)
+
+select ob_fcreate_quality('q1');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fcreate_quality('q2');
+ ob_fcreate_quality 
+--------------------
+                  0
+(1 row)
+
+select ob_fadd_account('o1','olivier>q1',1000);
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+select ob_fadd_account('o2','olivier>q2',1000);
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+select ob_finsert_bid('o1','olivier>q1',100,50,'olivier>q2');
+ ob_finsert_bid 
+----------------
+              0
+(1 row)
+
+select ob_finsert_bid('o2','olivier>q2',100,50,'olivier>q1');
+ ob_finsert_bid 
+----------------
+              1
+(1 row)
+
+-- executes ob_getdraft_get(6,2,3,2)
+-- should be 0
+SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft as errors from ob_fstats();
+ errors 
+--------
+      0
+(1 row)
+
+select ob_faccept_draft(100,'o1');
+ ob_faccept_draft 
+------------------
+                0
+(1 row)
+
+select ob_faccept_draft(100,'o2');
+ ob_faccept_draft 
+------------------
+                0
+(1 row)
+
+-- should be 0
+SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft as errors from ob_fstats();
+ errors 
+--------
+      0
+(1 row)
+
+select qown,qname,owner,qtt from ob_vowned;
+  qown   |   qname    | owner | qtt 
+---------+------------+-------+-----
+ olivier | olivier>q2 | o2    | 900
+ olivier | olivier>q2 | o1    | 100
+ olivier | olivier>q1 | o1    | 900
+ olivier | olivier>q1 | o2    | 100
+(4 rows)
+
+select qown,qname,qtt from ob_vbalance;
+  qown   |   qname    | qtt  
+---------+------------+------
+ olivier | olivier>q2 | 1000
+ olivier | olivier>q1 | 1000
+(2 rows)
+
+select id,did,provider,nat,qtt,receiver from ob_vmvt;
+ id | did | provider |    nat     | qtt  | receiver 
+----+-----+----------+------------+------+----------
+  1 |     | market   | olivier>q1 | 1000 | o1
+  2 |     | market   | olivier>q2 | 1000 | o2
+  3 |   3 | o1       | olivier>q1 |  100 | o2
+  4 |   3 | o2       | olivier>q2 |  100 | o1
+(4 rows)
+
