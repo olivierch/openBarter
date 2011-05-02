@@ -32,6 +32,7 @@
 #include <point.h>
 #include <flux.h>
 
+/* obsolete */
 size_t ob_point_getsizePoint(ob_tPoint *point) {
 	int res;
 	unsigned char _nb;
@@ -80,20 +81,25 @@ int ob_point_getErrorOffreStock(ob_tNoeud *o, ob_tStock *s) {
 	fin: return ret;
 }
 
-/* initializes the point.
- *  point->mo.offre is defined -it was a marqueOffre
- */
+/**************************************************************************
+ *  initializes the point from point->mo (ob_tMarqueOffre).
+ *  clears the point->chemin,
+ *  the stock red from stocktemps[stockId] is stored into point->chemin.no[0].stock
+ *  if this stock is empty and deposOffre,
+ *  	returns ob_point_CerStockEpuise
+ *  if the point is a source, puts this offre as first element of point->chemin
+ *  stores point into point[oid]
+ *  returns
+ *************************************************************************/
 int ob_point_initPoint(ob_tPrivateTemp *privt, ob_tPoint *point) {
-	int ret; //, coucheav;
+	int ret;
 	ob_tStock *pstock;
 	DBT du_stock,ks_sid,ks_oid,ds_point;
 	ob_tLoop loop;
 
-	//bool _fast = privt->cflags && ob_flux_CFast;
-
 	ob_flux_cheminVider(&point->chemin, privt->cflags);
 	// place for the first stock
-	pstock = ob_flux_cheminGetAdrFirstStock(&point->chemin);
+	pstock = ob_flux_McheminGetAdrFirstStock(&point->chemin);
 	// get the stocktemps[point->mo.offre.stockId]
 	obMtDbtpU(du_stock, pstock);
 	//ob_point_voirNoeud(&point->mo.offre);
@@ -101,91 +107,41 @@ int ob_point_initPoint(ob_tPrivateTemp *privt, ob_tPoint *point) {
 	ret = privt->stocktemps->get(privt->stocktemps, 0, &ks_sid, &du_stock, 0);
 	if (ret) {
 		obMTRACE(ret);
-		elog(INFO,"for stocktemp[%lli]",point->mo.offre.stockId);
-		// voirDBT(&point->mo.offre.stockId);
+		elog(INFO,"read from stocktemp[%lli] returned %i",point->mo.offre.stockId,ret);
 		goto fin;
 	}
-	// TODO if it is not found?? it should be
 
-	if (privt->deposOffre)
-		if (pstock->qtt == 0) {
+	// the stock is empty and the node is not the pivot on price read
+	if (pstock->qtt == 0 && !(!privt->deposOffre && point->mo.offre.oid ==0)  )
 			ret = ob_point_CerStockEpuise;
-			goto fin;
+	else {
+		if (point->mo.av.layer == 1) { // it is a source
+			// put it into the chemin
+			// 	chemin = [point->mo.offre,]
+			ret = ob_flux_cheminAjouterNoeud(&point->chemin, pstock,&point->mo.offre,&loop);
+			if (ret) goto fin;
 		}
 
-	if (point->mo.av.layer == 1) { // it is a source
-		// put it into the chemin
-		// 	chemin = [point->mo.offre]
-		ret = ob_flux_cheminAjouterNoeud(&point->chemin, pstock,&point->mo.offre,&loop);
-		if (ret)
-			goto fin;
-	}
+		obMtDbtS(ks_oid, point->mo.offre.oid);
+		// obMtDbtpS(ds_point, point);
+		memset(&ds_point,0,sizeof(DBT));
+		ds_point.data = point;
+		ds_point.size = sizeof(ob_tPoint); //ob_point_getsizePoint(point);
 
-	// save, not to redo it
-	obMtDbtS(ks_oid, point->mo.offre.oid);
-	obMtDbtpS(ds_point, point);
-	ds_point.size = ob_point_getsizePoint(point);
-	ret = privt->points->put(privt->points, 0, &ks_oid, &ds_point, 0);
-	if (ret) {
-		obMTRACE(ret);
-		goto fin;
+		ret = privt->points->put(privt->points, 0, &ks_oid, &ds_point, 0);
+		if (ret) { obMTRACE(ret); goto fin; }
 	}
-	fin: return ret;
+fin:
+	return ret;
 }
-/*******************************************************************************
- pas_accepte
- lis envi.interdits, et indique si l'arc est accept�
- si Xoid==Yoid rend *refuse = true
- NB: envit sert a lire envit->txn
- *******************************************************************************/
-// TODO appel, add txn
-/*
-int ob_point_pas_accepte(env, envt,txn, Xoid, Yoid, refuse)
-	DB_ENV *env;DB_ENV *envt;DB_TXN *txn;ob_tId *Xoid, *Yoid;bool *refuse; {
-	int ret = 0;
-	DBT ks_fleche,du_interdit;
 
-	ob_tPrivate *priv = env->app_private;
-	//ob_tPrivateTemp *privt = envt->app_private;
-
-	ob_tInterdit interdit;
-	ob_tFleche rid;
-
-	if (*Xoid == *Yoid) {
-		ret = ob_point_CerRefusXY;
-		goto fin;
-	}
-	obMtDbtS(ks_fleche, rid);
-	obMtDbtU(du_interdit, interdit);
-
-	// interdit.rid de type ob_tFleche
-	rid.Xoid = *Xoid;
-	rid.Yoid = *Yoid;
-	//printf("rid= ");
-	// ob_flux_voirDBT(stdout,&rid.Xoid,0);
-	 // ob_flux_voirDBT(stdout,&rid.Yoid,1);
-	//printf("txn=0x%x\n",privt->txn);
-	ret = priv->interdits->get(priv->interdits, txn, &ks_fleche,
-			&du_interdit, 0);
-	if (!ret) { // it is refused, no error
-		//ob_point_voirInterdit(&interdit);
-		*refuse = true;
-		goto fin;
-	} else if (ret == DB_NOTFOUND) {
-		*refuse = false;
-		ret = 0;
-	} else {
-		obMTRACE(ret);
-		goto fin;
-	}
-	fin: return (ret);
-} */
 /*******************************************************************************
  getPoint read the point.
  *******************************************************************************/
-int ob_point_getPoint(DB *db, ob_tId *oid, ob_tPoint *point) {
+int ob_point_getPoint(ob_tPrivateTemp *privt, ob_tId *oid, ob_tPoint *point) {
 	int ret;
 	DBT ks_oid,du_point;
+	DB *db = privt->points;
 
 	obMtDbtpS(ks_oid, oid);
 	obMtDbtpU(du_point, point);
@@ -193,7 +149,7 @@ int ob_point_getPoint(DB *db, ob_tId *oid, ob_tPoint *point) {
 	ret = db->get(db, 0, &ks_oid, &du_point, 0);
 #ifndef NDEBUG // mise au point
 	if (!ret) {
-		if (du_point.size == sizeof(ob_tMarqueOffre)) {
+		if (du_point.size != sizeof(ob_tPoint)) {
 			ret = ob_point_CerGetPoint;
 			goto fin;
 		}
@@ -231,7 +187,7 @@ int ob_point_getPoint(DB *db, ob_tId *oid, ob_tPoint *point) {
  new_trait
  place le trait dans le i_graph 0
  *******************************************************************************/
-int ob_point_new_trait(DB_ENV *envt, ob_tNoeud *offreX, ob_tNoeud *offreY) {
+int ob_point_new_trait(DB_ENV *envt, ob_tId *Xoid, ob_tId *Yoid) {
 	ob_tTrait trait;
 	int ret = 0;//, ret_t;
 	ob_tPrivateTemp *privt = envt->app_private;
@@ -241,8 +197,8 @@ int ob_point_new_trait(DB_ENV *envt, ob_tNoeud *offreX, ob_tNoeud *offreY) {
 	obMtDbtS(ks_fleche, trait.rid);
 
 	trait.igraph = 0;
-	trait.rid.Xoid = offreX->oid;
-	trait.rid.Yoid = offreY->oid;
+	trait.rid.Xoid = Xoid;
+	trait.rid.Yoid = Yoid;
 
 	ret = privt->traits->put(privt->traits, 0, &ks_fleche, &ds_trait, 0);
 	if (ret)

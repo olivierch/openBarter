@@ -24,6 +24,10 @@ defined in svn_test_main */
 #define ob_flux_McheminGetNbStock(pchemin) ob_flux_MMinCYCLE((pchemin)->nbStock)
 #define ob_flux_McheminGetNbOwn(pchemin)   ob_flux_MMinCYCLE((pchemin)->nbOwn)
 
+// points to the place where the first stock node should be inserted
+#define ob_flux_McheminGetAdrFirstStock(pchemin) &((pchemin)->no[0].stock)
+
+
 //#define ob_flux_MVoirDBT(a) ob_flux_voirDBT(stdout,a,1);
 
 void 		ob_flux_cheminVider(ob_tChemin *pchemin, const char cflags);
@@ -40,7 +44,6 @@ int 		ob_flux_cheminGetNbOwn(ob_tChemin *pchemin);
 ob_tNoeud 	*ob_flux_cheminGetAdrNoeud(ob_tChemin *pchemin,int io);
 ob_tStock 	*ob_flux_cheminGetAdrStockNode(ob_tChemin *pchemin,int io);
 ob_tStock 	*ob_flux_cheminGetAdrStockLastNode(ob_tChemin *pchemin);
-ob_tStock 	*ob_flux_cheminGetAdrFirstStock(ob_tChemin *pchemin);
 int 		ob_flux_cheminGetSindex(ob_tChemin *pchemin,int io);
 ob_tOwnId 	*ob_flux_cheminGetNewOwn(ob_tChemin *chemin,int io);
 ob_tOwnId 	*ob_flux_cheminGetOwn(ob_tChemin *pchemin,int iw);

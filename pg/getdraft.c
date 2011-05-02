@@ -199,7 +199,6 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 		goto err;
 	}
 	//elog(INFO,"parcours_arriere %i layer",ctx->nblayer);
-	if (ctx->nblayer < 1) goto err; 
 	ctx->i_graph = -1;
 	return ctx;
 err:
@@ -297,6 +296,12 @@ endloop:
 	//pfree(ctx);
 	return ret;
 }
+/* Sets ctx->i_commit to the next index of ctx->accord.chemin.no[]
+ * At the first call or when the last is reached, calls ob_chemin_get_draft_next
+ * ctx->i_graph == -1 at the first call
+ *
+ * Returns an error
+ */
 static int ob_getdraft_get_commit(ob_getdraft_ctx *ctx) {
 	int ret;
 

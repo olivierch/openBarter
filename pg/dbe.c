@@ -483,187 +483,6 @@ static void errcallback(const DB_ENV *dbenv, const char *errpfx,
 }
 
 /*******************************************************************************
- dup compare
- *******************************************************************************/
-/*
-#define ob_dbe_cmp(a,b) (((a)<(b))?-1:(((a)>(b))?1:0))
-static int compare_dup_points(DB *db, const DBT *data1, const DBT *data2) {
-	ob_tMarqueOffre mo1, mo2;
-	int cmp;
-
-	memcpy(&mo1, data1->data, sizeof(ob_tNoeud));
-	memcpy(&mo2, data2->data, sizeof(ob_tNoeud));
-	cmp = ob_dbe_cmp(mo1.offre.nF, mo2.offre.nF);
-	if (cmp)
-		return (cmp);
-	cmp = ob_dbe_cmp(mo1.offre.nR, mo2.offre.nR);
-	if (cmp)
-		return (cmp);
-	cmp = ob_dbe_cmp(mo1.offre.stockId, mo2.offre.stockId);
-	if (cmp)
-		return (cmp);
-	// ajouté
-	cmp = ob_dbe_cmp(mo1.offre.oid, mo2.offre.oid);
-	if (cmp)
-		return (cmp);
-	return (0);
-}
-*/
-/*******************************************************************************
- Key extractors de l'environnement durable
- *******************************************************************************/
-/*
-// pour stock.valF
-static int stock_get_nF(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) {
-	ob_tStock *stock;
-
-	stock = pdata->data;
-
-	memset(skey, 0, sizeof(DBT));
-	skey->data = &(stock->nF);
-	skey->size = sizeof(ob_tQuaId);
-	return (0);
-}
-
-static int stock_get_own(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) {
-	ob_tStock *stock;
-
-	stock = pdata->data;
-
-	memset(skey, 0, sizeof(DBT));
-	skey->data = &(stock->own);
-	skey->size = sizeof(ob_tOwnId);
-	return (0);
-}
-
-static int offre_get_nY(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) {
-	ob_tNoeud *offre;
-
-	offre = pdata->data;
-
-	memset(skey, 0, sizeof(DBT));
-	skey->data = &(offre->nF);
-	skey->size = sizeof(ob_tQuaId);
-	return (0);
-}
-
-static int offre_get_nX(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) {
-	ob_tNoeud *offre;
-
-	offre = pdata->data;
-
-	memset(skey, 0, sizeof(DBT));
-	skey->data = &(offre->nR);
-	skey->size = sizeof(ob_tQuaId);
-	return (0);
-}
-
-static int offre_get_stockId(DB *sdbp, const DBT *pkey, const DBT *pdata,
-		DBT *skey) {
-	ob_tNoeud *offre;
-
-	offre = pdata->data;
-
-	memset(skey, 0, sizeof(DBT));
-	skey->data = &(offre->stockId);
-	skey->size = sizeof(ob_tId);
-	return (0);
-} */
-/*
-static int accord_get_oid(DB *sdbp, const DBT *pkey, const DBT *pdata,
-		DBT *skey) {
-
-	DBT *tmpdbt;
-	int nbo, io;
-	ob_tId *poid;
-	ob_tAccord *accord;
-	ob_tNoeud *pnoeud;
-	ob_tChemin *pchem;
-
-	memset(skey, 0, sizeof(DBT));
-
-	accord = pdata->data;
-	nbo = ob_flux_cheminGetNbNode(&accord->chemin);
-	//ob_accord_voirAccord(accord);
-	tmpdbt = malloc(sizeof(DBT) * nbo);
-	if (!tmpdbt) // TODO
-		return (ob_dbe_CerMalloc);
-	memset(tmpdbt, 0, sizeof(DBT) * nbo);
-
-	obMRange(io,nbo) {
-		pnoeud = ob_flux_cheminGetAdrNoeud(&accord->chemin, io);
-		tmpdbt[io].data = &pnoeud->oid;
-		tmpdbt[io].size = ob_ut_size(&pnoeud->oid);
-	}
-
-	skey->flags = DB_DBT_MULTIPLE | DB_DBT_APPMALLOC;
-	skey->data = tmpdbt;
-	skey->size = nbo;
-	return (0);
-} */
-/*
-static int accord_get_own(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) {
-
-	DBT *tmpdbt;
-	int nbw, iw;
-	ob_tId *pown;
-	ob_tAccord *accord;
-	ob_tChemin *pchem;
-
-	memset(skey, 0, sizeof(DBT));
-
-	accord = pdata->data;
-	pchem = &accord->chemin;
-	nbw = ob_flux_cheminGetNbOwn(pchem);
-	//ob_accord_voirAccord(accord);
-	tmpdbt = malloc(sizeof(DBT) * nbw);
-	if (!tmpdbt) // TODO
-		return (ob_dbe_CerMalloc);
-	memset(tmpdbt, 0, sizeof(DBT) * nbw);
-
-	obMRange(iw,nbw) {
-		pown = ob_flux_cheminGetOwn(pchem,iw);
-		tmpdbt[iw].data = pown;
-		tmpdbt[iw].size = ob_ut_size(pown);
-	}
-
-	skey->flags = DB_DBT_MULTIPLE | DB_DBT_APPMALLOC;
-	skey->data = tmpdbt;
-	skey->size = nbw;
-	return (0);
-}*/
-/*
-static int interdit_get_Xoid(DB *sdbp, const DBT *pkey, const DBT *pdata,
-		DBT *skey) {
-	ob_tInterdit *interdit;
-
-	interdit = pdata->data;
-
-	memset(skey, 0, sizeof(DBT));
-	skey->data = &(interdit->rid.Xoid);
-	skey->size = sizeof(ob_tId);
-	return (0);
-}
-static int interdit_get_Yoid(DB *sdbp, const DBT *pkey, const DBT *pdata,
-		DBT *skey) {
-	ob_tInterdit *interdit;
-
-	interdit = pdata->data;
-
-	memset(skey, 0, sizeof(DBT));
-	skey->data = &(interdit->rid.Yoid);
-	skey->size = sizeof(ob_tId);
-	return (0);
-}
-*/
-/*
-static int nom_get_nom(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) {
-	memset(skey, 0, sizeof(DBT));
-	skey->data = pdata->data;
-	skey->size = pdata->size;
-	return (0);
-} */
-/*******************************************************************************
  Fonctions d'extraction de clef sur l'evt temporaire
  *******************************************************************************/
 static int point_get_nX(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) {
@@ -685,33 +504,7 @@ static int point_get_nY(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) 
 	skey->size = sizeof(ob_tQuaId);
 	return (0);
 }
-/*
-static int point_get_mar(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) {
-	ob_tPoint *point;
-	ob_tMar *tmpmar;
-	int layer,res;
 
-	point = pdata->data;
-	tmpmar = malloc(sizeof(ob_tMar));
-
-	layer = point->mo.ar.layer;
-	res = 1;
-	while (layer) {
-		res <<=1;
-		layer >>=1;
-	} ;
-	res >>=1;
-	// res contains the most significant bit of point->mo.ar.layer
-	tmpmar->layer = res;
-	tmpmar->igraph = point->mo.ar.igraph; // unchanged
-	
-	memset(skey, 0, sizeof(DBT));
-	skey->data = tmpmar;
-	skey->size = sizeof(ob_tMar);
-	skey->flags = DB_DBT_APPMALLOC;
-	return (0);
-} 
-*/
 static int point_get_mar(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) {
 	ob_tPoint *point;
 	point = pdata->data;
@@ -722,34 +515,6 @@ static int point_get_mar(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey)
 	return (0);
 } 
 
-/*
-static int point_get_mav(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) {
-
-	
-	ob_tPoint *point;
-	ob_tMar *tmpmav;
-	int layer,res;
-
-	point = pdata->data;
-	tmpmav = malloc(sizeof(ob_tMar));
-
-	layer = point->mo.av.layer;
-	res = 1;
-	while (layer) {
-		res <<=1;
-		layer >>=1;
-	} ;
-	res >>=1;
-	// res contains the most significant bit of point->mo.ar.layer
-	tmpmav->layer = res;
-	tmpmav->igraph = point->mo.av.igraph; // unchanged
-	
-	memset(skey, 0, sizeof(DBT));
-	skey->data = tmpmav;
-	skey->size = sizeof(ob_tMar);
-	skey->flags = DB_DBT_APPMALLOC;
-	return (0);
-} */
 static int point_get_mav(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey) {
 	ob_tPoint *point;
 	point = pdata->data;
@@ -804,17 +569,6 @@ static int trait_get_marque(DB *sdbp, const DBT *pkey, const DBT *pdata,
 	skey->size = sizeof(int);
 	return (0);
 }
-/*
-static int message_get_own(DB *sdbp, const DBT *pkey, const DBT *pdata,
-		DBT *skey) {
-	ob_tMessage *message;
-	message = pdata->data;
-
-	memset(skey, 0, sizeof(DBT));
-	skey->data = &(message->own);
-	skey->size = sizeof(ob_tId);
-	return (0);
-} */
 
 void ob_dbe_resetStock(ob_tStock *pstock) {
 	memset(pstock, 0, sizeof(ob_tStock));

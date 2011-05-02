@@ -184,6 +184,11 @@ err:
 	return ret;
 }
 
+/* ob_iternoeud_put_stocktemp3(envt,pstock)
+ * pstock is put into stocktemps[pstock->sid],
+ * and privt->versionsg = max(privt->versionsg,pstock->version) if pstock->sid !=0
+ *
+ */
 int ob_iternoeud_put_stocktemp3(envt,pstock)
 	DB_ENV *envt;
 	ob_tStock *pstock;

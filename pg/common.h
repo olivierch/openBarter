@@ -68,7 +68,7 @@ the error name space from -30,100 to -30,299.
 #define ob_flux_CerOmegaNeg	 		ob_flux_CerOff-11
 #define ob_flux_CerNoeudNotStock	 	ob_flux_CerOff-12
 #define ob_flux_CerCheminPom2 			ob_flux_CerOff-13
-
+#define ob_flux_CerCheminPom3 			ob_flux_CerOff-14
 
 #define ob_point_CerMalloc				ob_point_CerOff-1
 #define ob_point_CerStockEpuise 		ob_point_CerOff-2
@@ -314,13 +314,7 @@ struct ob__Trait { // traits[rid]
 	ob_tFleche rid;
 	int igraph;
 };
-/* 
-The secondary index of privt->traits are:
-privt->px_traits
-	ob__Trait.rid.Xoid extracted by the callback trait_get_Xoid()
-privt->py_traits
-	ob__Trait.rid.Yoid extracted by the callback trait_get_Yoid()
-*/
+
 struct ob__Mar {
 	int layer;
 	int igraph;
@@ -336,66 +330,11 @@ struct ob__Point {
 	ob_tChemin chemin;
 	ob_tNo	__no[obCMAXCYCLE];
 };
-/* The secondary index of privt->points are
-	privt->mar_points 
-	ob__Point.mo.ar extracted by the callback point_get_mar()
-	privt->mav_points
-	ob__Point.mo.av extracted by the callback point_get_mav()
-	privt->vx_points
-	ob__Point.mo.offre.nR extracted by the callback point_get_nX()
-	privt->vy_points
-	ob__Point.mo.offre.nF extracted by the callback point_get_nY()
-*/
+
 struct ob__Loop {
 	ob_tFleche rid;
 	ob_tId version;
 };
-/*
-struct ob__Batch {
-	ob_tId id;
-	size_t size; // size of the object
-	char *author; // name of author without prefix O
-	ob_tId authorId; // set at the beginning of batch
-	enum { 	omr, // omega read
-		bd, // bid deposit 
-		sd, // stock deposit
-		br, // bid removal
-		sr, // stock removal
-		ds, // decide draft
-		def // define name
-		} t; 
-	union {
-		struct {
-			ob_tNoeud pivot;
-		} omr;// omega read
-		struct {
-			ob_tNoeud pivot;
-		} bd; // bid deposit 
-		struct {
-			ob_tQtt qtt;
-			char *nnF; // name of quality without prefix Q
-			char *nown;// name of owner without prefix O
-		} sd; // stock deposit
-		struct {
-			ob_tId oid;  
-		} br; // bid removal
-		struct {
-			ob_tId sid; 
-		} sr; // stock removal
-		struct {
-			ob_tId  aid; 
-			ob_tId  wid;
-			bool    sign;
-		} ds; // decide draft
-		struct {
-			ob_tId did;
-		} def; // define name
-	};
-
-	int nbParam;
-	size_t _lenTot;
-	char *argv[]; 
-};*/
 
 struct ob__Accord {
 	ob_tId		aid;
@@ -414,15 +353,6 @@ struct ob__Interdit {
 	uint32_t	flags;
 } ;
 
-/* messages table starts with ob__Message, and next the message itself */
-/*
-struct ob__Message {
-	ob_tId id;
-	ob_tOwnId	own;
-	int	flags;
-#define ob_CDONE 1;
-} ;
-*/
 
 struct ob__PrivateTemp {
 	int id;

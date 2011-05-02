@@ -350,8 +350,13 @@ int ob_flux_cheminAjouterNoeud(ob_tChemin *pchemin, const ob_tStock *pstock,
 	// verify that the node is not already in the chemin
 	obMRange(_i,pchemin->nbNoeud) {
 		if (pchemin->no[_i].noeud.oid == pnoeud->oid) {
-			loop->rid.Xoid = pchemin->no[0].noeud.oid;
-			loop->rid.Yoid = pchemin->no[1].noeud.oid;
+			if(_i == pchemin->nbNoeud-1) {
+				// pchemin->no[pchemin->nbNoeud-1].noeud.oid and pnoeud->oid should be different
+				_ret = ob_flux_CerCheminPom3;
+				return _ret;
+			}
+			loop->rid.Xoid = pchemin->no[pchemin->nbNoeud-1].noeud.oid;
+			loop->rid.Yoid = pnoeud->oid;
 			_ret = ob_flux_CerLoopOnOffer;
 			return _ret;
 		}
@@ -682,10 +687,7 @@ ob_tStock *ob_flux_cheminGetAdrStockLastNode(ob_tChemin *pchemin) {
 	}
 	return pstock;
 }
-// address to the place where the first stock node should be inserted
-ob_tStock *ob_flux_cheminGetAdrFirstStock(ob_tChemin *pchemin) {
-	return &(pchemin->no[0].stock);
-}
+
 //index of the stock of the node[io]
 int ob_flux_cheminGetSindex(ob_tChemin *pchemin, int io) {
 	return (int) pchemin->no[io].stockIndex;
