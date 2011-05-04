@@ -173,9 +173,9 @@ static svn_error_t * test_flux(stocks, noeuds, fluxArrondi, flags)
 	}
 	// ob_flux_voirChemin(stdout,pchem,0);
 
-	_flux_nul = ob_flux_fluxMaximum(pchem);
-	if (_flux_nul) {
-		MAKE_ERROR("flow null", &err);
+	_ret = ob_flux_fluxMaximum(pchem);
+	if (_ret != 1) {
+		MAKE_ERROR("flow null or error", &err);
 	}
 
 	_ret = ob_flux_cheminError(pchem);

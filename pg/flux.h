@@ -33,7 +33,7 @@ defined in svn_test_main */
 void 		ob_flux_cheminVider(ob_tChemin *pchemin, const char cflags);
 int 		ob_flux_cheminAjouterNoeud(ob_tChemin *pchemin,
 				const ob_tStock *pstock,const ob_tNoeud *pnoeud,ob_tLoop *loop);
-bool 		ob_flux_fluxMaximum(ob_tChemin *pchemin);
+int 		ob_flux_fluxMaximum(ob_tChemin *pchemin);
 int 		ob_flux_cheminError(ob_tChemin *pchemin);
 double 		ob_flux_cheminGetOmega(ob_tChemin *pchemin);
 int 		ob_flux_cheminGetNbNode(ob_tChemin *pchemin);

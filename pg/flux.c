@@ -79,7 +79,7 @@ static int _calGains(ob_tChemin *pchemin,double omegaCorrige[]) {
 	double no_gain[obCMAXCYCLE];
 
 	if (!pchemin->nbOwn)
-		return 1;
+		return ob_flux_CerCheminNoOwn;
 	// the gain is shared between owners
 	pchemin->gain = pow(pchemin->prodOmega, -1.0 /((double) pchemin->nbOwn));
 
@@ -424,10 +424,13 @@ int ob_flux_cheminAjouterNoeud(ob_tChemin *pchemin, const ob_tStock *pstock,
 }
 /******************************************************************************
  * gives the maximum flow of pchemin
- * return true if no flow was found
+ * return 
+	0 if no flow was found
+	1 if a flow was found
+	<0 on error
  *****************************************************************************/
-bool ob_flux_fluxMaximum(ob_tChemin *pchemin) {
-	bool _fluxNul, _err;
+int ob_flux_fluxMaximum(ob_tChemin *pchemin) {
+	bool _fluxNul, _ret;
 	double _omegaCorrige[obCMAXCYCLE];
 	double _fluxExact[obCMAXCYCLE];
 	//unsigned char _i;
@@ -440,9 +443,8 @@ bool ob_flux_fluxMaximum(ob_tChemin *pchemin) {
 		pchemin->prodOmega = 1.0;
 	}
 	// omegas are corrected
-	_err = _calGains(pchemin,_omegaCorrige);
-	if (_err)
-		return true; // stop processing
+	_ret = _calGains(pchemin,_omegaCorrige);
+	if (_ret) goto fin;
 
 	// maximum flow
 	/*elog(INFO,"lastIgnode %i",(pchemin->cflags & ob_flux_CLastIgnore) ?1:0);
@@ -454,9 +456,13 @@ bool ob_flux_fluxMaximum(ob_tChemin *pchemin) {
 	}*/
 	_fluxNul = _arrondir(_fluxExact, pchemin);
 	//elog(INFO,"_flux %i",_fluxNul?1:0);
-	if (!_fluxNul)
+	if (!_fluxNul) {
 		pchemin->cflags |= ob_flux_CFlowDefined;
-	return _fluxNul;
+		_ret = 1;
+		
+	} else _ret = 0;
+fin:
+	return _ret;
 }
 /******************************************************************************
  * verify pchemin consistancy
@@ -470,16 +476,12 @@ int ob_flux_cheminError(ob_tChemin *pchemin) {
 	if (!pchemin || (pchemin->nbNoeud > obCMAXCYCLE)) {
 		ret = ob_flux_CerCheminTropLong;
 		goto fin;
-		obMTRACE(ret);
-		return ret;
 	}
 	// nbStock <nbNoeud
 	if (pchemin->nbStock > pchemin->nbNoeud) {
 		// printf("Stocks %i Noeuds %i\n",pchemin->nbStock,pchemin->nbNoeud);
 		ret = ob_flux_CerCheminTropStock;
 		goto fin;
-		obMTRACE(ret);
-		return ret;
 	}
 	// sum(no[.].stockOcc)==nbNoeud
 	_occ = 0;
@@ -488,10 +490,6 @@ int ob_flux_cheminError(ob_tChemin *pchemin) {
 	if (_occ != pchemin->nbNoeud) {
 		ret = ob_flux_CerCheminPbOccStock;
 		goto fin;
-		printf("pchemin->nbNoeud=%i _occ=%i pchemin->nbStock=%i\n",
-				pchemin->nbNoeud, _occ, pchemin->nbStock);
-		obMTRACE(ret);
-		return ret;
 	}
 	// sum(no[.].ownOcc)==nbNoeud
 	_occ = 0;
@@ -500,16 +498,12 @@ int ob_flux_cheminError(ob_tChemin *pchemin) {
 	if (_occ != pchemin->nbNoeud) {
 		ret = ob_flux_CerCheminPbOccOwn;
 		goto fin;
-		obMTRACE(ret);
-		return ret;
 	}
 	// no[.].stockIndex < nbStock
 	obMRange(_in,pchemin->nbNoeud) {
 		if (pchemin->no[_in].stockIndex >= pchemin->nbStock) {
 			ret = ob_flux_CerCheminPbIndexStock;
 			goto fin;
-			obMTRACE(ret);
-			return ret;
 		}
 	}
 	// no[no[.].ownIndex].own == no[no[.].stockIndex].stock.own
@@ -519,8 +513,6 @@ int ob_flux_cheminError(ob_tChemin *pchemin) {
 		if (pchemin->no[_iw].own != pchemin->no[_is].stock.own) {
 			ret = ob_flux_CerCheminPbOwn;
 			goto fin;
-			obMTRACE(ret);
-			return ret;
 		}
 	}
 	// no[.].ownIndex < nbOwn
@@ -528,8 +520,6 @@ int ob_flux_cheminError(ob_tChemin *pchemin) {
 		if (pchemin->no[_in].ownIndex >= pchemin->nbOwn) {
 			ret = ob_flux_CerCheminPbIndexOwn;
 			goto fin;
-			obMTRACE(ret);
-			return ret;
 		}
 	}
 	// no[.].noeud.omega > 0.
@@ -593,9 +583,6 @@ int ob_flux_cheminError(ob_tChemin *pchemin) {
 		elog(INFO,"_err=%i",_err);
 		ret = ob_flux_CerCheminCuillere;
 		goto fin;
-		printf("_err = %i\n",_err);
-		obMTRACE(ret);
-		return ret;
 	}
 	ret = 0;
 fin:

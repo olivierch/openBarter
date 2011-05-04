@@ -69,6 +69,8 @@ the error name space from -30,100 to -30,299.
 #define ob_flux_CerNoeudNotStock	 	ob_flux_CerOff-12
 #define ob_flux_CerCheminPom2 			ob_flux_CerOff-13
 #define ob_flux_CerCheminPom3 			ob_flux_CerOff-14
+#define ob_flux_CerCheminNoOwn 			ob_flux_CerOff-15
+#define ob_flux_CerCheminNotMax 			ob_flux_CerOff-16
 
 #define ob_point_CerMalloc				ob_point_CerOff-1
 #define ob_point_CerStockEpuise 		ob_point_CerOff-2
@@ -119,8 +121,9 @@ error code offset:
 
 #define ob_flux_MVoirDBT(a) ob_flux_voirDBT(stdout,a,1);
 
-// should be less than 255
-#define obCMAXCYCLE 8
+// it is the girth of the graph.
+#define obCGIRTH 9
+#define obCMAXCYCLE obCGIRTH-1
 // 2^obCOFPROFONDEUR>=obCMAXCYCLE
 #define obCOFPROFONDEUR 3
 /*********************************************************************

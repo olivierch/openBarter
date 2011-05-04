@@ -123,11 +123,7 @@ int ob_point_initPoint(ob_tPrivateTemp *privt, ob_tPoint *point) {
 		}
 
 		obMtDbtS(ks_oid, point->mo.offre.oid);
-		// obMtDbtpS(ds_point, point);
-		memset(&ds_point,0,sizeof(DBT));
-		ds_point.data = point;
-		ds_point.size = sizeof(ob_tPoint); //ob_point_getsizePoint(point);
-
+		obMtDbtpS(ds_point, point);
 		ret = privt->points->put(privt->points, 0, &ks_oid, &ds_point, 0);
 		if (ret) { obMTRACE(ret); goto fin; }
 	}

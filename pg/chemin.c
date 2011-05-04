@@ -37,13 +37,19 @@ parcours_arriere
 	clients of the pivot are called sources and have mo.av.layer=1,mo.av.igraph=0
 		mo.av.layer=0 for others.
 
+	The graph produced does not include traits from pivot->sources
+
 	env	environment
-	txn unused
 	nblayer (out)
 		 0 no sources
 		 else, nblayer layers inserted between [1,layer]
 
 	return 0 or an error
+	
+versionSg:
+	reset at the beginning, When a stock is inserted into stocktemps,
+	privt->versionsg = max(privt->versionsg,pstock->version) if pstock->sid != 0
+	this is done with ob_iternoeud_put_stocktemp3()
 
 *****************************************************************************/
 int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
@@ -81,8 +87,7 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 	obMtDbtS(ks_Xoid,Xoid);
 	// elog(INFO,"pivot stockId %lli nF %lli nR %lli omega %f own %lli oid %lli",pivot->stockId,pivot->nF,pivot->nR,pivot->omega,pivot->own,pivot->oid);
 
-	/* cursor for iteration on points for a given moY.ar
-	 * ob_tMar contains (layer,igraph) */
+	/* cursor for iteration on points for a given ob_tMar moY.ar containing (layer,igraph) */
 	ret = privt->mar_points->cursor(privt->mar_points,NULL,&cmar_pointY,0);
 	if(ret) {obMTRACE(ret); goto fin;}
 
@@ -92,20 +97,17 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 
 	privt->versionSg = 0;
 
-	// the pivot is inserted on the first layer (moY.ar.layer==1) *********
+	/* the pivot is inserted on the first layer (moY.ar.layer==1). it is not source, hence mo.av.layer = 0 */
 	memset(&moY,0,sizeof(moY));
-	// it is not source, hence mo.av.layer = 0
-
 	memcpy(&moY.offre,pivot,sizeof(moY.offre));//ob_tNoeud
-	moY.ar.layer = 1 ;
-	// moY.ar.igraph = 0
-	Yoid = pivot->oid; // the oid of the pivot
+	moY.ar.layer = 1 ;// moY.ar.igraph = 0
+	Yoid = pivot->oid; 
 	ret = privt->points->put(privt->points,0,&ku_Yoid,&du_moY,DB_NOOVERWRITE);
 	if(ret) {obMTRACE(ret);goto fin;}
 
-	// the stock of the pivot is inserted
+	
 	if(privt->deposOffre) {
-		//stock.sid = pivot->stockId;
+		// the stock of the pivot is inserted
 		memcpy(&stock,stockPivot,sizeof(ob_tStock));
 	} else {
 		// the stock of the pivot is created temporarily with sid=0
@@ -113,9 +115,6 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 		stock.nF = pivot->nF;
 		// stock.own = stock.qtt = stock.sid = stock.version = 0
 	}
-
-	// stocktemps[stock.sid] <- stock
-	// and privt->versionsg = max(privt->versionsg,pstock->version) if pstock->sid != 0
 	ret = ob_iternoeud_put_stocktemp3(envt,&stock);
 	if(ret){obMTRACE(ret);goto fin;}
 
@@ -124,32 +123,31 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 	sources = false;
 
 	/*********************************************************************/
-	// while [A] layer<obCMAXCYCLE and layer non empty
-	while(true) { // [A]
+	while(true) { // while [A] layer<obCMAXCYCLE and layer non empty
 		bool layerX_empty = true;// reset when some points are on layer+1
-
 		ob_tMar marqueYar;
 		DBT ks_marqueYar;
 
 		obMtDbtS(ks_marqueYar,marqueYar);
 
+		//elog(INFO,"Start new layer %i",layer);
+		/**********************************************************************************
+		loop [B] ALL (moY,Yoid) on layer
+		for all pointY having (pointY.mo.ar.layer,pointY.mo.ar.igraph) == (layer,0)
+		*/
 		marqueYar.layer = layer;
 		marqueYar.igraph = 0;
-		//elog(INFO,"Start new layer %i",layer);
-		/**********************************************************************************/
-		// loop [B] ALL (moY,Yoid) on layer
-		// cmar_pointY
-		// for all pointY of layer (pointY.mo.ar.layer,pointY.mo.ar.igraph) == (layer,0)
 		ret = cmar_pointY->pget(cmar_pointY,&ks_marqueYar,&ku_Yoid,&du_moY,DB_SET);
+		// sets Yoid and moY
 		if(!ret) do { // [B]
 			//elog(INFO,"Layer %i, Yoid=%lli found",layer,Yoid);
-			// moY.offre.nR is now set
 			
 			/*******************************************************************************/
-			/* [C] ALL (offreX,Xoid,stock)  nF =------>>--------=nR   moY
-			 * selects from database bids having noeud.nf==moY.offre.nR and S.qtt != 0
-			"SELECT NOX.*,S.* FROM ob_tnoeud NOX INNER JOIN ob_stock S ON (NOX.sid =S.id)
-				WHERE NOX.nf=Y_nR AND S.qtt!=0  */
+			/* [C] ALL (offreX,Xoid,stock)  such as offreX.nF =moY.offre.nR and stock.qtt != 0
+			" the portal cvy_offreX is the following sql:
+				SELECT NOX.*,S.* FROM ob_tnoeud NOX INNER JOIN ob_stock S ON (NOX.sid =S.id)
+				WHERE NOX.nf=Y_nR AND S.qtt!=0 
+			*/
 			cvy_offreX = ob_iternoeud_GetPortal2(envt,Yoid,moY.offre.nR);
 			if( cvy_offreX == NULL)  {
 				ret = ob_chemin_CerIterNoeudErr;
@@ -158,15 +156,16 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 			}
 			//elog(INFO,"ob_iternoeud_GetPortal2(Yoid=%lli,nR=%lli)",Yoid,moY.offre.nR);
 
-			while(true) { // /* next element of the select [1]
+			while(true) { 
 				bool XoidNotFound = false;
 
+				// next element of the select [C]
 				ret = ob_iternoeud_Next2(cvy_offreX,&Xoid,&offreX,&stock);
 				if(ret == DB_NOTFOUND) break;
 				else if (ret !=0) { obMTRACE(ret); goto fin;}
 				//elog(INFO,"ob_iternoeud_Next2(Yoid=%lli,nR=%lli) found offreX.oid=%lli with offreX.nF=nR and offreX.nR=%lli",Yoid,moY.offre.nR,Xoid,offreX.nR);
 
-				if( true) { // Xoid != pivot->oid) { // traits from pivot to source are not inserted
+				if( Xoid != pivot->oid) { // traits[pivot->source] are not inserted
 					ret = ob_point_new_trait(envt,&Xoid,&Yoid);
 					if(ret) { obMTRACE(ret);goto fin; }
 				}
@@ -176,15 +175,17 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 				if(ret == DB_NOTFOUND ) XoidNotFound = true;
 				else if( ret != 0 ) { obMTRACE(ret); goto fin;}
 
-				/* if points[Xoid] is found, it is unchanged
-				=> it will not belong to layer+1, and the path to it will be stopped even if traits[X,Y] was written */
+				/*
+				if points[Xoid] is found nothing is done,
+				=> this point will not belong to layer+1, and the path from it will be stopped even if traits[X,Y] was written.
+
+				If points[Xoid]  is not found
+				*/
 
 				if( XoidNotFound) {
 
 					layerX_empty = false;
 
-					// stocktemps[stock.sid] <- stock
-					// and privt->versionsg = max(privt->versionsg,pstock->version) if pstock->sid != 0
 					ret = ob_iternoeud_put_stocktemp3(envt,&stock);
 					if(ret) {obMTRACE(ret);goto fin;}
 
@@ -193,18 +194,16 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 					memcpy(&moX.offre,&offreX,sizeof(ob_tNoeud));
 					moX.ar.layer = layer+1;
 
-					if(pivot->nF == moX.offre.nR) {
-						// moX is client of the pivot
+					if(pivot->nF == moX.offre.nR) { // moX is client of the pivot
 						moX.av.layer = 1; sources = true;
-						// moX.av.igraph = 0
 					}
-					// points[Xoid] <- moX on layer+1
 
 					ret = c_point->put(c_point,&ks_Xoid,&du_moX,DB_KEYFIRST);
 					if(ret) { obMTRACE(ret);goto fin; }
 					//elog(DEBUG,"Xoid=%lli inserted into points layer=%i",Xoid,layer);
 				}
-				/* all traits[X,Y] have a point[X] that belongs to layer+1 or not */
+				/* TODO what does it mean??
+				 * all traits[X,Y] have a point[X] that belongs to layer+1 or not */
 			}
 			SPI_cursor_close(cvy_offreX);cvy_offreX = NULL;
 			// end while [C].next
@@ -221,24 +220,26 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 		// break condition for [A]
 
 		if (layerX_empty)  {
-			/* layer is the last inserted, and the number of layers inserted
-			 * the last traits[X,Y] has a point[X] not on layer+1
+			/* No point where inserted on layer+1
+			=> max(point.layer) = layer
 			 */
 			//elog(INFO,"Layer %i empty - BREAK",layer+1);
 			break; 
 		}
 
 		if(layer == (obCMAXCYCLE -1)) {
+			// some point are inserted on layer+1
 			layer +=1;
-			/* layer is now the last inserted, and the number of layers inserted is obCMAXCYCLE
+			/* max(point.layer) = obCMACCYCLE
 			 */
 			//elog(INFO,"Layer %i == %i reached - BREAK",layer,obCMAXCYCLE);
 			break;
 		}
 		layer +=1;
 	} // end [A]
-	/*********************************************************************/
 
+	/*********************************************************************/
+	// layer is the number of layer inserted, and point.layer in [1,obCMAXCYCLE]
 	// mo.ar.layer in [1,layer] since layer is the last inserted
 	if(sources) {
 		*nblayer = layer;
@@ -292,7 +293,7 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 	ob_tNoeud *pivot = privt->pivot;
 	int layer,ret,ret_t,new_igraph;
 	ob_tMar marqueXav;
-	bool layerY_empty,_graphe_vide;
+	bool layerY_empty,_no_path_to_pivot;
 	ob_tFleche fleche;
 	ob_tId Xoid;
 	ob_tTrait trait;
@@ -325,7 +326,7 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 	ret = privt->points->cursor(privt->points,NULL,&c_point,0);
 	if(ret) {obMTRACE(ret); goto fin;}
 
-	_graphe_vide = true;
+	_no_path_to_pivot = true;
 
 	//*********************************************************************
 	// sources are moved from the old graph (i_graph) to the new (i_graph+1)
@@ -335,11 +336,13 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 	new_igraph = i_graph+1;
 
 	*nbSource = 0;
+	// select pointX where pointX.mo.av=(i_graph,1)
 	ret = cmav_point->pget(cmav_point,&ks_marqueXav,&ku_Xoid,&du_pointX,DB_SET);
 	while(!ret) {
 		pointX.mo.av.igraph = new_igraph;
 		pointX.mo.av.layer = 1;
 		ret = ob_point_initPoint(privt,&pointX);
+		// pointX is written to new_igraph only if ret == 0
 		if (ret == 0)
 			*nbSource +=1;
 		else if (ret!=ob_point_CerStockEpuise) {obMTRACE(ret); goto fin;}
@@ -352,42 +355,34 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 	if(!*nbSource) goto fin;
 
 	//*********************************************************************
-	// loop [D] while(!layerY_empty)
 	layer = 1;
-	do { // [D]
+	do { // loop [D] while(!layerY_empty)
 		layerY_empty = true;
 
 		//*************************************************************
-		// loop [E] cmav_point
 		// select (pointX,Xoid) from points having layer,igraph == layer,new_igraph
 
 		marqueXav.igraph = new_igraph;
 		marqueXav.layer = layer;
-
 		ks_marqueXav.data = &marqueXav;
 		ret = cmav_point->pget(cmav_point,&ks_marqueXav,&ku_Xoid,&du_pointX,DB_SET);
-		if(!ret) do { // [E]
+		if(!ret) do { // loop [E] cmav_point
 
 			//*****************************************************
-			// loop [F] cx_trait
-			// select (trait,fleche) from traits having fleche.Xoid == Xoid
-
-			ks_Xoid.data = &Xoid;
+			// [F] select (trait,fleche) from traits having fleche.Xoid == Xoid
+			ks_Xoid.data = &Xoid; // useless
 			ret = cx_trait->pget(cx_trait,&ks_Xoid,&ku_fleche,&du_trait,DB_SET);
-			if(!ret) do { //[F]
+			if(!ret) do { // loop [F]
 				//elog(INFO,"%lli->%lli layer %i X.ar %i X.av %i",fleche.Xoid,fleche.Yoid,layer,pointX.mo.ar.layer,pointX.mo.av.layer);
 				// get points[fleche.Yoid]
 				ret = c_point->get(c_point,&ks_fleche_Yoid,&du_pointY,DB_SET);
 				if (ret) {obMTRACE(ret); goto fin;}
 				// it must be found
 
-				//*******************************************
-				// points[Y] and traits[X,Y] written into i_graph+1
-				// only if stock is not empty
-
 				pointY.mo.av.igraph = new_igraph;
 				pointY.mo.av.layer = layer+1;
 				ret = ob_point_initPoint(privt,&pointY);
+				// points[Y] written into i_graph+1 only if ret == 0
 				if(ret == 0 ) { // stock of pointY is not empty
 
 					layerY_empty = false;
@@ -398,7 +393,7 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 
 					// The graph is not empty if the pivot is found
 					if(pointY.mo.offre.oid == pivot->oid)
-						_graphe_vide = false;
+						_no_path_to_pivot = false;
 
 				} else if ( ret != ob_point_CerStockEpuise)
 				{obMTRACE(ret); goto fin;}
@@ -419,22 +414,22 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 		// end [E] cmav_point
 		/*****************************************************/
 
-		/*
-		 *
-		 */
+		if (layerY_empty) break;
+
 		layer +=1;
-		if(layer > nblayer && !layerY_empty) {
+		// pointY.layer = layer
+		if(layer > nblayer) {
 			ret = ob_chemin_CerLoopOnOffer;
 			//elog(INFO,"ob_chemin_CerLoopOnOffer layer=%i nblayer=%i",layer,nblayer);
 			memcpy(&loop->rid,&fleche,sizeof(ob_tFleche));
 			elog(INFO,"loop found on Xoid=%lli Yoid=%lli",loop->rid.Xoid,loop->rid.Yoid);
 			goto fin;
 		}
-	} while(!layerY_empty);
+	} while(true); //!layerY_empty);
 	// end [D] loop while(!layerY_empty)
 	//*********************************************************************
 fin:
-	if(_graphe_vide) *nbSource = 0;
+	if(_no_path_to_pivot) *nbSource = 0;
 	obMCloseCursor(cx_trait);
 	obMCloseCursor(cmav_point);
 	obMCloseCursor(c_point);
@@ -443,11 +438,13 @@ fin:
 /*******************************************************************************
 bellman_ford_in
 
-point.chemin is a path from the pivot to point, or is empty.
+point.chemin is a path from point to pivot, or is empty.
 on the trait pointX->pointY, if pointX.chemin is empty, nothing is done.
-If it is not, we consider the path follows the path pointX.chemin and goes to pointY.
-It is compared with pointY.chemin using their prodOmega .
+If it is not, we consider the path that follows the path pointX.chemin and goes to pointY.
+It is compared with pointY.chemin using their prodOmega.
 If this path is better than pointY.chemin, it is written into pointY.chemin.
+
+return ret!=0 on error
 *******************************************************************************/
 static int _bellman_ford_in(privt,trait,loop)
 	ob_tPrivateTemp *privt;
@@ -484,9 +481,8 @@ static int _bellman_ford_in(privt,trait,loop)
 	if (ret) {obMTRACE(ret); goto fin;}
 
 	if(trait->rid.Yoid == privt->pivot->oid) {
-		// trait->rid.Yoid == pivotId
-		flowEmpty = ob_flux_fluxMaximum(&point.chemin);
-		if(flowEmpty) goto fin;
+		ret = ob_flux_fluxMaximum(&point.chemin);
+		if(ret !=1) goto fin; // flow null(ret ==0) or error
 	}
 	newOmega = ob_flux_cheminGetOmega(&point.chemin);
 	if (newOmega <= oldOmega)  goto fin; // omega is weaker
@@ -508,23 +504,23 @@ bellman_ford
 the algorithm is usually repeated for all node, but here only
 nblayer times, since paths are at most nblayer long.
 _bellman_ford_in is called for each trait of i_graph+1
+
+return ret!=0 on error
 *******************************************************************************/
-static int _bellman_ford(privt,chemin,nblayer,i_graph,loop)
+static int _bellman_ford(privt,chemin,i_graph,loop)
 	ob_tPrivateTemp *privt;
 	ob_tChemin *chemin;
-	int nblayer,i_graph;
+	int i_graph;
 	ob_tLoop	*loop;
-	// TODO remove nblayer
-
 {
-	int _layer,_graph,ret,ret_t;
+	int _layer,_new_graph,ret,ret_t;
 	ob_tPoint pointPivot;
 	ob_tTrait trait;
 	ob_tFleche rid;
 	DBT ks_marque,ku_rid,du_trait,ks_pivotId,du_pointPivot;
 	DBC *cm_trait = NULL;
 
-	obMtDbtS(ks_marque,_graph);
+	obMtDbtS(ks_marque,_new_graph);
 	obMtDbtU(ku_rid,rid);
 	obMtDbtU(du_trait,trait);
 	obMtDbtpS(ks_pivotId,&privt->pivot->oid);
@@ -534,11 +530,13 @@ static int _bellman_ford(privt,chemin,nblayer,i_graph,loop)
 	ret=privt->m_traits->cursor(privt->m_traits,NULL,&cm_trait,0);
 	if (ret) { obMTRACE(ret); goto fin;}
 
-	_graph = i_graph+1;
+	_new_graph = i_graph+1;
+	
 	_layer = obCMAXCYCLE;
-
+	/* loops should not be found */
 	while(_layer) {
-		ks_marque.data = &_graph;
+		// [G] for all traits where trait.igraph=_new_graph
+		ks_marque.data = &_new_graph;
 		ret = cm_trait->pget(cm_trait,&ks_marque,&ku_rid,&du_trait,DB_SET);
 		if(!ret) do {
 			ret = _bellman_ford_in(privt,&trait,loop);
@@ -579,6 +577,8 @@ static int _diminuer(privt,pchemin)
 	ob_tStock tabFlux[obCMAXCYCLE];
 	DBT ks_sid,du_stock,ds_stock,ku_oid,du_point;
 	DBC *cst_point = NULL;
+	bool _someStockExausted = false;
+
 
 	obMtDbtS(ks_sid,_sid);
 	obMtDbtU(du_stock,stock);
@@ -590,7 +590,7 @@ static int _diminuer(privt,pchemin)
 	if (ret) { obMTRACE(ret); goto fin;}
 
 	nbNoeud = ob_flux_GetTabStocks(pchemin,tabFlux,&nbStock);
-
+		
 	obMRange(_i,nbStock) {
 		pflux = &tabFlux[_i];
 
@@ -618,10 +618,14 @@ static int _diminuer(privt,pchemin)
 				&ks_sid,&ds_stock,0);
 			if(ret) {obMTRACE(ret);goto fin;}
 			continue;
-		} /* otherwise, the stock is empty: stock.qtt == pflux->qtt.
-		it is useless to update it, since points and traits that use it
-		will not belong to the next graph.
-		The stock is now empty */
+		} else {
+			/* otherwise, the stock is empty: stock.qtt == pflux->qtt.
+			it is useless to update it, since points and traits that use it
+			will not belong to the next graph.
+			The stock is now empty */
+			_someStockExausted = true;
+		}
+		if(!_someStockExhausted) {ret = ob_flux_CerCheminNotMax;obMTRACE(ret); goto fin;}
 
 		// all point and traits that use it are deleted
 		// ************************************************************
@@ -730,7 +734,7 @@ int ob_chemin_get_draft_next(ob_getdraft_ctx *ctx) {
 
 	// elog(INFO,"_bellman_ford()->chemin.cflags %x",paccord->chemin.cflags);
 	// competition on omega
-	ret = _bellman_ford(privt,&paccord->chemin,ctx->nblayer,ctx->i_graph,&ctx->loop);
+	ret = _bellman_ford(privt,&paccord->chemin,ctx->i_graph,&ctx->loop);
 	if(ret)	{ 
 		if(ret != ob_chemin_CerLoopOnOffer) obMTRACE(ret);
 		goto fin;

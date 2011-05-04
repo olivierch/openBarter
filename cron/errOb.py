@@ -39,6 +39,9 @@ ob_iternoeud_CerOff-1 : "ob_iternoeud_CerSPI_execute_plan"
 
 ,ob_fct_CerOff-1 : "ob_fct_CerStockNotFoundInA"
 ,ob_fct_CerOff-2 : "ob_fct_CerNotDraft"
+,ob_fct_CerOff-3 : "ob_dbe_CerMalloc"
+,ob_fct_CerOff-4 : "ob_dbe_CerPrivUndefined"
+,ob_fct_CerOff-5 : "ob_dbe_CerStr"
 ,ob_fct_CerOff-6 : "ob_fct_CerAccordNotFound"
 
 ,ob_flux_CerOff-1 : "ob_flux_CerCheminTropLong"
@@ -54,6 +57,9 @@ ob_iternoeud_CerOff-1 : "ob_iternoeud_CerSPI_execute_plan"
 ,ob_flux_CerOff-11 : "ob_flux_CerOmegaNeg"
 ,ob_flux_CerOff-12 : "ob_flux_CerNoeudNotStock"
 ,ob_flux_CerOff-13 : "ob_flux_CerCheminPom2"
+,ob_flux_CerOff-14 : "define ob_flux_CerCheminPom3" 			
+,ob_flux_CerOff-15 : "ob_flux_CerCheminNoOwn" 			
+,ob_flux_CerOff-16 : "ob_flux_CerCheminNotMax" 			
 
 
 ,ob_point_CerOff-1 : "ob_point_CerMalloc"
