@@ -60,17 +60,21 @@ the error name space from -30,100 to -30,299.
 #define ob_flux_CerCheminPbOccStock 	ob_flux_CerOff-3
 #define ob_flux_CerCheminPbOccOwn 		ob_flux_CerOff-4
 #define ob_flux_CerCheminPbIndexStock 	ob_flux_CerOff-5
-#define ob_flux_CerCheminPbOwn 		ob_flux_CerOff-6
+#define ob_flux_CerCheminPbOwn 			ob_flux_CerOff-6
 #define ob_flux_CerCheminPbIndexOwn 	ob_flux_CerOff-7
 #define ob_flux_CerCheminPom 			ob_flux_CerOff-8
 #define ob_flux_CerCheminCuillere 		ob_flux_CerOff-9
 #define ob_flux_CerLoopOnOffer	 		ob_flux_CerOff-10
-#define ob_flux_CerOmegaNeg	 		ob_flux_CerOff-11
+#define ob_flux_CerOmegaNeg	 			ob_flux_CerOff-11
 #define ob_flux_CerNoeudNotStock	 	ob_flux_CerOff-12
 #define ob_flux_CerCheminPom2 			ob_flux_CerOff-13
 #define ob_flux_CerCheminPom3 			ob_flux_CerOff-14
 #define ob_flux_CerCheminNoOwn 			ob_flux_CerOff-15
-#define ob_flux_CerCheminNotMax 			ob_flux_CerOff-16
+#define ob_flux_CerCheminNotMax 		ob_flux_CerOff-16
+#define ob_flux_CerCgain 				ob_flux_CerOff-17
+#define ob_flux_CerStockPivotUsed 		ob_flux_CerOff-18
+#define ob_flux_CerStockPb 				ob_flux_CerOff-19
+#define ob_flux_CerFlowNotFound 		ob_flux_CerOff-20
 
 #define ob_point_CerMalloc				ob_point_CerOff-1
 #define ob_point_CerStockEpuise 		ob_point_CerOff-2

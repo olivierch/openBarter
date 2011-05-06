@@ -29,7 +29,7 @@ int ob_point_getPoint(ob_tPrivateTemp *privt,ob_tId *oid,ob_tPoint *point);
 int ob_point_get_version(DB_TXN *txn,ob_tId *version);
 int ob_point_pas_accepte(DB_ENV *env,DB_ENV *envt,DB_TXN *txn,
 		ob_tId *Xoid,ob_tId *Yoid,bool *refuse);
-int ob_point_new_trait(DB_ENV *envt,ob_tId *Xoid,ob_tId *Yoid);
+int ob_point_new_trait(DB_ENV *envt,ob_tId Xoid,ob_tId Yoid);
 int ob_point_initPoint(ob_tPrivateTemp *privt, ob_tPoint *point);
 int ob_point_loop_trait(ob_tPrivateTemp *envit,
 		ob_tNoeud *offreX,ob_tNoeud *offreY,int couche,int nbCouche);

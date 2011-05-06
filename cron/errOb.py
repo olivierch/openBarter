@@ -59,8 +59,11 @@ ob_iternoeud_CerOff-1 : "ob_iternoeud_CerSPI_execute_plan"
 ,ob_flux_CerOff-13 : "ob_flux_CerCheminPom2"
 ,ob_flux_CerOff-14 : "define ob_flux_CerCheminPom3" 			
 ,ob_flux_CerOff-15 : "ob_flux_CerCheminNoOwn" 			
-,ob_flux_CerOff-16 : "ob_flux_CerCheminNotMax" 			
-
+,ob_flux_CerOff-16 : "ob_flux_CerCheminNotMax" 	
+,ob_flux_CerOff-17 : "ob_flux_CerCgain"		
+,ob_flux_CerOff-18 : "ob_flux_CerStockPivotUsed"
+,ob_flux_CerOff-19 : "ob_flux_CerStockPb"
+,ob_flux_CerOff-20 : "ob_flux_CerSFlowNotFound"
 
 ,ob_point_CerOff-1 : "ob_point_CerMalloc"
 ,ob_point_CerOff-2 : "ob_point_CerStockEpuise"

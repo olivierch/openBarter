@@ -166,7 +166,7 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 				//elog(INFO,"ob_iternoeud_Next2(Yoid=%lli,nR=%lli) found offreX.oid=%lli with offreX.nF=nR and offreX.nR=%lli",Yoid,moY.offre.nR,Xoid,offreX.nR);
 
 				if( Xoid != pivot->oid) { // traits[pivot->source] are not inserted
-					ret = ob_point_new_trait(envt,&Xoid,&Yoid);
+					ret = ob_point_new_trait(envt,Xoid,Yoid);
 					if(ret) { obMTRACE(ret);goto fin; }
 				}
 				//elog(INFO,"trait %lli->%lli inserted",offreX.oid,moY.offre.oid);
@@ -316,6 +316,7 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 
 	obMtDbtS(ks_fleche,fleche);
 
+	_no_path_to_pivot = true;
 
 	ret = privt->mav_points->cursor(privt->mav_points,NULL,&cmav_point,0);
 	if(ret) {obMTRACE(ret); goto fin;}
@@ -326,7 +327,6 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 	ret = privt->points->cursor(privt->points,NULL,&c_point,0);
 	if(ret) {obMTRACE(ret); goto fin;}
 
-	_no_path_to_pivot = true;
 
 	//*********************************************************************
 	// sources are moved from the old graph (i_graph) to the new (i_graph+1)
@@ -438,7 +438,7 @@ fin:
 /*******************************************************************************
 bellman_ford_in
 
-point.chemin is a path from point to pivot, or is empty.
+point.chemin is a path from a source to pivot, or is empty.
 on the trait pointX->pointY, if pointX.chemin is empty, nothing is done.
 If it is not, we consider the path that follows the path pointX.chemin and goes to pointY.
 It is compared with pointY.chemin using their prodOmega.
@@ -452,7 +452,6 @@ static int _bellman_ford_in(privt,trait,loop)
 	ob_tLoop	*loop;
 {
 	int ret;
-	bool flowEmpty;
 	ob_tId oid;
 	ob_tPoint point,pointY;
 	double oldOmega,newOmega;
@@ -482,7 +481,7 @@ static int _bellman_ford_in(privt,trait,loop)
 
 	if(trait->rid.Yoid == privt->pivot->oid) {
 		ret = ob_flux_fluxMaximum(&point.chemin);
-		if(ret !=1) goto fin; // flow null(ret ==0) or error
+		if(ret) goto fin; // flow undefined or error
 	}
 	newOmega = ob_flux_cheminGetOmega(&point.chemin);
 	if (newOmega <= oldOmega)  goto fin; // omega is weaker
@@ -501,8 +500,19 @@ fin:
 
 /*******************************************************************************
 bellman_ford
+
+At the beginning, all sources are such as source.chemin=[source,]
+for t in [1,obCMAXCYCLE]:
+	for all trait[X,Y] of the graph (i_graph+1):
+		if X.chemin empty continue
+		chemin = X.chemin followed by Y
+		if chemin better than X.chemin, then Y.chemin <- chemin
+	At the end, Each node.chemin is the best chemin from a source to this node
+	with at most t traits
+At the end, pivot contains the best chemin from a source to pivot at most obCMAXCYCLE long
+
 the algorithm is usually repeated for all node, but here only
-nblayer times, since paths are at most nblayer long.
+obCMAXCYCLE times. (Paths are NOT at most nblayer long).
 _bellman_ford_in is called for each trait of i_graph+1
 
 return ret!=0 on error
@@ -513,12 +523,13 @@ static int _bellman_ford(privt,chemin,i_graph,loop)
 	int i_graph;
 	ob_tLoop	*loop;
 {
-	int _layer,_new_graph,ret,ret_t;
+	int _iter,ret,ret_t;
 	ob_tPoint pointPivot;
 	ob_tTrait trait;
 	ob_tFleche rid;
 	DBT ks_marque,ku_rid,du_trait,ks_pivotId,du_pointPivot;
 	DBC *cm_trait = NULL;
+	int _new_graph = i_graph+1;
 
 	obMtDbtS(ks_marque,_new_graph);
 	obMtDbtU(ku_rid,rid);
@@ -529,12 +540,8 @@ static int _bellman_ford(privt,chemin,i_graph,loop)
 
 	ret=privt->m_traits->cursor(privt->m_traits,NULL,&cm_trait,0);
 	if (ret) { obMTRACE(ret); goto fin;}
-
-	_new_graph = i_graph+1;
 	
-	_layer = obCMAXCYCLE;
-	/* loops should not be found */
-	while(_layer) {
+	obMRange(_iter,obCMAXCYCLE) {
 		// [G] for all traits where trait.igraph=_new_graph
 		ks_marque.data = &_new_graph;
 		ret = cm_trait->pget(cm_trait,&ks_marque,&ku_rid,&du_trait,DB_SET);
@@ -545,12 +552,11 @@ static int _bellman_ford(privt,chemin,i_graph,loop)
 		} while(!ret);
 		if (ret == DB_NOTFOUND) ret = 0;
 		else {obMTRACE(ret); goto fin;}
-		_layer -=1;
 	}
 
 	ret = privt->points->get(privt->points,0,&ks_pivotId,&du_pointPivot,0);
 	if (ret) { obMTRACE(ret); goto fin;}
-	// pivot shoud be found since it was found by parcours_avant
+	// pivot should be found since it was found by parcours_avant
 
 	memcpy(chemin,&(pointPivot.chemin),ob_flux_cheminGetSize(&pointPivot.chemin));
 
@@ -577,7 +583,7 @@ static int _diminuer(privt,pchemin)
 	ob_tStock tabFlux[obCMAXCYCLE];
 	DBT ks_sid,du_stock,ds_stock,ku_oid,du_point;
 	DBC *cst_point = NULL;
-	bool _someStockExausted = false;
+	bool _someStockExhausted = false;
 
 
 	obMtDbtS(ks_sid,_sid);
@@ -612,7 +618,7 @@ static int _diminuer(privt,pchemin)
 			ret = ob_point_CerStockNotNeg;obMTRACE(ret);goto fin;
 
 		} else if (stock.qtt > pflux->qtt) {
-		// stocktemps[sid]  updated to stock if it is not empty
+			// stocktemps[sid]  updated to stock if it is not empty
 			stock.qtt -= pflux->qtt;
 			ret = privt->stocktemps->put(privt->stocktemps,0,
 				&ks_sid,&ds_stock,0);
@@ -623,9 +629,8 @@ static int _diminuer(privt,pchemin)
 			it is useless to update it, since points and traits that use it
 			will not belong to the next graph.
 			The stock is now empty */
-			_someStockExausted = true;
+			_someStockExhausted = true;
 		}
-		if(!_someStockExhausted) {ret = ob_flux_CerCheminNotMax;obMTRACE(ret); goto fin;}
 
 		// all point and traits that use it are deleted
 		// ************************************************************
@@ -666,6 +671,12 @@ static int _diminuer(privt,pchemin)
 		else {obMTRACE(ret);goto fin;}
 		// end loop cst_point
 		// ************************************************************
+	}
+	/* if no stock is exhausted, it is not the maximum flow,
+	and the draft would make a len(girth) <= obCMAXCYCLE
+	 */
+	if(!_someStockExhausted) {
+		ret = ob_flux_CerCheminNotMax;obMTRACE(ret); goto fin;
 	}
 fin:
 	obMCloseCursor(cst_point);

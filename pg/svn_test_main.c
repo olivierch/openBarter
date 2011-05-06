@@ -65,6 +65,7 @@ void make_error(char *message, svn_error_t **err, char *file, long line) {
 	svn_error_t *perr;
 	char *mess;
 
+	printf("msg %s, file %s,line %li\n",message,file,line);
 	mess = malloc(strlen(message) + 1);
 	if (!mess) {
 		fprintf(stderr, "malloc in make_error (b)");

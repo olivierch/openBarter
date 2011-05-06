@@ -143,6 +143,7 @@ static svn_error_t * test_flux(stocks, noeuds, fluxArrondi, flags)
 	int _len;
 	ob_tStock *_stocks;
 	ob_tNoeud *_noeuds;
+	ob_tLoop loop;
 
 	pchem = &envchemin.chemin;
 
@@ -155,9 +156,8 @@ static svn_error_t * test_flux(stocks, noeuds, fluxArrondi, flags)
 		_sid = noeuds[_nid].stockId;
 		// c'est un ut_DBT!!!
 		// printf("_nid %i _sid %i\n",_nid,_sid);
-		_ret
-				= ob_flux_cheminAjouterNoeud(pchem, &_stocks[_sid],
-						&_noeuds[_nid]);
+		_ret = ob_flux_cheminAjouterNoeud(pchem, &_stocks[_sid],
+						&_noeuds[_nid],&loop);
 		if (_ret) {
 			MAKE_ERROR("incoherent chemin 0", &err);
 		}
@@ -166,7 +166,7 @@ static svn_error_t * test_flux(stocks, noeuds, fluxArrondi, flags)
 	}
 	freeStockNoeud(_stocks, _noeuds);
 	_len = ob_flux_cheminGetNbNode(pchem);
-	// printf("_len %i\n",_len);
+	//
 	_ret = ob_flux_cheminError(pchem);
 	if (_ret) {
 		MAKE_ERROR("incoherent chemin 1", &err);
@@ -174,8 +174,10 @@ static svn_error_t * test_flux(stocks, noeuds, fluxArrondi, flags)
 	// ob_flux_voirChemin(stdout,pchem,0);
 
 	_ret = ob_flux_fluxMaximum(pchem);
-	if (_ret != 1) {
-		MAKE_ERROR("flow null or error", &err);
+	if (_ret) {
+		sprintf(buf,"ob_flux_fluxMaximum ret=%i\n",_ret);
+		//printf("_k %i\n",_ret);
+		MAKE_ERROR(buf, &err);
 	}
 
 	_ret = ob_flux_cheminError(pchem);
@@ -185,11 +187,13 @@ static svn_error_t * test_flux(stocks, noeuds, fluxArrondi, flags)
 	}
 
 	_len = ob_flux_cheminGetNbNode(pchem);
+
 	obMRange(_i,_len)
 	if (pchem->no[_i].fluxArrondi!=fluxArrondi[_i]) {
 		sprintf(buf,"indice %5i: %lli != %lli\n",_i,pchem->no[_i].fluxArrondi,fluxArrondi[_i]);
 		MAKE_ERROR(buf,&err);
 	}
+
 	fin: if (err) {
 		ob_flux_voirChemin(stdout,pchem,0);
 		printf("attendu: ");

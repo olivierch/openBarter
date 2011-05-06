@@ -13,10 +13,10 @@ env.Program('exemple_test',Split('exemple_test.c svn_test_main.c'))
 
 prog_flux = Split('flux.c')
 env.Program('flux_test',prog_flux + Split('flux_test.c svn_test_main.c'))
-
+"""
 prog_dbe = prog_flux+Split('dbe.c')
 env.Program('dbe_test',prog_dbe + Split('dbe_test.c svn_test_main.c'))
 
 prog_chemin = prog_dbe + Split('point.c chemin.c')
 env.Program('chemin_test',prog_chemin+Split('chemin_test.c svn_test_main.c'))
-
+"""

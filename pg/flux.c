@@ -71,7 +71,7 @@ static double _idistance(const unsigned char lon,
 
  It must be called with:
 	pchemin->nbOwn !=0 and pchemin->no[.]ownOcc !=0
- It returns 1 in this case, and 0 otherwise.
+ It returns ob_flux_CerCgain in this case, and 0 otherwise.
  *******************************************************************************/
 
 static int _calGains(ob_tChemin *pchemin,double omegaCorrige[]) {
@@ -87,7 +87,7 @@ static int _calGains(ob_tChemin *pchemin,double omegaCorrige[]) {
 	obMRange(_i,pchemin->nbNoeud) {
 		_occ = pchemin->no[pchemin->no[_i].ownIndex].ownOcc;
 		if (!_occ)
-			return 1;
+			return ob_flux_CerCgain;
 		else if (_occ == 1)
 			no_gain[_i] = pchemin->gain;
 		else
@@ -106,7 +106,7 @@ This flow fluxExact[.] is such than:
  	fluxExact[i] = omegaCorrige[i] * fluxExact[i-1]
 and such as quantities of stock can provide this flow
  
-Each node can be used by several stocks.
+Each stock can be used by several nodes.
  
 Input-output
 ************	
@@ -118,8 +118,12 @@ Input-output
 		->no[j].stock.qtt
 
  Out	fluxExact[.] the maximum flow, of pchemin->lon elts
- Out	fluxExact[.] the maximum flow, of pchemin->lon elts
 
+returns the index i of the exhausted stock.
+	when ob_flux_CLastIgnore, 
+		i in [0,->->nbStock -1[
+	else
+		i in [0,->->nbStock[
 Details
 *******
 If flags & obCLastIgnore: The flow is not limited by the last node
@@ -144,11 +148,12 @@ and:
 	f[i] = f[0] * _piom[i]
 
  *******************************************************************************/
-static void _fluxMaximum(const ob_tChemin *pchemin,double omegaCorrige[], double *fluxExact) {
+static int _fluxMaximum(const ob_tChemin *pchemin,double omegaCorrige[], double *fluxExact) {
 	unsigned char _is, _jn, _lon, _jm;
 	double _piom[obCMAXCYCLE]; //  _fPiomega(i)
 	double _spiom[obCMAXCYCLE]; // (SUM(_fPiomega(i)) for i in Sj)
 	double _min, _cour;
+	int	_iStockExhausted;
 
 	_lon = pchemin->nbNoeud;
 	
@@ -173,10 +178,13 @@ static void _fluxMaximum(const ob_tChemin *pchemin,double omegaCorrige[], double
 	/*********************************/
 	_lon = pchemin->nbStock;
 	_jm = (pchemin->cflags & ob_flux_CLastIgnore) ? (_lon - 1) : _lon;
+
 	obMRange(_is,_jm) { // loop on stocks
 		_cour = ((double) (pchemin->no[_is].stock.qtt)) / _spiom[_is] ;
-		if ((_is == 0) || (_cour < _min))
+		if ((_is == 0) || (_cour < _min)) {
 			_min = _cour;
+			_iStockExhausted = (int) _is;
+		}
 	}
 	//printf("_min =%f\n",_min);
 
@@ -186,7 +194,7 @@ static void _fluxMaximum(const ob_tChemin *pchemin,double omegaCorrige[], double
 	obMRange(_jn,_lon)
 		fluxExact[_jn] = _min * _piom[_jn];
 	// ob_flux_printtableaudoubles(stdout,"flux",fluxExact,_lon);	
-	return;
+	return _iStockExhausted;
 }
 
 /*******************************************************************************
@@ -197,7 +205,9 @@ static void _fluxMaximum(const ob_tChemin *pchemin,double omegaCorrige[], double
 
  pchemin->nbNoeud must be <= obCMAXCYCLE < 32 (2^31 loops !!)
 
- returns true if no solution was found.
+ returns
+ 	 0 if a solution is found
+  	 <0 on error
  The solution is returned in pchemin->no[.].fluxArrondi
 
  when pchemin->cflags & obCLastIgnore,
@@ -205,34 +215,56 @@ static void _fluxMaximum(const ob_tChemin *pchemin,double omegaCorrige[], double
  In this case this stock does not limit the flow
 
  *******************************************************************************/
-static bool _arrondir(const double *fluxExact, ob_tChemin *pchemin) {
+static int _arrondir(const double *fluxExact, ob_tChemin *pchemin,int _iStockExhausted) {
 	unsigned char _i, _j, _k, _lonNode, _lonStock, _lonStockl,_lonNodel;
 	int _matcour, _matmax;
-	bool _admissible, _trouve;
+	int _ret = 0;
+	bool _notFound;
 	ob_tQtt _flowNodes[obCMAXCYCLE], _flowStocks[obCMAXCYCLE], _r;
-	ob_tQtt _floor[obCMAXCYCLE];
+	ob_tQtt _floor[obCMAXCYCLE],_f;
 	double _newdist, _maxdist;
 
-	_trouve = false;
+	_notFound = true;
 	_lonNode = _lonNodel = pchemin->nbNoeud;
 	_lonStock = _lonStockl = pchemin->nbStock;
 
 	if (pchemin->cflags & ob_flux_CLastIgnore) {
-		_lonNodel -= 1; _lonStockl -= 1;
+		_lonNodel -= 1; 
+		_lonStockl -= 1;
+		// the stock of the pivot should not be used by any other node when ob_flux_CLastIgnore
+		_k = 0;
+		obMRange(_i,_lonNodel) {
+			if( _k < pchemin->no[_i].stockIndex)
+				_k = pchemin->no[_i].stockIndex;
+		}
+		_k +=1;
+
+		if(_k != _lonStockl) {
+			_ret = ob_flux_CerStockPivotUsed;
+			goto fin;
+		}
 	}
 
-	obMRange(_i,_lonNode)
-		_floor[_i] = floor(fluxExact[_i]);
+	obMRange(_i,_lonNode) {
+		_f = floor(fluxExact[_i]);
+		if(_f < 0) _f = 0;
+		_floor[_i] = _f;
+	}
+
+	// the stock exhausted should be in [0,_lonstockl[
+	if(_iStockExhausted >= _lonStockl) {
+		_ret = ob_flux_CerStockPb; goto fin;
+	}
 
 	_matmax = 1 << ((int) _lonNode); // one bit for each node
 
 	// for each vertex of the hypercude
 	/**********************************/
 	for (_matcour = 0; _matcour < _matmax; _matcour++) {
-
+		bool _admissible = true;
+		
 		// obtain the vertex _flowNodes
 		/******************************/
-		_admissible = true;
 		for (_j = 0; _j < _lonNode; _j++) {
 			_r = _floor[_j];
 			if (_matcour & (1 << ((int) _j)))
@@ -246,12 +278,14 @@ static bool _arrondir(const double *fluxExact, ob_tChemin *pchemin) {
 			_flowNodes[_j] = _r;
 		}
 		if (!_admissible) continue; // the vertex is rejected
-		// a vertex _flowNodes was found
+		/* a vertex _flowNodes was found where all _flowNodes[.] > 0
+		 */
 
 		// obtain _flowStocks
 		/********************/
-		memset(_flowStocks, 0, sizeof(_flowStocks));
-		// if no limit on the last node. Keep it null
+		obMRange (_j,_lonStockl)
+			_flowStocks[_j] = 0;
+
 		obMRange (_j,_lonNodel) {
 			_k = pchemin->no[_j].stockIndex;
 			_flowStocks[_k] += _flowNodes[_j];
@@ -260,30 +294,40 @@ static bool _arrondir(const double *fluxExact, ob_tChemin *pchemin) {
 		// verify stocks can provide flowStocks
 		/*****************************************/
 		obMRange (_k,_lonStockl) {
-			if (_flowStocks[_k] == 0) continue;
-			// a limit on this stock
-			if (pchemin->no[_k].stock.qtt < _flowStocks[_k]) {
-				_admissible = false;
-				break;
+			if(_k == (unsigned char) _iStockExhausted) {
+				// verify the flow exhausts the stock
+				if(_flowStocks[_k] != pchemin->no[_k].stock.qtt ) {
+					_admissible = false; break;
+				}
+			} else {
+				// verify the flow is not greater than the stock
+				if ( _flowStocks[_k] > pchemin->no[_k].stock.qtt ) {
+					_admissible = false; break;
+				}
 			}
 		}
 		if (!_admissible) continue; // the vertex is rejected
-
+		
 		// choose the best
 		/*****************/
 		_newdist = _idistance(_lonNode, fluxExact, _flowNodes);
 
-		if (_trouve && (_newdist <= _maxdist))
-			continue;
 
 		// this vertex is better than other found (if any)
 		/************************************************/
-		_trouve = true;
-		_maxdist = _newdist;
-		obMRange (_k,_lonNode)
-			pchemin->no[_k].fluxArrondi = _flowNodes[_k];
+		if( _notFound || _maxdist < _newdist) {
+			_notFound = false;
+			_maxdist = _newdist;
+			obMRange (_k,_lonNode)
+				pchemin->no[_k].fluxArrondi = _flowNodes[_k];
+		}
 	}
-	return (!_trouve); // true if no solution was found
+	if(_notFound) _ret = ob_flux_CerFlowNotFound;
+	else _ret = 0;
+fin:
+	return (_ret); /*
+		0 if a solution is found
+		< 0 on error */
 }
 /*******************************************************************************
  pchemin is initialized with 0 nodes.
@@ -351,13 +395,14 @@ int ob_flux_cheminAjouterNoeud(ob_tChemin *pchemin, const ob_tStock *pstock,
 	obMRange(_i,pchemin->nbNoeud) {
 		if (pchemin->no[_i].noeud.oid == pnoeud->oid) {
 			if(_i == pchemin->nbNoeud-1) {
-				// pchemin->no[pchemin->nbNoeud-1].noeud.oid and pnoeud->oid should be different
+				/* pchemin->no[pchemin->nbNoeud-1].noeud.oid and pnoeud->oid should be different
+				Xoid == Yoid */
 				_ret = ob_flux_CerCheminPom3;
-				return _ret;
+			} else {
+				loop->rid.Xoid = pchemin->no[pchemin->nbNoeud-1].noeud.oid;
+				loop->rid.Yoid = pnoeud->oid;
+				_ret = ob_flux_CerLoopOnOffer;
 			}
-			loop->rid.Xoid = pchemin->no[pchemin->nbNoeud-1].noeud.oid;
-			loop->rid.Yoid = pnoeud->oid;
-			_ret = ob_flux_CerLoopOnOffer;
 			return _ret;
 		}
 	}
@@ -425,18 +470,18 @@ int ob_flux_cheminAjouterNoeud(ob_tChemin *pchemin, const ob_tStock *pstock,
 /******************************************************************************
  * gives the maximum flow of pchemin
  * return 
-	0 if no flow was found
-	1 if a flow was found
+	0 if a flow was found
 	<0 on error
  *****************************************************************************/
 int ob_flux_fluxMaximum(ob_tChemin *pchemin) {
-	bool _fluxNul, _ret;
+	int _ret;
 	double _omegaCorrige[obCMAXCYCLE];
 	double _fluxExact[obCMAXCYCLE];
+	int _iStockExhausted;
 	//unsigned char _i;
 
 	if(pchemin->cflags & ob_flux_CLastIgnore) {
-		/* omega of the last node is set in order that the product prodOmega becomes 1.0 :
+		/* omega of the last node is set in order than the product prodOmega becomes 1.0 :
 			omega[_nbNoeud-1] = 1./product(omega[i]) for i in [0,_nbNoeud-2] 
 		*/
 		pchemin->no[pchemin->nbNoeud-1].noeud.omega = pchemin->no[pchemin->nbNoeud-1].noeud.omega/pchemin->prodOmega;
@@ -444,23 +489,24 @@ int ob_flux_fluxMaximum(ob_tChemin *pchemin) {
 	}
 	// omegas are corrected
 	_ret = _calGains(pchemin,_omegaCorrige);
+
 	if (_ret) goto fin;
 
 	// maximum flow
 	/*elog(INFO,"lastIgnode %i",(pchemin->cflags & ob_flux_CLastIgnore) ?1:0);
 	obMRange(_i,pchemin->nbStock) elog(INFO,"\t_stock[.].qtt %lli",pchemin->no[_i].stock.qtt);
 	*/
-	_fluxMaximum(pchemin,_omegaCorrige,_fluxExact);
+	_iStockExhausted = _fluxMaximum(pchemin,_omegaCorrige,_fluxExact);
+
 	/*obMRange(_i,pchemin->nbNoeud) {
 		elog(INFO,"\t_fluxExact[.]=%f, omega[.]=%f",_fluxExact[_i],pchemin->no[_i].noeud.omega);
 	}*/
-	_fluxNul = _arrondir(_fluxExact, pchemin);
+	_ret = _arrondir(_fluxExact, pchemin,_iStockExhausted);
+
 	//elog(INFO,"_flux %i",_fluxNul?1:0);
-	if (!_fluxNul) {
+	if (_ret == 0 ) {
 		pchemin->cflags |= ob_flux_CFlowDefined;
-		_ret = 1;
-		
-	} else _ret = 0;
+	}
 fin:
 	return _ret;
 }

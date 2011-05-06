@@ -32,7 +32,7 @@
 #include <point.h>
 #include <flux.h>
 
-/* obsolete */
+/* obsolete
 size_t ob_point_getsizePoint(ob_tPoint *point) {
 	int res;
 	unsigned char _nb;
@@ -48,7 +48,7 @@ size_t ob_point_getsizePoint(ob_tPoint *point) {
 	}
 	// else  res = sizeof(ob_tPoint);
 	return res;
-}
+} */
 /****************************************************************************
  * initialise le point.
  * si le point est une source(si point.mo.av==1),
@@ -183,7 +183,7 @@ int ob_point_getPoint(ob_tPrivateTemp *privt, ob_tId *oid, ob_tPoint *point) {
  new_trait
  place le trait dans le i_graph 0
  *******************************************************************************/
-int ob_point_new_trait(DB_ENV *envt, ob_tId *Xoid, ob_tId *Yoid) {
+int ob_point_new_trait(DB_ENV *envt, ob_tId Xoid, ob_tId Yoid) {
 	ob_tTrait trait;
 	int ret = 0;//, ret_t;
 	ob_tPrivateTemp *privt = envt->app_private;
