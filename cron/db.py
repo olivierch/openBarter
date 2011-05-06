@@ -91,10 +91,16 @@ class Cursor():
 
 		"""
 		if(exc_type == psycopg2.Error):
-			self.log.error(exc_val.pgerror)
+			self.error(exc_val.pgerror)
 		self.cursor.close()
 		return False # exception is propagated
 		
+	def error(self,str):
+		if(self.log):
+			self.log.error(str)	
+		else:
+			print >> sys.stderr,str
+					
 def getDictsFromCursor(cursor):
 	""" usage:
 	for d in getDictsFromCursor(cursor):
