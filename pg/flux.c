@@ -231,7 +231,8 @@ static int _arrondir(const double *fluxExact, ob_tChemin *pchemin,int _iStockExh
 	if (pchemin->cflags & ob_flux_CLastIgnore) {
 		_lonNodel -= 1; 
 		_lonStockl -= 1;
-		// the stock of the pivot should not be used by any other node when ob_flux_CLastIgnore
+		/* the stock of the pivot should not be used by any other node when ob_flux_CLastIgnore
+		=> index of stocks used by nodes other than the pivot should be in [0,_lonStockl[ */
 		_k = 0;
 		obMRange(_i,_lonNodel) {
 			if( _k < pchemin->no[_i].stockIndex)
@@ -247,7 +248,7 @@ static int _arrondir(const double *fluxExact, ob_tChemin *pchemin,int _iStockExh
 
 	obMRange(_i,_lonNode) {
 		_f = floor(fluxExact[_i]);
-		if(_f < 0) _f = 0;
+		if(_f < 0) _f = 0; // security
 		_floor[_i] = _f;
 	}
 
@@ -265,35 +266,33 @@ static int _arrondir(const double *fluxExact, ob_tChemin *pchemin,int _iStockExh
 		
 		// obtain the vertex _flowNodes
 		/******************************/
-		for (_j = 0; _j < _lonNode; _j++) {
+		obMRange (_j,_lonNode) {
 			_r = _floor[_j];
 			if (_matcour & (1 << ((int) _j)))
 				_r += 1;
-
-			// the vertex is rejected if _flowNodes[_j]==0
-			if (_r == 0) {
-				_admissible = false;
-				break;
-			}
 			_flowNodes[_j] = _r;
 		}
-		if (!_admissible) continue; // the vertex is rejected
-		/* a vertex _flowNodes was found where all _flowNodes[.] > 0
-		 */
+
 
 		// obtain _flowStocks
 		/********************/
-		obMRange (_j,_lonStockl)
-			_flowStocks[_j] = 0;
+		obMRange (_k,_lonStock)
+			_flowStocks[_k] = 0;
 
-		obMRange (_j,_lonNodel) {
+		obMRange (_j,_lonNode) {
 			_k = pchemin->no[_j].stockIndex;
 			_flowStocks[_k] += _flowNodes[_j];
 		}
 
-		// verify stocks can provide flowStocks
+		// several checking
 		/*****************************************/
 		obMRange (_k,_lonStockl) {
+
+			// All _flowStocks[.] > 0
+			if(_flowStocks[_k] == 0) {
+				_admissible = false; break;
+			}
+
 			if(_k == (unsigned char) _iStockExhausted) {
 				// verify the flow exhausts the stock
 				if(_flowStocks[_k] != pchemin->no[_k].stock.qtt ) {
@@ -308,6 +307,13 @@ static int _arrondir(const double *fluxExact, ob_tChemin *pchemin,int _iStockExh
 		}
 		if (!_admissible) continue; // the vertex is rejected
 		
+		/* At this point, each stock can provide flowStock{],
+		all flowStock[.] > 0
+			=> every stock provide something
+			=> every one provide something
+		the cycle exhausts the flow  */
+
+
 		// choose the best
 		/*****************/
 		_newdist = _idistance(_lonNode, fluxExact, _flowNodes);
