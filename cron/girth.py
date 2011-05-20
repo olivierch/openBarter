@@ -6,56 +6,77 @@
 import db
 import sys
 
-conn = None
 sqllien = """SELECT NOY.id,NOY.bf FROM ob_tnoeud NOY WHERE NOY.nr=%s """
-sqlfour = """SELECT NOX.id,NOX.nf,S.qtt FROM ob_tnoeud NOX INNER JOIN ob_tstock S ON (NOX.sid =S.id) WHERE S.qtt!=0 and S.type='S' and NOX.bf=%s"""
+sqlfour = """SELECT NOX.id,NOX.nf,S.qtt,NOX.loop_bf FROM ob_tnoeud NOX INNER JOIN ob_tstock S ON (NOX.sid =S.id) WHERE S.qtt!=0 and S.type='S' and NOX.bf=%s"""
 
-def breadth_first(nid):
+def breadth_first(conn,nid):
 	""" computes the smallest cycle from this node """
 	depth=1
-	add_column("ob_tnoeud","bf")
-	updateNode(1,nid)	
+	nbf=0
+	# a new column bf is (re)created default=null
+	add_column(conn,"ob_tnoeud","bf","bigint")
+	add_column(conn,"ob_tnoeud","loop_bf","text")
+	updateNode(conn,1,nid,"%i"%nid)	
+	# print "\nfor node[%i]" % (nid,)
 	_couche = True
 	while _couche:
 		_couche = False
+		_str = ""
 		with db.Cursor(conn,'name2') as cur2:
 			cur2.execute(sqlfour,[depth])
-			for (_idx,_nf,_qtt) in cur2:
+			#for all nodes of couche=depth having stock!=0
+			for (_idx,_nf,_qtt,_loop) in cur2:
 				with db.Cursor(conn,'name3') as cur3:
+					#for all nodes where nr=_nf
 					cur3.execute(sqllien,[ _nf])
 					for (_idy,_bf) in cur3:
+						if(depth==1): nbf +=1
+						_loop1 = _loop+(",%i"%_idy)
 						if _bf != None: 
-							return _bf
-						print "%i :%i->%i" % (_qtt,_idx,_idy)
-						updateNode(depth+1,_idy)
+							return _bf+1,_loop,nbf
+						_str += "[%i]:q%i->[%i] " % (_idx,_qtt,_idy)
+						updateNode(conn,depth+1,_idy,_loop1)
 						_couche = True			
 		depth +=1 
-	print "depth %i" % (depth-1,)
-	return None
+		if(False and len(_str)):
+			_str = "%i: %s" % (depth-1,_str)
+			print _str
+	
+	return None,None,nbf
 
-def updateNode(val,nid):
+def updateNode(conn,val,nid,loop):
 	with db.Cursor(conn,'name4') as cur4:
-		cur4.execute("update ob_tnoeud set bf=%s where id=%s",[val,nid])
+		cur4.execute("update ob_tnoeud set bf=%s,loop_bf=%s where id=%s",[val,loop,nid])
 	return 
 	
-def find_cycle():
-	global conn
-	maxl = None
+def find_cycle(conn):
+	minl = None
+	mini = None
+	maxi = None
+	nbf = 0
 	# for each ob_tnoeud
+	nbBids =0
 	with db.Cursor(conn,'name1') as cursor:
-		cursor.execute("select id from ob_tnoeud")
+		cursor.execute("select id from ob_tnoeud order by id")
 		for (_id,) in cursor:
-			length = breadth_first(_id)
-			if(maxl == None): maxl = length
-			elif (length != None and maxl < length): maxl = length
-	if maxl == None:
-		print "girth infinite"
-	else:
-		print "girth %i" % maxl
+			if(mini == None or mini>_id): mini = _id
+			if(maxi == None or maxi<_id): maxi = _id
+			nbBids +=1
+			length,loop,_nbf = breadth_first(conn,_id)
+			print "from [%i] %i arcs" % (_id,_nbf)
+			nbf += _nbf
+			if (False and length):
+				print "loop:"+loop
+			if(minl == None) or (length != None and minl > length):  
+				minl = length
+				minloop = loop
+	return minl,nbBids,minloop,mini,maxi,nbf
+
+def printLoop(conn,length):
+	return
 	
-def add_column(table,column):
+def add_column(conn,table,column,typ):
 	""" add a column to the table """
-	global conn
 	
 	try:
 		with db.Cursor(conn,'name') as cursor:
@@ -64,22 +85,20 @@ def add_column(table,column):
 		pass
 
 	with db.Cursor(conn,'name') as cursor:
-		cursor.execute("alter table %s add %s bigint default null" % (table,column))
+		cursor.execute("alter table %s add %s %s default null" % (table,column,typ))
 	return
 	
 def automate():
-	global conn
 	retCode = 0 
 	with db.Connection() as conn:
-		find_cycle()
-		"""
-		try:
-			find_cycle()
-		except Exception,e:
-			print("Exception %s occured" % str(e))
-		else:	
-			print("done")
-		"""
+		girth,nbBids,minloop,mini,maxi,nbf = find_cycle(conn)
+	print "##################################### RESULT ##############################"
+	print "for a graph with %i arcs and %i nodes between %i and %i " % (nbf,nbBids,mini,maxi)
+	if girth == None:
+		print "girth infinite"
+	else:
+		print "girth %i" % girth
+		print minloop
 	return retCode
 	
 if __name__ == "__main__":
