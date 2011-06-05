@@ -64,6 +64,8 @@ init
  *****************************************************************/
 void		_PG_init(void) {
 	int ret;
+
+	memset(&openbarter_g,0,sizeof(ob_tGlob));
 	ret = _ob_iternoeud_Init();
 	if(ret) elog(ERROR,"_PG_init() failed");
 	//elog(INFO,"on est passé par _PG_init()");

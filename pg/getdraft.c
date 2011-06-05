@@ -16,13 +16,15 @@
 #include "chemin.h"
 #include "iternoeud.h"
 
+// #define ob_getdraft_PRINTDBG true
+
 #ifdef PG_MODULE_MAGIC
 PG_MODULE_MAGIC;
 #endif
 
 ob_tGlob openbarter_g;
 
-void ob_getdraft_init(void);
+int ob_getdraft_init(void);
 Datum ob_getdraft_get(PG_FUNCTION_ARGS);
 
 /***************************************************************************************
@@ -38,13 +40,9 @@ sql declaration:
 
 static int ob_getdraft_getcommit_next(ob_getdraft_ctx *ctx,HeapTuple *ptuple);
 static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCTION_ARGS);
-static int ob_getdraft_get_commit(ob_getdraft_ctx *ctx);
 
-void ob_getdraft_init(void) {
-	ob_getdraft_ctx *ctx = &openbarter_g.ctx;
-
-	openbarter_g.pathEnv[0] = 0;
-	memset(ctx,0,sizeof(ob_getdraft_ctx));
+int ob_getdraft_init(void) {
+	return 0;
 }
 
 /*
@@ -80,6 +78,8 @@ Datum ob_getdraft_get(PG_FUNCTION_ARGS) { // FunctionCallInfo fcinfo
 
 		MemoryContext oldcontext;
 		TupleDesc tupdesc;
+
+		//elog(INFO,"ob_getdraft_get first call");
 
 		if(SPI_OK_CONNECT != SPI_connect())
 			elog(ERROR,"SPI_connect() error");
@@ -135,14 +135,13 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 	ob_tPrivateTemp *privt;
 	//int _nblayer,i_graph,ret=0,ret_t,_nbSource,_lo;
 	int ret;
+#ifdef ob_getdraft_PRINTDBG
+	ob_tMsg msg;
+	int retm;
+#endif
 	
 	ctx = &openbarter_g.ctx;
-	/*
-	ctx = palloc(sizeof(ob_getdraft_ctx));
-	if(ctx== NULL) {
-		elog(ERROR,"out of memory");
-		return NULL;
-	}*/
+
 	if(ctx->envt != 0) {
 		ob_dbe_closeEnvTemp(ctx->envt);
 		ctx->envt = NULL; // Done
@@ -200,12 +199,46 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 	}
 	//elog(INFO,"parcours_arriere %i layer",ctx->nblayer);
 	ctx->i_graph = -1;
-	return ctx;
+	goto end;
+
 err:
 	ob_dbe_closeEnvTemp(ctx->envt);
 	ctx->envt = NULL; // Done
 	// pfree(ctx);
-	return NULL;
+	ctx = NULL;
+
+end:
+#ifdef ob_getdraft_PRINTDBG
+	retm = ob_flux_makeMessage(&msg,"ob_getdraft_get2(%05lli,%6.3f,%03lli,%03lli)\n",
+			pivot->stockId,pivot->omega,pivot->nF,pivot->nR);
+	if(retm == 0) {
+		elog(INFO,"%s",msg.begin);
+		ob_flux_writeFile(&msg); // pfree is included
+	} else elog(INFO,"Error in ob_flux_makeMessage");
+#endif
+
+	return ctx;
+}
+/***************************************************************************************/
+/* Sets ctx->i_commit to the next index of ctx->accord.chemin.no[]
+ * At the first call or when the last is reached, calls ob_chemin_get_draft_next
+ * ctx->i_graph == -1 at the first call
+ *
+ * Returns an error
+ */
+static int ob_getdraft_get_commit(ob_getdraft_ctx *ctx) {
+	int ret;
+
+	ctx->i_commit += 1;
+	if(ctx->i_graph == -1 || ctx->i_commit >= ctx->accord.chemin.nbNoeud) {
+			ctx->i_graph += 1;
+			ctx->i_commit = 0;
+			ret = ob_chemin_get_draft_next(ctx);
+			// elog(INFO,"ob_chemin_get_draft_next returned %i",ret);
+	} else {
+		ret = 0;
+	}
+	return ret;
 }
 /***************************************************************************************/
 static int ob_getdraft_getcommit_next(ctx,ptuple) 
@@ -296,25 +329,6 @@ endloop:
 	//pfree(ctx);
 	return ret;
 }
-/* Sets ctx->i_commit to the next index of ctx->accord.chemin.no[]
- * At the first call or when the last is reached, calls ob_chemin_get_draft_next
- * ctx->i_graph == -1 at the first call
- *
- * Returns an error
- */
-static int ob_getdraft_get_commit(ob_getdraft_ctx *ctx) {
-	int ret;
 
-	ctx->i_commit += 1;
-	if(ctx->i_graph == -1 || ctx->i_commit >= ctx->accord.chemin.nbNoeud) {
-			ctx->i_graph += 1;
-			ctx->i_commit = 0;
-			ret = ob_chemin_get_draft_next(ctx);
-			// elog(INFO,"ob_chemin_get_draft_next returned %i",ret);
-	} else {
-		ret = 0;
-	}
-	return ret;
-}
 
 

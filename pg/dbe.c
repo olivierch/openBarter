@@ -44,6 +44,7 @@ static void errcallback(const DB_ENV *dbenv, const char *errpfx,
 
 static int openBasesTemp(DB_ENV *envt, u_int32_t flagsdb);
 static int closeBasesTemp(ob_tPrivateTemp *privt);
+static int truncateBasesTemp(ob_tPrivateTemp *privt);
 
 /******************************************************************************
  directory creation
@@ -113,12 +114,25 @@ int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 		obMTRACE(ret);
 		goto abort;
 	}
-
-	_flagsenv = DB_CREATE | DB_INIT_MPOOL;
-	// DB_INIT_LOCK,DB_INIT_TXN unused <= each database accessed by only one process/thread
-	// DB_INIT_LOG unused <= no database recovery necessary
-	//  DB_PRIVATE unused <= env accessed by multiple process
-	// => region files created
+	/* DB_INIT_MPOOL (docs/api_reference/C/envopen.html#open_DB_INIT_MPOOL)
+	 * 	Initialize the shared memory buffer pool subsystem.
+	 * 	This subsystem should be used whenever an application is using any Berkeley DB access method.
+	 *
+	 * DB_CREATE (docs/api_reference/C/envopen.html#open_DB_CREATE)
+	 *	Cause Berkeley DB subsystems to create any underlying files, as necessary.
+	 *
+	 * DB_PRIVATE (docs/api_reference/C/envopen.html#open_DB_PRIVATE)
+	 *	Allocate region memory from the heap instead of from memory backed by the filesystem or system shared memory.
+	 *	This flag implies the environment will only be accessed by a single process (although that process may be multithreaded).
+	 *	This flag has two effects on the Berkeley DB environment.
+	 *	First, all underlying data structures are allocated from per-process memory instead of from shared memory
+	 *	that is accessible to more than a single process. Second, mutexes are only configured to work between threads.
+	 *	This flag should not be specified if more than a single process is accessing the environment
+	 *	because it is likely to cause database corruption and unpredictable behavior.
+	 *	For example, if both a server application and Berkeley DB utilities (for example, db_archive, db_checkpoint or db_stat)
+	 *	are expected to access the environment, the DB_PRIVATE flag should not be specified.
+	 */
+	_flagsenv = DB_CREATE | DB_INIT_MPOOL | DB_PRIVATE;
 	ret = envt->open(envt, openbarter_g.pathEnv, _flagsenv, 0);
 	if (ret) {
 		obMTRACE(ret);
@@ -177,22 +191,33 @@ int ob_dbe_closeEnvTemp(DB_ENV *envt) {
 	if (ret_t != 0 && ret == 0)
 		ret = ret_t;
 	// elog( ERROR,"Appel de ob_rmPath avec %s",openbarter_g.pathEnv );
-	// ob_rmPath(openbarter_g.pathEnv,true);
+	ob_rmPath(openbarter_g.pathEnv,true);
+	return ret;
+}
+
+/******************************************************************************
+ reset the temporary environment
+	when **envt == NULL creates the envt and open batabases
+	else truncate databases
+ returns 0 or an error
+ ******************************************************************************/
+int ob_dbe_resetEnvTemp(DB_ENV **penvt) {
+	int ret;
+
+	if(*penvt == NULL) {
+		ret = ob_dbe_openEnvTemp(penvt);
+	} else {
+		ret = truncateBasesTemp((*penvt)->app_private);
+	}
 	return ret;
 }
 
 static int open_db(DB_ENV *env, bool is_secondary, DB *db, char *name,
-
-		DB_TXN *txn_e, // ne sert plus
-		int size, DBTYPE type, u_int32_t flags, int(*bt_compare_fcn)(DB *db,
+		DBTYPE type, u_int32_t flags, int(*bt_compare_fcn)(DB *db,
 				const DBT *dbt1, const DBT *dbt2), int(*dup_compare_fcn)(
 				DB *db, const DBT *dbt1, const DBT *dbt2)) {
-	int ret, ret_t, _flags;
-	//char strid[obCMAXBUF];
+	int ret, _flags;
 	char *pname = name;
-	//DB_MPOOLFILE *mpf;
-	DB_TXN *txn = NULL;
-	u_int32_t flagsenv;
 
 	if (bt_compare_fcn) {
 		ret = db->set_bt_compare(db, bt_compare_fcn);
@@ -219,33 +244,17 @@ static int open_db(DB_ENV *env, bool is_secondary, DB *db, char *name,
 	} else
 		_flags = flags;
 
-	ret = env->get_open_flags(env, &flagsenv);
+	/* DB->open(DB *db, DB_TXN *txnid, const char *file, const char *database, DBTYPE type, u_int32_t flags, int mode);
+	 * Whether other threads of control can access this database is driven entirely by whether the database parameter is set to NULL.
+	 *
+	 */
+	ret = db->open(db, NULL, pname, NULL, type, _flags | DB_PRIVATE, 0644);
 	if (ret) {
 		obMTRACE(ret);
 		goto err;
 	}
-	if (flagsenv & DB_INIT_TXN) {
-		// start transaction
-		ret = env->txn_begin(env, NULL, &txn, 0);
-		if (ret != 0) {
-			obMTRACE(ret);
-			goto err;
-		}
-		ret = db->open(db, txn, pname, NULL, type, _flags, 0644);
-		if (!ret) {
-			ret = txn->commit(txn, 0);
-			if (ret) {
-				obMTRACE(ret);
-				goto err;
-			}
-		} else {
-			ret_t = txn->abort(txn);
-			if (ret_t) {
-				obMTRACE(ret_t);
-				goto err;
-			}
-		}
-	} else if (_flags & DB_PRIVATE) {
+	/*
+	if (_flags & DB_PRIVATE) {
 		// if DB_PRIVATE, region file resides in memory
 		ret = db->open(db, NULL, NULL, pname, type, _flags, 0644);
 		if (ret) {
@@ -259,6 +268,7 @@ static int open_db(DB_ENV *env, bool is_secondary, DB *db, char *name,
 			goto err;
 		}
 	}
+	*/
 	return 0;
 	err: return (ret);
 }
@@ -325,27 +335,9 @@ static int createBasesTemp(ob_tPrivateTemp *privt, DB_ENV *envt) {
 	return 0;
 	fin: return (ret);
 }
-static char *extendPid(char *res,char *name){
-	int ret;
-	size_t l;
-	pid_t pid;
-	char *str;
 
-	l =strlen(name);
-	memcpy(res,name,l);
-	str = res+l;
-	pid = getpid();
-	ret = snprintf(str,32,"%d",pid);
-	if(ret >=32) {
-		ereport(ERROR,
-				(errmsg("32 char was not enough to print the pid")));
-		return name;
-	}
-	return res;
-}
 static int openBasesTemp(DB_ENV *envt, u_int32_t flagsdb) {
 	int ret;
-	char nam[obCMAXPATH];
 
 	ob_tPrivateTemp *privt = envt->app_private;
 	if (!privt) {
@@ -358,57 +350,57 @@ static int openBasesTemp(DB_ENV *envt, u_int32_t flagsdb) {
 	if(ret) goto fin;
 
 	// traits
-	ret = open_db(envt, false, privt->traits, extendPid(nam,"traits"), NULL, 0, DB_BTREE,flagsdb, NULL, NULL);
+	ret = open_db(envt, false, privt->traits, "traits", DB_BTREE,flagsdb, NULL, NULL);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->m_traits, extendPid(nam,"m_traits"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->m_traits, "m_traits",DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 
 	ret = privt->traits->associate(privt->traits, 0, privt->m_traits,trait_get_marque, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->px_traits, extendPid(nam,"px_traits"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->px_traits, "px_traits",DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->traits->associate(privt->traits, 0, privt->px_traits,trait_get_Xoid, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->py_traits,extendPid(nam, "py_traits"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->py_traits,"py_traits",DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->traits->associate(privt->traits, 0, privt->py_traits,trait_get_Yoid, 0);
 	if(ret) goto fin;
 
 	//points
-	ret = open_db(envt, false, privt->points,extendPid(nam, "points"), NULL, 0, DB_BTREE,flagsdb, NULL, NULL);
+	ret = open_db(envt, false, privt->points,"points", DB_BTREE,flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	// the size of points is not constant
 
-	ret = open_db(envt, true, privt->mar_points, extendPid(nam,"mar_points"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->mar_points, "mar_points",DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->mar_points,point_get_mar, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->mav_points, extendPid(nam,"mav_points"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->mav_points, "mav_points",DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->mav_points,point_get_mav, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->vx_points, extendPid(nam,"vx_points"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->vx_points, "vx_points",DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->vx_points,point_get_nX, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->vy_points, extendPid(nam,"vy_points"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->vy_points, "vy_points",DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->vy_points,point_get_nY, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->st_points,extendPid(nam, "st_points"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->st_points, "st_points",DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->st_points,point_get_stockId, 0);
 	if(ret) goto fin;
 
 	// stocktemps
-	ret = open_db(envt, false, privt->stocktemps, extendPid(nam,"stocktemps"), NULL, 0,DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, false, privt->stocktemps, "stocktemps",DB_BTREE, flagsdb, NULL, NULL);
 	if(ret) goto fin;
 
 	return 0;
@@ -467,7 +459,22 @@ static int closeBasesTemp(ob_tPrivateTemp *privt) {
 
 	return (ret);
 }
+/******************************************************************************/
+static int truncateBasesTemp(ob_tPrivateTemp *privt) {
+	int ret = 0, ret_t;
+	u_int32_t cnt;
 
+	if (!privt) {
+		ret = ob_dbe_CerPrivUndefined;
+		return ret;
+	}
+	ob_dbe_MTruncateBase(privt->traits);
+	// secondary index are also truncated
+	ob_dbe_MTruncateBase(privt->points);
+	ob_dbe_MTruncateBase(privt->stocktemps);
+
+	return (ret);
+}
 /*******************************************************************************
  Callback error
  *******************************************************************************/

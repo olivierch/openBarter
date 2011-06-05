@@ -26,7 +26,37 @@
 #include <iternoeud.h>
 #include <dbe.h>
 
+// #define ob_chemin_PRINTDBG true
+#ifdef ob_chemin_PRINTDBG
 
+/* nid and stock can be null */
+static int _svoirPoint(ob_tMsg *msg, ob_tNoeud *noeud,ob_tId *nid,ob_tStock *stock) {
+	int ret;
+
+	ret = ob_flux_makeMessage(msg,"b%c%c%c",
+			(noeud && stock && noeud->stockId != stock->sid)?'z':' ',
+			(noeud && stock && noeud->nF != stock->nF)?'z':' ',
+			(noeud && stock && noeud->own != stock->own)?'z':' ',
+			(nid &&  noeud->oid!=*nid)?'z':' ');
+
+	ret = ob_flux_makeMessage(msg, ":q%03lli->q%03lli",noeud->nR,noeud->nF);
+	ret = ob_flux_makeMessage(msg, " sx%016llX",noeud->stockId);
+	ret = ob_flux_makeMessage(msg, " wx%016llX",noeud->own);
+	ret = ob_flux_makeMessage(msg, " om%6.3f",noeud->omega);
+	if(nid) ret = ob_flux_makeMessage(msg," nx%016llX",*nid);
+	if(stock) {
+		ret = ob_flux_makeMessage(msg, " f%05lli",stock->qtt);
+		ret = ob_flux_makeMessage(msg, " vx%016llX",stock->version);
+	}
+
+	return ret;
+}
+static int _svoirTrait(ob_tMsg *msg,ob_tId xoid,ob_tId yoid) {
+	int ret;
+	ret = ob_flux_makeMessage(msg,"%05lli->%05lli\n",xoid,yoid);
+	return ret;
+}
+#endif
 /*******************************************************************************
 parcours_arriere
 
@@ -70,7 +100,10 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 	ob_tMarqueOffre moY,moX; // some points on layer X and layer Y
 	ob_tNoeud offreX;
 	ob_tStock stock;
-
+#ifdef ob_chemin_PRINTDBG
+	ob_tMsg msg;
+	int retm;
+#endif
 	DBT ku_Yoid,du_moY,ku_Xoid,du_moX,du_offreX,ks_nR,ks_Xoid;
 	DBC *cmar_pointY = NULL;
 	DBC *c_point = NULL;
@@ -85,7 +118,10 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 	obMtDbtU(du_offreX,offreX);
 	obMtDbtS(ks_nR,moY.offre.nR);
 	obMtDbtS(ks_Xoid,Xoid);
+
+
 	// elog(INFO,"pivot stockId %lli nF %lli nR %lli omega %f own %lli oid %lli",pivot->stockId,pivot->nF,pivot->nR,pivot->omega,pivot->own,pivot->oid);
+
 
 	/* cursor for iteration on points for a given ob_tMar moY.ar containing (layer,igraph) */
 	ret = privt->mar_points->cursor(privt->mar_points,NULL,&cmar_pointY,0);
@@ -115,6 +151,13 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 		stock.nF = pivot->nF;
 		// stock.own = stock.qtt = stock.sid = stock.version = 0
 	}
+
+#ifdef ob_chemin_PRINTDBG
+	msg.begin = NULL;
+	retm = ob_flux_makeMessage(&msg,"ParcoursArriere:\nPivot:");
+	retm = _svoirPoint(&msg,pivot,NULL,stockPivot);
+#endif
+
 	ret = ob_iternoeud_put_stocktemp3(envt,&stock);
 	if(ret){obMTRACE(ret);goto fin;}
 
@@ -137,8 +180,13 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 		*/
 		marqueYar.layer = layer;
 		marqueYar.igraph = 0;
+
 		ret = cmar_pointY->pget(cmar_pointY,&ks_marqueYar,&ku_Yoid,&du_moY,DB_SET);
 		// sets Yoid and moY
+#ifdef ob_chemin_PRINTDBG
+		retm = ob_flux_makeMessage(&msg,"\nlayer %i Y:",layer);
+		retm = _svoirPoint(&msg,&moY.offre,&Yoid,NULL);
+#endif
 		if(!ret) do { // [B]
 			//elog(INFO,"Layer %i, Yoid=%lli found",layer,Yoid);
 			
@@ -163,8 +211,13 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 				ret = ob_iternoeud_Next2(cvy_offreX,&Xoid,&offreX,&stock);
 				if(ret == DB_NOTFOUND) break;
 				else if (ret !=0) { obMTRACE(ret); goto fin;}
-				//elog(INFO,"ob_iternoeud_Next2(Yoid=%lli,nR=%lli) found offreX.oid=%lli with offreX.nF=nR and offreX.nR=%lli",Yoid,moY.offre.nR,Xoid,offreX.nR);
 
+				//elog(INFO,"ob_iternoeud_Next2(Yoid=%lli,nR=%lli) found offreX.oid=%lli with offreX.nF=nR and offreX.nR=%lli",Yoid,moY.offre.nR,Xoid,offreX.nR);
+#ifdef ob_chemin_PRINTDBG
+				ret = ob_flux_makeMessage(&msg,"%05lli->%05lli,",Xoid,Yoid);
+				//retm = ob_flux_makeMessage(&msg,"\n\tX:");
+				//retm = _svoirPoint(&msg,&offreX,&Xoid,&stock);
+#endif
 				if( Xoid != pivot->oid) { // traits[pivot->source] are not inserted
 					ret = ob_point_new_trait(envt,Xoid,Yoid);
 					if(ret) { obMTRACE(ret);goto fin; }
@@ -196,6 +249,9 @@ int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
 
 					if(pivot->nF == moX.offre.nR) { // moX is client of the pivot
 						moX.av.layer = 1; sources = true;
+#ifdef ob_chemin_PRINTDBG
+						retm = ob_flux_makeMessage(&msg," SOURCE");
+#endif
 					}
 
 					ret = c_point->put(c_point,&ks_Xoid,&du_moX,DB_KEYFIRST);
@@ -252,6 +308,13 @@ fin:
 	obMCloseCursor(cmar_pointY);
 	obMCloseCursor(c_point);
 	if(cvy_offreX != NULL) SPI_cursor_close(cvy_offreX);
+#ifdef ob_chemin_PRINTDBG
+	retm = ob_flux_makeMessage(&msg,"\nFIN ParcoursArriere: nblayer %i\n",*nblayer);
+	if(retm == 0) {
+		elog(INFO,"%s",msg.begin);
+		ob_flux_writeFile(&msg); // pfree is included
+	} else elog(INFO,"Error in ob_flux_makeMessage");
+#endif
 	return (ret);
 }
 /*******************************************************************************
@@ -302,6 +365,10 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 	DBC *cmav_point = NULL;
 	DBC *cx_trait = NULL;
 	DBC *c_point = NULL;
+#ifdef ob_chemin_PRINTDBG
+	ob_tMsg msg;
+	int retm;
+#endif
 
 	obMtDbtS(ks_marqueXav,marqueXav);
 	obMtDbtU(ku_Xoid,Xoid);
@@ -352,6 +419,11 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 	if (ret == DB_NOTFOUND) ret = 0;
 	else {obMTRACE(ret);  goto fin;}
 
+#ifdef ob_chemin_PRINTDBG
+	msg.begin = NULL;
+	retm = ob_flux_makeMessage(&msg,"\nParcoursAvant new_graph %i:",new_igraph);
+#endif
+
 	if(!*nbSource) goto fin;
 
 	//*********************************************************************
@@ -366,12 +438,19 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 		marqueXav.layer = layer;
 		ks_marqueXav.data = &marqueXav;
 		ret = cmav_point->pget(cmav_point,&ks_marqueXav,&ku_Xoid,&du_pointX,DB_SET);
+
+
+#ifdef ob_chemin_PRINTDBG
+		retm = ob_flux_makeMessage(&msg,"\nlayer %i X:",layer);
+		retm = _svoirPoint(&msg,&pointX.mo.offre,&Xoid,NULL);
+#endif
 		if(!ret) do { // loop [E] cmav_point
 
 			//*****************************************************
 			// [F] select (trait,fleche) from traits having fleche.Xoid == Xoid
 			ks_Xoid.data = &Xoid; // useless
 			ret = cx_trait->pget(cx_trait,&ks_Xoid,&ku_fleche,&du_trait,DB_SET);
+
 			if(!ret) do { // loop [F]
 				//elog(INFO,"%lli->%lli layer %i X.ar %i X.av %i",fleche.Xoid,fleche.Yoid,layer,pointX.mo.ar.layer,pointX.mo.av.layer);
 				// get points[fleche.Yoid]
@@ -383,6 +462,11 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 				pointY.mo.av.layer = layer+1;
 				ret = ob_point_initPoint(privt,&pointY);
 				// points[Y] written into i_graph+1 only if ret == 0
+
+#ifdef ob_chemin_PRINTDBG
+				retm = ob_flux_makeMessage(&msg,"\n\tY:");
+				retm = _svoirPoint(&msg,&pointY.mo.offre,&fleche.Yoid,NULL);
+#endif
 				if(ret == 0 ) { // stock of pointY is not empty
 
 					layerY_empty = false;
@@ -395,8 +479,7 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 					if(pointY.mo.offre.oid == pivot->oid)
 						_no_path_to_pivot = false;
 
-				} else if ( ret != ob_point_CerStockEpuise)
-				{obMTRACE(ret); goto fin;}
+				} else if ( ret != ob_point_CerStockEpuise) {obMTRACE(ret); goto fin;}
 
 				// next (trait,fleche)
 				ret = cx_trait->pget(cx_trait,&ks_Xoid,&ku_fleche,&du_trait,DB_NEXT_DUP);
@@ -423,6 +506,7 @@ static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
 			//elog(INFO,"ob_chemin_CerLoopOnOffer layer=%i nblayer=%i",layer,nblayer);
 			memcpy(&loop->rid,&fleche,sizeof(ob_tFleche));
 			elog(INFO,"loop found on Xoid=%lli Yoid=%lli",loop->rid.Xoid,loop->rid.Yoid);
+
 			goto fin;
 		}
 	} while(true); //!layerY_empty);
@@ -433,6 +517,15 @@ fin:
 	obMCloseCursor(cx_trait);
 	obMCloseCursor(cmav_point);
 	obMCloseCursor(c_point);
+
+#ifdef ob_chemin_PRINTDBG
+	retm = ob_flux_makeMessage(&msg,"\nFIN ParcoursAvant: nbSource %i\n",*nbSource);
+	if(retm == 0) {
+		elog(INFO,"%s",msg.begin);
+		ob_flux_writeFile(&msg); // pfree is included
+	} else elog(INFO,"Error in ob_flux_makeMessage");
+#endif
+
 	return(ret);
 }
 /*******************************************************************************
@@ -682,6 +775,18 @@ fin:
 	obMCloseCursor(cst_point);
 	return(ret);
 }
+static void _voirChemin(ob_tChemin *chemin)	{
+	ob_tMsg msg;
+	int ret;
+
+	msg.begin = NULL;
+	ret = ob_flux_svoirChemin(&msg,chemin,0);
+	if(ret == 0) {
+		elog(INFO,"%s",msg.begin);
+		ob_flux_writeFile(&msg); // pfree is included
+	} else elog(INFO,"Error in ob_flux_svoirChemin");
+	return;
+}
 
 
 /*******************************************************************************
@@ -761,11 +866,12 @@ int ob_chemin_get_draft_next(ob_getdraft_ctx *ctx) {
 	// an agreement was found
 	paccord->status = DRAFT;
 	paccord->versionSg = privt->versionSg;
+	// _voirChemin(&paccord->chemin);
 
 	ret = _diminuer(privt,&paccord->chemin);
 	if(ret) {
 		obMTRACE(ret);goto fin;}
 fin:
-	// elog(INFO,"ob_chemin_get_draft_next() ret= %i",ret);
+	//elog(INFO,"ob_chemin_get_draft_next() ret= %i",ret);
 	return ret;
 }

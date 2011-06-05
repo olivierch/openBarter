@@ -27,6 +27,7 @@ def getOwnerName(i):
 	return 'owner'+str(i+1)
 	
 def exitError(log,msg,ret_code=-1):
+	print msg
 	log.error("Exit after on:")
 	log.error("\t%s with the following stack:" % msg,exc_info=True)
 	#type, value, traceback = sys.exc_info()
@@ -35,7 +36,13 @@ def exitError(log,msg,ret_code=-1):
 	os._exit(ret_code)
 	
 ############################################################	
-
+	
+def getDebugLevel(cursor,log):
+	cursor.execute("show client_min_messages")
+	res = cursor.fetchall()
+	if(len(res)):
+		log.info("show client_min_message= %s" % (res[0],))
+	return res
 def clear_base(conn,log):
 	file_name = os.path.join(settings.PGSQLOBDIR,'getdrafttest1.sql')
 	with open(file_name, 'r') as f:
@@ -44,7 +51,9 @@ def clear_base(conn,log):
 	# with closing(conn.cursor()) as cursor:
 	with db.Cursor(conn,log) as cursor:
 		cursor.executemany(sql_init,((),))
+		getDebugLevel(cursor,log)
 	log.debug('most tables truncated')
+	
 
 def add_qualities(conn,log):
 	# with closing(conn.cursor()) as cursor:
@@ -104,22 +113,35 @@ def lirePrix(conn,log,natr,natf):
 	#log.debug(str((omegaLu,fluxLu)))
 	return omegaLu,fluxLu
 	
+	
 def insertBid(conn,log,owner,natf,qttf,qttr,natr):
-	# offre sur la base du prix avec omega, natr,natf,qttf
-	# usage: insertBid(conn,log,natf,qttf,qttr,natr)
+	""" offre sur la base du prix avec omega, natr,natf,qttf
+	# usage: insertBid(conn,log,natf,qttf,qttr,natr) """
+
+	sql,pars = 'ob_finsert_bid',[owner,natf,qttf,qttr,natr]
+	
+
+	
 	with db.Cursor(conn,log) as cursor:
 		# nb_draft int8 = ob_finsert_bid(_owner text,_qualityprovided text,qttprovided int8,_qttrequired int8,_qualityrequired text)
 		# omega = qttf/qttr => qttr = qttf/omega
-		sql,pars = 'ob_finsert_bid',[owner,natf,qttf,qttr,natr]
+		
 		# log.info( sql+str(pars))
 		cursor.callproc(sql,pars)
 		res = cursor.fetchone()
+		print  'select ob_finsert_bid(%s,%s,%i,%i,%s);'% (owner,natf,qttf,qttr,natr)
+				
 		res = res[0]
 		if res < 0:
 			exitError(log,(sql+"(%s,%s,%i,%i,%s) returned %i") % tuple(pars+[res]))
 		# elif res > 0:
 			# log.info('%i draft created',res)
-			
+	nid,version = getLastBid(conn,log)
+
+	nbidmax=21
+	if(nid >=nbidmax):
+		stri = "Termination at insertion when nid=%i and version=%i"% (nbidmax,version)
+		exitError(log,stri)		
 	return 
 	
 def insertSbib(conn,log,owner,bidId,qttf,qttr,natr):
@@ -153,6 +175,20 @@ def getRanBidId(conn,log,owner):
 		
 	if(l == 0): return (None,None,None,None)
 	return res[random.randint(0,l-1)] 
+
+	
+def getLastBid(conn,log):
+	""" get last bid id
+	"""
+	with closing(conn.cursor()) as cursor:
+		cursor.execute(" select max(id) from ob_tnoeud ",[])
+		res = cursor.fetchone()
+		nbids = res[0]
+		cursor.execute(" SELECT last_value from ob_tdraft_id_seq ",[])
+		res = cursor.fetchone()
+		version = res[0]
+		print "nid=%i verion=%i" %(nbids,version)
+	return	nbids,version
 	
 def verifLoops(conn,log,sql):
 	"""
@@ -182,7 +218,8 @@ def verifLoops23(conn,log):
 	return
 	
 def keepReserve(conn,log,owner):
-	""" the oldest bid is removed, if too much bids are made
+	""" the oldest bid is removed, if too much bids are made, 
+	so that quantities remain available for new bids
 	"""
 	with closing(conn.cursor()) as cursor:
 		sql = """SELECT 
@@ -234,7 +271,7 @@ def traiteOwner(conn,log,owner):
 			log.info("%i draft where found for %s" % (len(res),owner))
 		return res
 
-	
+	""" decision on his drafts waiting for approval """
 	# For drafts where he is a partner
 	with db.Cursor(conn,log) as cursor:
 		resu = ob_draft_of_own(cursor,owner)
@@ -290,18 +327,22 @@ def traiteOwner(conn,log,owner):
 	
 	# makes a bid
 	makeSbid = (random.randint(0,5)==0) # 1 fois sur 5
+	# only bid
 	makeSbid = False
 	
 	bidId,natfId,natf,qttf = getRanBidId(conn,log,owner)
 	
 	if(bidId and makeSbid):
+		# make sbid
 		natr,natrId = getRandQuality(natfId)
 		omegaLu,fluxLu = lirePrix(conn,log,natrId,natfId)
 		qttr = getFromPrix(omegaLu,qttf)
 		insertSbib(conn,log,owner,bidId,qttf,qttr,natr)
 	else:
+		# make bid
 		# chooses a quality owned
-		valf = sOwned[random.randint(0,nbOwned-1) if nbOwned >1 else 0 ] # valf={'quality':..,'qtt': .. }
+		valf = sOwned[random.randint(0,nbOwned-1) if nbOwned >1 else 0 ] 
+		# valf={'quality':..,'qtt': .. }
 		# takes a part of it
 		natfId = valf['qualityid']
 		natf = valf['quality']
@@ -311,7 +352,8 @@ def traiteOwner(conn,log,owner):
 			# choisit une qualité au hasard != natfId
 			natr,natrId = getRandQuality(natfId)
 		
-			omegaLu,fluxLu = lirePrix(conn,log,natrId,natfId) # http://fr.wikipedia.org/wiki/Distribution_Gamma
+			omegaLu,fluxLu = lirePrix(conn,log,natrId,natfId) 
+			# http://fr.wikipedia.org/wiki/Distribution_Gamma
 			qttr = getFromPrix(omegaLu,qttf)
 
 			insertBid(conn,log,owner,natf,qttf,qttr,natr)
@@ -320,8 +362,9 @@ def traiteOwner(conn,log,owner):
 	return
 	
 def loopSimu(conn,log):
-	"""  chooses a random owner """
+	""" main loop for each owner """
 	while True:
+		"""  chooses a random owner """
 		owner = getOwnerName(random.randint(1,settings.NBOWNER)-1)
 		traiteOwner(conn,log,owner)
 		statMarket(conn,log)
@@ -337,7 +380,6 @@ def simu():
 			add_qualities(conn,log)
 			add_owners(conn,log)
 			loopSimu(conn,log)
-		log.info("Db connection closed")
 		
 	except Exception,e:
 		exitError(log,"Abnormal termination")

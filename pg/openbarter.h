@@ -51,9 +51,7 @@ struct ob__Glob {
 	DB_ENV *envt;
 	TupleDesc tupDescQuality;
 	TupleDesc tupDescStock;
-	//TupleDesc tupDescForbidden;
 	TupleDesc tupDescNoeud;
-	// SPIPlanPtr planIterNoeuds;
 	SPIPlanPtr planIterNoeuds2;
 	SPIPlanPtr planGetStock;
 	char pathEnv[MAXPGPATH];
@@ -69,7 +67,7 @@ extern int ob_utils_PrepareIterNoeuds(ob_tGlob *ob);
 extern int ob_utils_PrepareGetStock(ob_tGlob *ob);
 
 // getdraft.c
-void ob_getdraft_init(void);
+extern int ob_getdraft_init(void);
 
 // global variables
 extern ob_tGlob openbarter_g;

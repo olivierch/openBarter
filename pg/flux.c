@@ -798,13 +798,27 @@ size_t ob_flux_cheminGetSize(ob_tChemin *pchemin) {
 
 
  *******************************************************************************/
-void ob_flux_voirQtt(FILE *stream, ob_tQtt *pqtt, int flags) {
-
-	fprintf(stream, "<d %lli >", *pqtt);
+#define obCFMTQTT " f%05lli "
+#define obCFMTDBT "%016llX"
+int ob_flux_svoirQtt(ob_tMsg *msg, ob_tQtt *pqtt, int flags) {
+	int ret;
+	ob_flux_makeMessage(msg,obCFMTQTT, *pqtt);
 	if (flags & 1)
-		fprintf(stream, "\n");
+		ret = ob_flux_makeMessage(msg, "\n");
 	else
-		fprintf(stream, " ");
+		ret = ob_flux_makeMessage(msg, " ");
+	return ret;
+}
+void ob_flux_voirQtt(FILE *stream, ob_tQtt *pqtt, int flags) {
+	ob_tMsg msg;
+	int ret;
+
+	msg.begin = NULL;
+	ret = ob_flux_svoirQtt(&msg,pqtt,flags);
+	if(ret ==0) {
+		fprintf(stream,"%s",msg.begin);
+		pfree(msg.begin);
+	} else fprintf(stream,"Error in ob_flux_svoirQtt");
 	return;
 }
 /*****************************************************************************/
@@ -812,50 +826,183 @@ void ob_flux_voirQtt(FILE *stream, ob_tQtt *pqtt, int flags) {
  * flags &1 avec /n
  * flags &2 forme courte
  * */
-void ob_flux_voirDBT(FILE *stream, int64 *dbt, int flags) {
-
-	fprintf(stream, "%016llX", *dbt);
+int ob_flux_svoirDBT(ob_tMsg *msg, int64 *dbt, int flags) {
+	int ret;
+	ob_flux_makeMessage(msg,obCFMTDBT, *dbt);
 	if (flags & 1)
-		fprintf(stream, "\n");
+		ret = ob_flux_makeMessage(msg, "\n");
 	else
-		fprintf(stream, " ");
+		ret = ob_flux_makeMessage(msg, " ");
+	return ret;
+}
+void ob_flux_voirDBT(FILE *stream, int64 *dbt, int flags) {
+	ob_tMsg msg;
+	int ret;
+
+	msg.begin = NULL;
+	ret = ob_flux_svoirDBT(&msg,dbt,flags);
+	if(ret ==0) {
+		fprintf(stream,"%s",msg.begin);
+		pfree(msg.begin);
+	} else fprintf(stream,"Error in ob_flux_svoirDBT");
 	return;
 }
-void ob_flux_voirChemin(FILE *stream, ob_tChemin *pchemin, int flags) {
-	int _i, _nb;//, _ecrit;
+/*******************************************************************************
+ USAGES
+ ob_flux_svoirChemin(msg,pchemin,flags)
+
+ provides 1 heading and one line for each commit.
+
+ Heading:
+ 	 s2w2o5 DFI 24.002 ok:
+ meaning:
+ 2 stocks,
+ 2 owners,
+ 5 offers,
+ 24.002 prodOmega,
+ D	the flow is defined, (D,_)
+ F	fast,no checkings, (F,_)
+ I	last ignore, (I,_)
+ OK	path ok, (OK,ERROR)
+
+ line for each commit:
+ 	 >o003s004q0012->o004s004q0012->o003s004q00012-:
+
+
+
+ *******************************************************************************/
+
+int ob_flux_svoirChemin(ob_tMsg *msg, ob_tChemin *pchemin, int flags) {
+	int _i, _nb,ret;//, _ecrit;
 	bool _diag;
 	//char _fin;
 
 	_diag = ob_flux_cheminError(pchemin);
 
 	_nb = (int) pchemin->nbNoeud;
-	_nb = (_nb > obCMAXCYCLE) ? obCMAXCYCLE : _nb; //in case...
+	if(_nb > obCMAXCYCLE) {
+		ret = ob_flux_makeMessage(msg, "chemin->nbNoeud > obCMAXCYCLE - ERROR\n");
+		return ret;
+	}
 
-	fprintf(stream, "S%c W%c O%c %c%c%c %.3f %s: \n", '0' + pchemin->nbStock,
+	ret = ob_flux_makeMessage(msg, "Draft S%c W%c O%c %c%c%c %.3f %s: \n", '0' + pchemin->nbStock,
 			'0' + pchemin->nbOwn, '0' + pchemin->nbNoeud, (pchemin->cflags
 					& ob_flux_CFlowDefined) ? 'D' : '_', (pchemin->cflags
 					& ob_flux_CFast) ? 'F' : '_', (pchemin->cflags
 					& ob_flux_CLastIgnore) ? 'I' : '_', pchemin->prodOmega,
 			_diag ? "ERROR" : "OK");
 	if (!_nb) {
-		fprintf(stream, "chemin empty\n");
-		return;
+		ret = ob_flux_makeMessage(msg, "chemin empty\n");
+		return ret;
 	}
 	obMRange(_i,_nb) {
-		fprintf(stream, "o>");
-		ob_flux_voirDBT(stream, &pchemin->no[_i].noeud.oid, 0);
-		fprintf(stream, " s");
-		ob_flux_voirDBT(stream, &pchemin->no[_i].noeud.stockId, 0);
+		ret = ob_flux_makeMessage(msg, "b>");
+		ret = ob_flux_makeMessage(msg, " q%03lli->q%03lli",pchemin->no[_i].noeud.nR,pchemin->no[_i].noeud.nF);
+		ret = ob_flux_makeMessage(msg, " s[%c]x",'0'+pchemin->no[_i].stockIndex);
+		ret = ob_flux_svoirDBT(msg, &pchemin->no[_i].noeud.stockId, 0);
+		ret = ob_flux_makeMessage(msg, " w[%c]x",'0'+pchemin->no[_i].ownIndex);
+		ret = ob_flux_svoirDBT(msg, &pchemin->no[_i].noeud.own, 0);
+		ret = ob_flux_makeMessage(msg, " om%6.3f ix",pchemin->no[_i].noeud.omega);
+		ret = ob_flux_svoirDBT(msg, &pchemin->no[_i].noeud.oid, 0);
 		if (pchemin->cflags & ob_flux_CFlowDefined) {
-			ob_flux_voirQtt(stream, &(pchemin->no[_i].fluxArrondi), 1);
+			ret = ob_flux_makeMessage(msg, " f%05lli\n", pchemin->no[_i].fluxArrondi);
 		} else {
-			fprintf(stream, "\n");
+			ret = ob_flux_makeMessage(msg, " Flow?\n");
 		}
 		//if (_i==_nb-1) _fin = '\n'; else _fin = '-';
-		//fprintf(stream,"%c",_fin);
+		//ob_flux_makeMessage(msg,"%c",_fin);
 	}
+	return ret;
+}
+void ob_flux_voirChemin(FILE *stream, ob_tChemin *pchemin, int flags) {
+	ob_tMsg msg;
+	int ret;
+
+	msg.begin = NULL;
+	ret = ob_flux_svoirChemin(&msg,pchemin,flags);
+	if(ret ==0) {
+		fprintf(stream,"%s",msg.begin);
+		pfree(msg.begin);
+	} else fprintf(stream,"Error in ob_flux_svoirChemin");
 	return;
 }
+
+int ob_flux_makeMessage(ob_tMsg *msg,const char *fmt, ...) {
+	 char *p = NULL;
+	 size_t remains,bloc = 4;
+	 int n = 0;
+	 va_list ap;
+
+	if(msg->begin == NULL) {
+		msg->error = 1;
+		msg->current = 0;
+		msg->size = bloc;
+		if((msg->begin = palloc(bloc)) == NULL) return -1;
+		msg->error = 0;
+	}
+	if(msg->error) return -1;
+
+	while(1) {
+		va_start(ap, fmt);
+		remains = msg->size - msg->current;
+		n = vsnprintf(&msg->begin[msg->current],remains, fmt, ap);
+		va_end(ap);
+
+		if(n > -1 && n < remains){
+			msg->current += n;
+			return 0;
+		}
+
+		/* failed: have to try again, alloc more mem. */
+		if(n > -1)      /* glibc 2.1 */
+		bloc = n + 1;
+		else            /* glibc 2.0 */
+		bloc *= 2;     /* twice the old size */
+
+		if((p = repalloc (msg->begin, msg->current+bloc)) == NULL) {
+		   	if(msg->begin) pfree(msg->begin);
+			msg->begin = NULL;
+			msg->error = 1;
+			return -1;
+		} else {
+			msg->begin = p;
+			msg->size = msg->current+bloc;
+		}
+	}
+}
+#define obCFLUX_DUMP_FILE "global/flux.log"
+void ob_flux_writeFile(ob_tMsg *msg)
+{
+	FILE	   *file;
+
+	file = AllocateFile(obCFLUX_DUMP_FILE,"a");
+	if (file == NULL)
+		goto error;
+
+	(void)fseek(file,0L,SEEK_END);
+
+	if (fwrite(msg->begin,msg->current, 1, file) != 1)
+		goto error;
+
+	if (FreeFile(file))
+	{
+		file = NULL;
+		goto error;
+	}
+	pfree(msg->begin);
+	return;
+
+error:
+	ereport(LOG,
+			(errcode_for_file_access(),
+			 errmsg("could not write to file \"%s\": %m",
+					 obCFLUX_DUMP_FILE)));
+	if (file)
+		FreeFile(file);
+	unlink(obCFLUX_DUMP_FILE);
+	pfree(msg->begin);
+}
+
 /*
 static bool verify_fluxMaximum(const ob_tChemin *pchemin, double *fluxExact) {
 	unsigned char _is, _jn, _lon,_jm;

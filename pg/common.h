@@ -212,6 +212,7 @@ struct ob__Stock;typedef struct ob__Stock ob_tStock;
 struct ob__Noeud;typedef struct ob__Noeud ob_tNoeud;
 struct ob__No;typedef struct ob__No ob_tNo;
 struct ob__Chemin;typedef struct ob__Chemin ob_tChemin;
+struct ob__Msg;typedef struct ob__Msg ob_tMsg;
 /*
 #define ob_CSIZEID 2
 
@@ -276,6 +277,13 @@ struct ob__Chemin {
 	double		prodOmega;
 	double		gain;
 	ob_tNo		no[]; // nbNoeud
+};
+
+struct ob__Msg {
+	char* begin;
+	size_t size;
+	size_t current;
+	int error;
 };
 
 // min,max length of name of depos and owners

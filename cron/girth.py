@@ -18,6 +18,7 @@ def breadth_first(conn,nid):
 	add_column(conn,"ob_tnoeud","loop_bf","text")
 	updateNode(conn,1,nid,"%i"%nid)	
 	# print "\nfor node[%i]" % (nid,)
+	arcs = []
 	_couche = True
 	while _couche:
 		_couche = False
@@ -30,11 +31,13 @@ def breadth_first(conn,nid):
 					#for all nodes where nr=_nf
 					cur3.execute(sqllien,[ _nf])
 					for (_idy,_bf) in cur3:
-						if(depth==1): nbf +=1
+						if(depth==1): 
+							nbf +=1
+							arcs.append((_qtt,_idx,_idy))
+						if str(_idy) in _loop.split(","):
+							#print _loop 
+							return _bf+1,_loop,nbf,arcs
 						_loop1 = _loop+(",%i"%_idy)
-						if _bf != None: 
-							return _bf+1,_loop,nbf
-						_str += "[%i]:q%i->[%i] " % (_idx,_qtt,_idy)
 						updateNode(conn,depth+1,_idy,_loop1)
 						_couche = True			
 		depth +=1 
@@ -42,7 +45,7 @@ def breadth_first(conn,nid):
 			_str = "%i: %s" % (depth-1,_str)
 			print _str
 	
-	return None,None,nbf
+	return None,None,nbf,arcs
 
 def updateNode(conn,val,nid,loop):
 	with db.Cursor(conn,'name4') as cur4:
@@ -62,8 +65,12 @@ def find_cycle(conn):
 			if(mini == None or mini>_id): mini = _id
 			if(maxi == None or maxi<_id): maxi = _id
 			nbBids +=1
-			length,loop,_nbf = breadth_first(conn,_id)
-			print "from [%i] %i arcs" % (_id,_nbf)
+			length,loop,_nbf,arcs = breadth_first(conn,_id)
+			#print "from [%i] %i arcs" % (_id,_nbf)
+			if(len(arcs)):
+				
+				print "[%i]\t"%(arcs[0][0],)+",".join(
+					["%i->%i"%(idx,idy) for qtt,idx,idy in arcs])
 			nbf += _nbf
 			if (False and length):
 				print "loop:"+loop

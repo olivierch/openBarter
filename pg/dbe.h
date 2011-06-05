@@ -11,6 +11,7 @@ void ob_dbe_resetTrait(ob_tTrait *ptrait);
 void ob_dbe_resetMarqueOffre(ob_tMarqueOffre *pmo);
 
 int ob_dbe_openEnvTemp(DB_ENV **penvt);
+int ob_dbe_resetEnvTemp(DB_ENV **penvt);
 int ob_dbe_closeEnvTemp(DB_ENV *envt);
 
 // 1<<16 256K, cache 1<<24 soit 16 Mo

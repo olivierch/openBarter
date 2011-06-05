@@ -52,6 +52,11 @@ size_t 		ob_flux_cheminGetSize(ob_tChemin *pchemin);
 void ob_flux_voirChemin(FILE *stream,ob_tChemin *pchemin,int flags);
 void ob_flux_voirQtt(FILE *stream,ob_tQtt *pqtt,int flags);
 void ob_flux_voirDBT(FILE *stream,int64 *dbt,int flags);
+int ob_flux_makeMessage(ob_tMsg *msg,const char *fmt, ...);
+void ob_flux_writeFile(ob_tMsg *msg);
+int ob_flux_svoirChemin(ob_tMsg *msg,ob_tChemin *pchemin,int flags);
+int ob_flux_svoirQtt(ob_tMsg *msg,ob_tQtt *pqtt,int flags);
+int ob_flux_svoirDBT(ob_tMsg *msg,int64 *dbt,int flags);
 
 #define ob_flux_MVoirDBT(a) ob_flux_voirDBT(stdout,a,1);
 

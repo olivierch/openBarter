@@ -1,0 +1,55 @@
+TABLES
+******
+traits
+	struct ob__Trait { // traits[rid]
+		ob_tFleche rid; (Xoid,Yoid)
+		int igraph;
+	};
+	INDEX:
+	px_traits,trait_get_Xoid index sur Xoid
+	py_traits,trait_get_Yoid index sur Yoid
+	m_traits,trait_get_marque index sur igraph
+	
+points
+	struct ob__Point {
+		ob_tMarqueOffre mo;
+		ob_tChemin chemin;
+		ob_tNo	__no[obCMAXCYCLE];
+	};
+	struct ob__MarqueOffre {
+		ob_tNoeud offre; (oid,stockId,omega,nR,nF,own)
+		ob_tMar ar; (layer,igraph)
+		ob_tMar av; (layer,igraph)
+	};
+	INDEX:
+	vx_points,point_get_nX index sur mo.offre.nF
+	vy_points,point_get_nY index sur mo.offre.nR
+	st_points,point_get_stockId, index sur mo.offre.stockId
+	mar_points,point_get_mar index sur mo.ar
+	mav_points,point_get_mav index sur mo.av
+	
+stocktemps
+
+ALGO:
+ob_chemin_parcours_arriere
+	utilise le tables mar_points,points,stocktemps
+	insere dans la table traits
+	
+	points->cursor(privt->points,NULL,&c_point,0);
+	points->put(privt->points,0,&ku_Yoid,&du_moY,DB_NOOVERWRITE);
+	c_point->get(c_point,&ks_Xoid,&du_moX,DB_SET);
+	c_point->put(c_point,&ks_Xoid,&du_moX,DB_KEYFIRST);
+	
+	
+	mar_points->cursor(privt->mar_points,NULL,&cmar_pointY,0);
+	cmar_pointY->pget(cmar_pointY,&ks_marqueYar,&ku_Yoid,&du_moY,DB_SET);
+	cmar_pointY->pget(cmar_pointY,&ks_marqueYar,&ku_Yoid,&du_moY,DB_NEXT_DUP);
+	
+_parcours_avant
+	utilise les tables mav_points,px_traits,points
+	
+_bellman_ford
+	utilise les tables m_traits,points
+	
+_diminuer
+	utilise les tables st_points,stocktemps

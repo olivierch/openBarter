@@ -12,3 +12,4 @@ truncate table ob_tquality restart identity cascade;
 -- truncate table ob_tdepositary restart identity cascade;
 truncate table ob_tmvt restart identity cascade;
 truncate table ob_tldraft restart identity cascade;
+select setval('ob_tdraft_id_seq',1);
