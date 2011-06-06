@@ -142,19 +142,15 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 	
 	ctx = &openbarter_g.ctx;
 
-	if(ctx->envt != 0) {
-		ob_dbe_closeEnvTemp(ctx->envt);
-		ctx->envt = NULL; // Done
-	}
-	memset(ctx,0,sizeof(ob_getdraft_ctx));
 	ctx->i_graph = -1;
 	ctx->tuple_desc = tuple_desc;
 	ctx->end = false;
-	if(ob_dbe_openEnvTemp(&ctx->envt)) {
-		// pfree(ctx);
-		elog(INFO,"could not open EnvTemp1");
+
+	if(ob_dbe_resetEnvTemp(&ctx->envt)) {
+		elog(INFO,"could not reset EnvTemp1");
 		return NULL;
 	}
+
 	privt = ctx->envt->app_private;
 	
 	pivot = &ctx->pivot;
@@ -324,8 +320,10 @@ static int ob_getdraft_getcommit_next(ctx,ptuple)
 
 	}
 endloop:
+	/*
 	ob_dbe_closeEnvTemp(ctx->envt);
 	ctx->envt = NULL; // Done
+	*/
 	//pfree(ctx);
 	return ret;
 }

@@ -559,24 +559,33 @@ static int _bellman_ford_in(privt,trait,loop)
 
 	// if pointX (here point) is empty,
 	// we do not modify pointY, (it must also be empty)
-	if(!ob_flux_cheminGetNbNode(&point.chemin)) goto fin;
+	if(!ob_flux_McheminGetNbNode(&point.chemin)) goto fin;
 
 	ret = ob_point_getPoint(privt,&trait->rid.Yoid,&pointY);
 	if(ret) goto fin;
 
-	oldOmega = ob_flux_cheminGetOmega(&pointY.chemin);
+	// check if insertion attempt should form a loop
+	ret = ob_flux_cheminLoop(&point.chemin,&pointY.mo.offre);
+	if(ret == ob_flux_CerLoopOnOffer) {
+		// pointY forms a loop on chemin
+		// it is not added to chemin, but bellman continue
+		ret = 0; goto fin;
+	}
+	if(ret)	{ obMTRACE(ret);goto fin;}
+
+	oldOmega = ob_flux_McheminGetOmega(&pointY.chemin);
 	// 0. if the path is empty
 
 	pstockY = ob_flux_cheminGetAdrStockLastNode(&pointY.chemin);
 
 	ret =ob_flux_cheminAjouterNoeud(&point.chemin,pstockY,&pointY.mo.offre,loop);
-	if (ret) {obMTRACE(ret); goto fin;}
+	if (ret) {obMTRACE(ret);goto fin;}
 
 	if(trait->rid.Yoid == privt->pivot->oid) {
 		ret = ob_flux_fluxMaximum(&point.chemin);
 		if(ret) goto fin; // flow undefined or error
 	}
-	newOmega = ob_flux_cheminGetOmega(&point.chemin);
+	newOmega = ob_flux_McheminGetOmega(&point.chemin);
 	if (newOmega <= oldOmega)  goto fin; // omega is weaker
 
 	// writes point.chemin into points[trait->rid.Yoid]
@@ -851,9 +860,7 @@ int ob_chemin_get_draft_next(ob_getdraft_ctx *ctx) {
 	// elog(INFO,"_bellman_ford()->chemin.cflags %x",paccord->chemin.cflags);
 	// competition on omega
 	ret = _bellman_ford(privt,&paccord->chemin,ctx->i_graph,&ctx->loop);
-	if(ret)	{ 
-		if(ret != ob_chemin_CerLoopOnOffer) obMTRACE(ret);
-		goto fin;
+	if(ret)	{ obMTRACE(ret);goto fin;
 	}
 
 	//elog(INFO,"_bellman_ford()->chemin.cflags %x",paccord->chemin.cflags);

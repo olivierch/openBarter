@@ -42,7 +42,7 @@ static int trait_get_marque(DB *sdbp, const DBT *pkey, const DBT *pdata,
 static void errcallback(const DB_ENV *dbenv, const char *errpfx,
 		const char *msg);
 
-static int openBasesTemp(DB_ENV *envt, u_int32_t flagsdb);
+static int openBasesTemp(DB_ENV *envt);
 static int closeBasesTemp(ob_tPrivateTemp *privt);
 static int truncateBasesTemp(ob_tPrivateTemp *privt);
 
@@ -88,10 +88,11 @@ static void *_palloc(Size size) {
 int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 	int ret = 0, ret_t;
 	DB_ENV *envt = NULL;
-	u_int32_t _flagsdb, _flagsenv;
+	u_int32_t  _flagsenv;
 	ob_tPrivateTemp *privt;
 
 	ret = ob_makeEnvDir(openbarter_g.pathEnv);
+	// elog(INFO,"Create envtemp in %s",openbarter_g.pathEnv);
 	if(ret) return(ob_dbe_CerDirErr);
 
 	ret = db_env_create(&envt, 0);
@@ -138,8 +139,10 @@ int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 		obMTRACE(ret);
 		goto abort;
 	}
-
-	privt = palloc(sizeof(ob_tPrivateTemp));
+	/* privt allocated in the heap memory of the process
+	 * the memory is freed when the envt is closed. It is not here
+	 */
+	privt = malloc(sizeof(ob_tPrivateTemp));
 	if (!privt) {
 		ret = ENOMEM;
 		obMTRACE(ret);
@@ -148,14 +151,7 @@ int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 	memset(privt, 0, sizeof(ob_tPrivateTemp));
 	envt->app_private = privt;
 
-	// how do we avoid the opening transaction ?
-	// DB_PRIVATE => one process,
-	// otherwise, region files are backed to file system
-	_flagsdb = DB_CREATE | DB_TRUNCATE | DB_PRIVATE;
-	// to activate  TXN
-	// _flagsdb |= DB_AUTO_COMMIT;
-
-	ret = openBasesTemp(envt, _flagsdb);
+	ret = openBasesTemp(envt);
 	if (ret)
 		goto abort;
 
@@ -184,7 +180,7 @@ int ob_dbe_closeEnvTemp(DB_ENV *envt) {
 	ob_tPrivateTemp *privt = envt->app_private;
 	if (privt != NULL) {
 		ret = closeBasesTemp(privt);
-		pfree(privt);
+		free(privt);
 		envt->app_private = NULL;
 	}
 	ret_t = envt->close(envt, 0);
@@ -197,7 +193,7 @@ int ob_dbe_closeEnvTemp(DB_ENV *envt) {
 
 /******************************************************************************
  reset the temporary environment
-	when **envt == NULL creates the envt and open batabases
+	when **envt == NULL creates the envt and open databases
 	else truncate databases
  returns 0 or an error
  ******************************************************************************/
@@ -213,10 +209,12 @@ int ob_dbe_resetEnvTemp(DB_ENV **penvt) {
 }
 
 static int open_db(DB_ENV *env, bool is_secondary, DB *db, char *name,
-		DBTYPE type, u_int32_t flags, int(*bt_compare_fcn)(DB *db,
-				const DBT *dbt1, const DBT *dbt2), int(*dup_compare_fcn)(
-				DB *db, const DBT *dbt1, const DBT *dbt2)) {
-	int ret, _flags;
+		int(*bt_compare_fcn)(DB *db,const DBT *dbt1, const DBT *dbt2),
+		int(*dup_compare_fcn)(DB *db, const DBT *dbt1, const DBT *dbt2)
+		) {
+
+	int ret;
+	int _flags = DB_CREATE | DB_TRUNCATE  | DB_PRIVATE;
 	char *pname = name;
 
 	if (bt_compare_fcn) {
@@ -240,35 +238,19 @@ static int open_db(DB_ENV *env, bool is_secondary, DB *db, char *name,
 			obMTRACE(ret);
 			goto err;
 		}
-		_flags = flags & ~DB_TRUNCATE;
-	} else
-		_flags = flags;
+		_flags = _flags & ~DB_TRUNCATE;
+	}
 
 	/* DB->open(DB *db, DB_TXN *txnid, const char *file, const char *database, DBTYPE type, u_int32_t flags, int mode);
 	 * Whether other threads of control can access this database is driven entirely by whether the database parameter is set to NULL.
 	 *
 	 */
-	ret = db->open(db, NULL, pname, NULL, type, _flags | DB_PRIVATE, 0644);
+	ret = db->open(db, NULL, pname, NULL,  DB_BTREE, _flags, 0644);
 	if (ret) {
 		obMTRACE(ret);
 		goto err;
 	}
-	/*
-	if (_flags & DB_PRIVATE) {
-		// if DB_PRIVATE, region file resides in memory
-		ret = db->open(db, NULL, NULL, pname, type, _flags, 0644);
-		if (ret) {
-			obMTRACE(ret);
-			goto err;
-		}
-	} else {
-		ret = db->open(db, NULL, pname, NULL, type, _flags, 0644);
-		if (ret) {
-			obMTRACE(ret);
-			goto err;
-		}
-	}
-	*/
+
 	return 0;
 	err: return (ret);
 }
@@ -336,7 +318,7 @@ static int createBasesTemp(ob_tPrivateTemp *privt, DB_ENV *envt) {
 	fin: return (ret);
 }
 
-static int openBasesTemp(DB_ENV *envt, u_int32_t flagsdb) {
+static int openBasesTemp(DB_ENV *envt) {
 	int ret;
 
 	ob_tPrivateTemp *privt = envt->app_private;
@@ -350,57 +332,57 @@ static int openBasesTemp(DB_ENV *envt, u_int32_t flagsdb) {
 	if(ret) goto fin;
 
 	// traits
-	ret = open_db(envt, false, privt->traits, "traits", DB_BTREE,flagsdb, NULL, NULL);
+	ret = open_db(envt, false, privt->traits, "traits", NULL, NULL);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->m_traits, "m_traits",DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->m_traits, "m_traits",  NULL, NULL);
 	if(ret) goto fin;
 
 	ret = privt->traits->associate(privt->traits, 0, privt->m_traits,trait_get_marque, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->px_traits, "px_traits",DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->px_traits, "px_traits",  NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->traits->associate(privt->traits, 0, privt->px_traits,trait_get_Xoid, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->py_traits,"py_traits",DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->py_traits,"py_traits",  NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->traits->associate(privt->traits, 0, privt->py_traits,trait_get_Yoid, 0);
 	if(ret) goto fin;
 
 	//points
-	ret = open_db(envt, false, privt->points,"points", DB_BTREE,flagsdb, NULL, NULL);
+	ret = open_db(envt, false, privt->points,"points",  NULL, NULL);
 	if(ret) goto fin;
 	// the size of points is not constant
 
-	ret = open_db(envt, true, privt->mar_points, "mar_points",DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->mar_points, "mar_points",  NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->mar_points,point_get_mar, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->mav_points, "mav_points",DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->mav_points, "mav_points",  NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->mav_points,point_get_mav, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->vx_points, "vx_points",DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->vx_points, "vx_points",  NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->vx_points,point_get_nX, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->vy_points, "vy_points",DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->vy_points, "vy_points",  NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->vy_points,point_get_nY, 0);
 	if(ret) goto fin;
 
-	ret = open_db(envt, true, privt->st_points, "st_points",DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, true, privt->st_points, "st_points",  NULL, NULL);
 	if(ret) goto fin;
 	ret = privt->points->associate(privt->points, 0, privt->st_points,point_get_stockId, 0);
 	if(ret) goto fin;
 
 	// stocktemps
-	ret = open_db(envt, false, privt->stocktemps, "stocktemps",DB_BTREE, flagsdb, NULL, NULL);
+	ret = open_db(envt, false, privt->stocktemps, "stocktemps",  NULL, NULL);
 	if(ret) goto fin;
 
 	return 0;
@@ -410,7 +392,7 @@ fin:
 	return (ret);
 }
 /******************************************************************************/
-#define ob_dbe_MCloseBase(base) do { if ((base)!=NULL){ \
+#define ob_dbe_MCloseBase(base) do { int ret_t; if ((base)!=NULL){ \
 		ret_t = (base)->close((base),0); \
 		if( ret_t) { \
 			if(!ret) ret = ret_t; \
@@ -418,7 +400,7 @@ fin:
 		(base) = NULL; \
 	} else elog(ERROR,"batabase is null- could not close"); \
 	} while (0)
-#define ob_dbe_MTruncateBase(base) do { if ((base)!=NULL) { \
+#define ob_dbe_MTruncateBase(base) do { int ret_t; u_int32_t cnt; if ((base)!=NULL) { \
 		ret_t = (base)->truncate((base),NULL,&cnt,0); \
 		if( ret_t) { \
 			if(!ret) ret = ret_t; \
@@ -428,23 +410,18 @@ fin:
 /******************************************************************************/
 /******************************************************************************/
 static int closeBasesTemp(ob_tPrivateTemp *privt) {
-	int ret = 0, ret_t;
-	u_int32_t cnt;
+	int ret = 0;
 	
 	if (!privt) {
 		ret = ob_dbe_CerPrivUndefined;
 		return ret;
 	}
-	ob_dbe_MTruncateBase(privt->traits);
-	// secondary index are also truncated
 
 	ob_dbe_MCloseBase(privt->px_traits);
 	ob_dbe_MCloseBase(privt->py_traits);
 	ob_dbe_MCloseBase(privt->m_traits);
 	ob_dbe_MCloseBase(privt->traits);
 
-	ob_dbe_MTruncateBase(privt->points);
-	//
 	ob_dbe_MCloseBase(privt->vx_points);
 	ob_dbe_MCloseBase(privt->vy_points);
 	ob_dbe_MCloseBase(privt->mar_points);
@@ -452,24 +429,23 @@ static int closeBasesTemp(ob_tPrivateTemp *privt) {
 	ob_dbe_MCloseBase(privt->st_points);
 	ob_dbe_MCloseBase(privt->points);
 
-	ob_dbe_MTruncateBase(privt->stocktemps);
-	//
 	ob_dbe_MCloseBase(privt->stocktemps);
-	// stat_env(envit->env,0);
 
 	return (ret);
 }
 /******************************************************************************/
+/* truncate db,
+ * when the main table is truncated, associated indexes are also truncated
+ *
+ */
 static int truncateBasesTemp(ob_tPrivateTemp *privt) {
-	int ret = 0, ret_t;
-	u_int32_t cnt;
+	int ret = 0;
 
 	if (!privt) {
 		ret = ob_dbe_CerPrivUndefined;
 		return ret;
 	}
 	ob_dbe_MTruncateBase(privt->traits);
-	// secondary index are also truncated
 	ob_dbe_MTruncateBase(privt->points);
 	ob_dbe_MTruncateBase(privt->stocktemps);
 

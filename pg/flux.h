@@ -19,7 +19,7 @@ defined in svn_test_main */
  
 #define ob_flux_McheminGetOmega(pchemin) (pchemin)->prodOmega
 
-#define ob_flux_MMinCYCLE(i) ((((int) i )< obCMAXCYCLE)? ((int) i ) : obCMAXCYCLE )    
+#define ob_flux_MMinCYCLE(i) ((((int) i )< obCMAXCYCLE)? ((int) i ) : (obCMAXCYCLE-1) )
 #define ob_flux_McheminGetNbNode(pchemin)  ob_flux_MMinCYCLE((pchemin)->nbNoeud)
 #define ob_flux_McheminGetNbStock(pchemin) ob_flux_MMinCYCLE((pchemin)->nbStock)
 #define ob_flux_McheminGetNbOwn(pchemin)   ob_flux_MMinCYCLE((pchemin)->nbOwn)
@@ -31,6 +31,7 @@ defined in svn_test_main */
 //#define ob_flux_MVoirDBT(a) ob_flux_voirDBT(stdout,a,1);
 
 void 		ob_flux_cheminVider(ob_tChemin *pchemin, const char cflags);
+int 		ob_flux_cheminLoop(const ob_tChemin *pchemin,const ob_tNoeud *pnoeud);
 int 		ob_flux_cheminAjouterNoeud(ob_tChemin *pchemin,
 				const ob_tStock *pstock,const ob_tNoeud *pnoeud,ob_tLoop *loop);
 int 		ob_flux_fluxMaximum(ob_tChemin *pchemin);

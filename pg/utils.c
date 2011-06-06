@@ -28,7 +28,6 @@ int ob_makeEnvDir(char *direnv)
 	join_path_components(direnv,DataDir,"openbarter");
 	ret = ob_makeEnvDir_int(direnv);
 	if(ret) return ret;
-	return ret;
 
 	pid = getpid();
 	ret = snprintf(pid_str,32,"%d",pid);

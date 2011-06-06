@@ -93,7 +93,6 @@ static int _ob_iternoeud_Init(void) {
 	connected = true;
 	if(ob_iternoeud_getTupleDesc("ob_tquality",&ob->tupDescQuality)) goto err;
 	if(ob_iternoeud_getTupleDesc("ob_tstock",&ob->tupDescStock)) goto err;
-	//if(ob_iternoeud_getTupleDesc("ob_tforbidden",&ob->tupDescForbidden)) goto err;
 	if(ob_iternoeud_getTupleDesc("ob_tnoeud",&ob->tupDescNoeud)) goto err;
 	if(_ob_iternoeud_PrepareIterNoeuds2()) goto err;
 	if(_ob_iternoeud_PrepareGetStock()) goto err;
@@ -162,16 +161,7 @@ int ob_iternoeud_getStock(stock)
 		HeapTuple row = SPI_tuptable->vals[0];
 		bool isnull;
 		Datum datum;
-		//int i;
-		/*
-		for(i=1;i<6;i++) {
-			elog(INFO,"ob_tstock %i %s",i,SPI_fname(tupdesc,i));
-			datum = SPI_getbinval(row, tupdesc, i, &isnull);
-			elog(INFO,"*datum %016llx",*((long long int*)datum));
-		}
-		elog(INFO,"size DATUM %i, size ob_tId %i",sizeof(Datum),sizeof(ob_tId));
-		*/
-		//datum = SPI_getbinval(row, tupdesc, 2, &isnull);
+
 		// ob_iternoeud_getBinValue(stock->sid,1,ob_tId);
 		ob_iternoeud_getBinValue(stock->own,2,ob_tId);
 		ob_iternoeud_getBinValue(stock->qtt,3,ob_tQtt);
@@ -218,16 +208,16 @@ fin:
 	and returns NO.*,S.* into offreX and Xoid
 
  *
-	ret = _ob_iternoeud_Init() done in _SPI_init
+	ret = _ob_iternoeud_PrepareIterNoeuds2() done in _ob_iternoeud_Init() done in _SPI_init
 	...........................
 	Portal *portal_noeuds=NULL;
 	int64 *Y_oid,*Y_nR;
 	........................
-	portal_noeuds = ob_iternoeud_GetPortal(Y_oid,Y_nR);
+	portal_noeuds = ob_iternoeud_GetPortal2(Y_oid,Y_nR);
 	do {
 		int64 X_oid;
 		ob_tnoeud X_offre;
-		ret = ob_iternoeud_Next(portal_noeuds,&X_oid,&X_offre,&stock);
+		ret = ob_iternoeud_Next2(portal_noeuds,&X_oid,&X_offre,&stock);
 		if(ret) break;
 		..............................................................
 	} while (ret == 0);
@@ -260,10 +250,9 @@ static int _ob_iternoeud_PrepareIterNoeuds2(void) { // called by _SPI_init->_ob_
 	if(ob->planIterNoeuds2 == NULL) {
 		elog(ERROR, "save _ob_iternoeud_PrepareIterNoeuds failure");
 		goto err;
-	} // else elog(INFO,"plan bien preparé");
+	}
 	return 0;
 err:
-	//elog(ERROR,"ca a fouaré");
 	return ob_chemin_CerIterNoeudErr;
 }
 Portal ob_iternoeud_GetPortal2(envt,yoid,nr)
