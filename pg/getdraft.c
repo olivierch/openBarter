@@ -141,6 +141,7 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 #endif
 	
 	ctx = &openbarter_g.ctx;
+	//ob_utils_timerStart(&openbarter_g.timerPG);
 
 	ctx->i_graph = -1;
 	ctx->tuple_desc = tuple_desc;

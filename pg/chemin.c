@@ -561,17 +561,18 @@ static int _bellman_ford_in(privt,trait,loop)
 	// we do not modify pointY, (it must also be empty)
 	if(!ob_flux_McheminGetNbNode(&point.chemin)) goto fin;
 
-	ret = ob_point_getPoint(privt,&trait->rid.Yoid,&pointY);
-	if(ret) goto fin;
-
 	// check if insertion attempt should form a loop
-	ret = ob_flux_cheminLoop(&point.chemin,&pointY.mo.offre);
+	ret = ob_flux_cheminLoop(&point.chemin,trait->rid.Yoid);
 	if(ret == ob_flux_CerLoopOnOffer) {
 		// pointY forms a loop on chemin
 		// it is not added to chemin, but bellman continue
 		ret = 0; goto fin;
 	}
 	if(ret)	{ obMTRACE(ret);goto fin;}
+
+	ret = ob_point_getPoint(privt,&trait->rid.Yoid,&pointY);
+	if(ret) goto fin;
+
 
 	oldOmega = ob_flux_McheminGetOmega(&pointY.chemin);
 	// 0. if the path is empty

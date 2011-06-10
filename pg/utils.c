@@ -111,3 +111,45 @@ static int ob_makeEnvDir_int(char *direnv)
 	}
 	return ret;
 }
+/*
+// all timers should be zeroed
+static TimestampTz *currentTimer;
+
+void ob_utils_timerStart(ob_tTimer *timer) {
+
+	memset(&penbarter_g.timerBDB,0,sizeof(ob_tTimer));
+	memset(&penbarter_g.timerPG,0,sizeof(ob_tTimer));
+
+	if(timer != &openbarter.timerBDB || timer != &openbarter.timerPG)
+		elog(ERROR,"Not a timer");
+
+	timer->start_time = GetCurrentTimestamp();
+	currentTimer = timer;
+	return;
+}
+void ob_utils_timerSwitch(ob_tTimer *newTimer) {
+	TimestampTz ts;
+
+	ts = GetCurrentTimestamp();
+	currentTimer->cumul += ts - currentTimer->start_time;
+	newTimer->start_time = ts;
+	currentTimer = newTimer;
+}
+void ob_utils_timerStop(void) {
+	TimestampTz ts;
+
+	ts = GetCurrentTimestamp();
+	currentTimer->cumul = ts - currentTimer->start_time;
+}
+void ob_utils_gettime(ob_tTimer *timer,long *secs,int *microsecs) {
+	TimestampTz ts;
+
+	if(timer == currentTimer) {
+		ts = GetCurrentTimestamp();
+		timer->cumul += ts - timer->start_time;
+		timer->start_time = ts;
+	}
+	ts = timer->start_time+timer->cumul;
+	TimestampDifference(timer->start_time,ts,secs,microsecs);
+}
+*/

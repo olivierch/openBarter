@@ -1502,7 +1502,7 @@ conditions:
 
 returns a char:
 		0 the draft is not yet accepted, 
-		1 the draft is executed,
+		1 the draft is executed, NON, retourne 0!
 		< 0 error
 */
 ----------------------------------------------------------------------------------------------------------------

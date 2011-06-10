@@ -47,6 +47,11 @@ typedef struct {
 	TimestampTz start;
 } ob_appel_ctx;
 
+typedef struct  {
+	TimestampTz start_time;
+	TimestampTz cumul;
+} ob_Timer;
+
 struct ob__Glob {
 	DB_ENV *envt;
 	TupleDesc tupDescQuality;
@@ -57,6 +62,8 @@ struct ob__Glob {
 	char pathEnv[MAXPGPATH];
 	ob_getdraft_ctx ctx;
 	ob_appel_ctx	actx;
+	//ob_tTimer timerPG;
+	//ob_tTimer timerBDB;
 };
 
 // utils.c
@@ -65,10 +72,16 @@ extern int ob_rmPath(char *path,bool also_me);
 extern int ob_utils_Init(ob_tGlob *ob);
 extern int ob_utils_PrepareIterNoeuds(ob_tGlob *ob);
 extern int ob_utils_PrepareGetStock(ob_tGlob *ob);
+extern void ob_utils_timerStart(ob_tTimer *timer);
+extern void ob_utils_timerSwitch(ob_tTimer *newTimer);
+extern void ob_utils_timerStop(void);
+extern void ob_utils_gettime(ob_tTimer *timer,long *secs,int *microsecs);
 
 // getdraft.c
 extern int ob_getdraft_init(void);
 
 // global variables
 extern ob_tGlob openbarter_g;
+
+
 #endif /* OPENBARTER_H_ */

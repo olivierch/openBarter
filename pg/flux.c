@@ -347,11 +347,11 @@ void ob_flux_cheminVider(ob_tChemin *pchemin, const char cflags) {
 	// printf("cflags = %x, %x\n",pchemin->cflags,~obCFlowDefined);
 	return;
 }
-int ob_flux_cheminLoop(const ob_tChemin *pchemin,const ob_tNoeud *pnoeud) {
+int ob_flux_cheminLoop(const ob_tChemin *pchemin,const ob_tId oid) {
 	unsigned char _i;
 
 	obMRange(_i,pchemin->nbNoeud)
-		if (pchemin->no[_i].noeud.oid == pnoeud->oid) {
+		if (pchemin->no[_i].noeud.oid == oid) {
 			if(_i == pchemin->nbNoeud-1)
 				return ob_flux_CerCheminPom3;
 			else
@@ -409,7 +409,7 @@ int ob_flux_cheminAjouterNoeud(ob_tChemin *pchemin, const ob_tStock *pstock,
 	}
 #endif
 	// verify that the node is not already in the chemin
-	_ret = ob_flux_cheminLoop(pchemin,pnoeud);
+	_ret = ob_flux_cheminLoop(pchemin,pnoeud->oid);
 	if(_ret) return _ret;
 
 	_noeudIndex = pchemin->nbNoeud;

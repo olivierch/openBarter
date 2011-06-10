@@ -31,7 +31,7 @@ defined in svn_test_main */
 //#define ob_flux_MVoirDBT(a) ob_flux_voirDBT(stdout,a,1);
 
 void 		ob_flux_cheminVider(ob_tChemin *pchemin, const char cflags);
-int 		ob_flux_cheminLoop(const ob_tChemin *pchemin,const ob_tNoeud *pnoeud);
+int 		ob_flux_cheminLoop(const ob_tChemin *pchemin,const ob_tId oid);
 int 		ob_flux_cheminAjouterNoeud(ob_tChemin *pchemin,
 				const ob_tStock *pstock,const ob_tNoeud *pnoeud,ob_tLoop *loop);
 int 		ob_flux_fluxMaximum(ob_tChemin *pchemin);

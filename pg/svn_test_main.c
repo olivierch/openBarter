@@ -8,7 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <getopt.h> /* getopt_long() */
-#include <tests.h>
+#include <svn_tests.h>
 
 /* Some Subversion test programs may want to parse options in the
  argument list, so we remember it here. */

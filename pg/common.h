@@ -1,6 +1,8 @@
 #ifndef defined__common_h
 #define defined__common_h
+#ifndef TBDB_C_
 #include <c.h>
+#endif
 //#include <stdbool.h>
 #include <assert.h>
 #include <stdlib.h>
@@ -313,6 +315,7 @@ enum ob__ErrorType;typedef enum ob__ErrorType ob_tErrorType;
 struct ob__Mar;typedef struct ob__Mar ob_tMar;
 struct ob__Loop;typedef struct ob__Loop ob_tLoop;
 struct ob__Batch;typedef struct ob__Batch ob_tBatch;
+struct ob__Timer;typedef struct ob__Timer ob_tTimer;
 
 
 enum ob__ErrorType
@@ -371,7 +374,6 @@ struct ob__Interdit {
 	uint32_t	flags;
 } ;
 
-
 struct ob__PrivateTemp {
 	int id;
 	DB *traits,*px_traits,*py_traits,*m_traits;
@@ -383,7 +385,6 @@ struct ob__PrivateTemp {
 	ob_tInterdit interdit; // arc interdit, (ret=obCerLoopOnOffer)
 	ob_tNoeud *pivot;
 };
-
 
 
 
