@@ -19,7 +19,6 @@ SET client_min_messages = warning;
 \i openbarter.sql
 \set ECHO all
 RESET client_min_messages;
-
 select setval('ob_tdraft_id_seq',100);
 
 select ob_fcreate_quality('q1');

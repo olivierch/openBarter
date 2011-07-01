@@ -24,6 +24,7 @@
 //#include <point.h>
 
 
+
 /*******************************************************************************
  Computes a distance between two vectors vecExact and vecArrondi. 
  It the angle alpha made by these vectors.
@@ -582,7 +583,7 @@ int ob_flux_cheminError(ob_tChemin *pchemin) {
 		obMRange (_in,pchemin->nbNoeud) {
 			_pom *= pchemin->no[_in].noeud.omega;
 			if (pchemin->no[_in].noeud.omega <= 0.) {
-				elog(INFO,"pchemin->no[%i].noeud.omega=%f <=0.",_in,pchemin->no[_in].noeud.omega);
+				//elog(INFO,"pchemin->no[%i].noeud.omega=%f <=0.",_in,pchemin->no[_in].noeud.omega);
 				_err = 1;
 				break;
 			}
@@ -595,9 +596,12 @@ int ob_flux_cheminError(ob_tChemin *pchemin) {
 		return ret;
 	}
 	if(pchemin->prodOmega != _pom) {
+		/*
+#ifndef TBDB
 		elog(INFO,"pchemin->prodOmega %016llx!= _pom %16llx",
 				*((long long int*)(&pchemin->prodOmega)),
 				*((long long int*)(&_pom )) );
+#endif */
 		ret = ob_flux_CerCheminPom2;
 		goto fin;
 		obMTRACE(ret);
@@ -630,8 +634,10 @@ int ob_flux_cheminError(ob_tChemin *pchemin) {
 			_err += 100;
 		}
 	}
-	if (_err) {
+	if (_err) { /*
+#ifndef TBDB
 		elog(INFO,"_err=%i",_err);
+#endif */
 		ret = ob_flux_CerCheminCuillere;
 		goto fin;
 	}
@@ -776,7 +782,8 @@ size_t ob_flux_cheminGetSize(ob_tChemin *pchemin) {
 		lon = 1; // TODO why?
 	return (sizeof(ob_tChemin) + (lon * sizeof(ob_tNo)));
 }
-
+//#ifndef TBDB
+//#ifndef obCTESTCHEM
 /*******************************************************************************
  USAGES
  ob_flux_fvoirEchange(stdout,pchemin,flags)
@@ -934,7 +941,7 @@ int ob_flux_makeMessage(ob_tMsg *msg,const char *fmt, ...) {
 
 	if(msg->begin == NULL) {
 		msg->error = 1;
-		msg->current = 0;
+		msg->current = (size_t) 0;
 		msg->size = bloc;
 		if((msg->begin = palloc(bloc)) == NULL) return -1;
 		msg->error = 0;
@@ -969,7 +976,7 @@ int ob_flux_makeMessage(ob_tMsg *msg,const char *fmt, ...) {
 		}
 	}
 }
-#define obCFLUX_DUMP_FILE "global/flux.log"
+#define obCFLUX_DUMP_FILE "openbarter/flux.log"
 void ob_flux_writeFile(ob_tMsg *msg)
 {
 	FILE	   *file;
@@ -992,16 +999,14 @@ void ob_flux_writeFile(ob_tMsg *msg)
 	return;
 
 error:
-	ereport(LOG,
-			(errcode_for_file_access(),
-			 errmsg("could not write to file \"%s\": %m",
-					 obCFLUX_DUMP_FILE)));
+	elog(LOG,"could not write to file \"%s\" ",obCFLUX_DUMP_FILE);
 	if (file)
 		FreeFile(file);
 	unlink(obCFLUX_DUMP_FILE);
 	pfree(msg->begin);
 }
-
+// #endif
+// #endif
 /*
 static bool verify_fluxMaximum(const ob_tChemin *pchemin, double *fluxExact) {
 	unsigned char _is, _jn, _lon,_jm;

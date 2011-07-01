@@ -1,606 +1,458 @@
-/* $Id: chemin.c 22 2010-01-15 16:00:22Z olivier.chaussavoine $ */
 /*
-    openbarter - The maximum wealth for the minimum collective effort
-    Copyright (C) 2008 olivier Chaussavoine
+AVEC obCTEST
 
-    This program is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by
-    the Free Software Foundation, either version 3 of the License, or
-    (at your option) any later version.
-
-    This program is distributed in the hope that it will be useful,
-    but WITHOUT ANY WARRANTY; without even the implied warranty of
-    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-    GNU General Public License for more details.
-
-    You should have received a copy of the GNU General Public License
-    along with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-    olivier.chaussavoine@openbarter.org
-*/
-/* Y Provided X Received */
-// #include <flux.h>
-#include <postgres.h>
+ */
+#ifdef obCTEST
+#include <stdbool.h>
+#else
 #include <chemin.h>
-#include <point.h> // include flux.h
-#include <iternoeud.h>
-#include <dbe.h>
-
-// #define ob_chemin_PRINTDBG true
-#ifdef ob_chemin_PRINTDBG
-
-/* nid and stock can be null */
-static int _svoirPoint(ob_tMsg *msg, ob_tNoeud *noeud,ob_tId *nid,ob_tStock *stock) {
-	int ret;
-
-	ret = ob_flux_makeMessage(msg,"b%c%c%c",
-			(noeud && stock && noeud->stockId != stock->sid)?'z':' ',
-			(noeud && stock && noeud->nF != stock->nF)?'z':' ',
-			(noeud && stock && noeud->own != stock->own)?'z':' ',
-			(nid &&  noeud->oid!=*nid)?'z':' ');
-
-	ret = ob_flux_makeMessage(msg, ":q%03lli->q%03lli",noeud->nR,noeud->nF);
-	ret = ob_flux_makeMessage(msg, " sx%016llX",noeud->stockId);
-	ret = ob_flux_makeMessage(msg, " wx%016llX",noeud->own);
-	ret = ob_flux_makeMessage(msg, " om%6.3f",noeud->omega);
-	if(nid) ret = ob_flux_makeMessage(msg," nx%016llX",*nid);
-	if(stock) {
-		ret = ob_flux_makeMessage(msg, " f%05lli",stock->qtt);
-		ret = ob_flux_makeMessage(msg, " vx%016llX",stock->version);
-	}
-
-	return ret;
-}
-static int _svoirTrait(ob_tMsg *msg,ob_tId xoid,ob_tId yoid) {
-	int ret;
-	ret = ob_flux_makeMessage(msg,"%05lli->%05lli\n",xoid,yoid);
-	return ret;
-}
 #endif
-/*******************************************************************************
-parcours_arriere
+#include "common.h"
+#include "flux.h"
+#include "iterators.h"
+#ifdef obCTEST
+#include "chemin_test.h"
+#else
+#include "iternoeud.h"
+#include "dbe.h"
+#endif
 
-	walks through the graph backward from the pivot.
-	for path ending at pivot,
-	fills envit->points with nodes mo and envit->traits with arcs.
-	for a node mo, mo.ar.layer is numbered from 1 for the pivot to nblayer,
-	clients of the pivot are called sources and have mo.av.layer=1,mo.av.igraph=0
-		mo.av.layer=0 for others.
+static int _diminuer(ob_tPrivateTemp *privt,ob_tChemin *pchemin,
+		ob_tId* stockPivotId);
 
-	The graph produced does not include traits from pivot->sources
-
-	env	environment
-	nblayer (out)
-		 0 no sources
-		 else, nblayer layers inserted between [1,layer]
-
-	return 0 or an error
-	
-versionSg:
-	reset at the beginning, When a stock is inserted into stocktemps,
-	privt->versionsg = max(privt->versionsg,pstock->version) if pstock->sid != 0
-	this is done with ob_iternoeud_put_stocktemp3()
-
-*****************************************************************************/
-int ob_chemin_parcours_arriere(envt,txn,nblayer,stockPivot)
-	DB_ENV *envt;
-	DB_TXN *txn;
-	int *nblayer;
-	ob_tStock *stockPivot;
+/*******************************************************************************/
+/* _put_stocktemp3(envt,pstock)
+ * pstock is put into stocktemps[pstock->sid],
+ * and versionSg = max(privt->versionsg,pstock->version where pstock->sid !=0)
+ */
+/*******************************************************************************/
+static int _put_stocktemp4(privt,pstock,pversionSg)
+	ob_tPrivateTemp *privt;
+	ob_tStock *pstock;
+	ob_tId *pversionSg;
 {
+	int ret;
 
-	ob_tPrivateTemp *privt = envt->app_private;
-	ob_tNoeud *pivot = privt->pivot;
+	if(*pversionSg <pstock->version) *pversionSg = pstock->version;
+	ret  = iterators_idPut(privt->stocktemps,&pstock->sid,pstock,sizeof(ob_tStock),0);
+	if (ret) obMTRACE(ret);
 
-	int layer; // layerY layer, layerX layer+1
-	int ret,ret_t;
+	return ret;
+}
 
-	bool sources;
-	ob_tId Yoid,Xoid;
-	ob_tMarqueOffre moY,moX; // some points on layer X and layer Y
-	ob_tNoeud offreX;
-	ob_tStock stock;
-#ifdef ob_chemin_PRINTDBG
-	ob_tMsg msg;
-	int retm;
-#endif
-	DBT ku_Yoid,du_moY,ku_Xoid,du_moX,du_offreX,ks_nR,ks_Xoid;
-	DBC *cmar_pointY = NULL;
-	DBC *c_point = NULL;
-	ob_tPortal cvy_offreX = NULL;
+/*******************************************************************************
+ *  initializes the point from point->mo (ob_tMarqueOffre).
+ *  clears the point->chemin,
+ *  the stock red from stocktemps[stockId] is stored into point->chemin.no[0].stock
+ *  if this stock is empty and deposOffre,
+ *  	returns ob_chemin_CerStockEpuise
+ *  if the point is a source, puts this offre as first element of point->chemin
+ *  stores point into point[oid]
+ *  returns
+ *******************************************************************************/
+static int _initPoint(ob_tPrivateTemp *privt, ob_tPoint *point) {
+	int ret;
+	ob_tStock *pstock;
+	ob_tLoop loop;
 
-	obMtDbtU(ku_Yoid,Yoid);
-	obMtDbtU(du_moY,moY);
+	ob_flux_cheminVider(&point->chemin, privt->cflags);
+	// place for the first stock
+	pstock = ob_flux_McheminGetAdrFirstStock(&point->chemin);
 
-	obMtDbtU(ku_Xoid,Xoid);
-	obMtDbtU(du_moX,moX);
+	// get the stocktemps[point->mo.offre.stockId]
+	ret  = iterators_idGet(privt->stocktemps,
+			&point->mo.offre.stockId,pstock,sizeof(ob_tStock),0);
+	if (ret) { obMTRACE(ret); goto fin; }
 
-	obMtDbtU(du_offreX,offreX);
-	obMtDbtS(ks_nR,moY.offre.nR);
-	obMtDbtS(ks_Xoid,Xoid);
+	// the stock is empty and the node is not the pivot on price read
+	if (pstock->qtt == 0 && !(!privt->deposOffre && point->mo.offre.oid == 0)  )
+			ret = ob_chemin_CerStockEpuise;
+	else {
+		if (point->mo.av.layer == 1) { // it is a source
+			// put it into the chemin
+			// 	chemin = [point->mo.offre,]
+			ret = ob_flux_cheminAjouterNoeud(&point->chemin,pstock,&point->mo.offre,&loop);
+			if (ret) goto fin;
+		}
+
+		ret  = iterators_idPut(privt->points,
+				&point->mo.offre.oid,point,sizeof(ob_tPoint),0);
+		if (ret) { obMTRACE(ret); goto fin; }
+	}
+fin:
+	return ret;
+}
 
 
-	// elog(INFO,"pivot stockId %lli nF %lli nR %lli omega %f own %lli oid %lli",pivot->stockId,pivot->nF,pivot->nR,pivot->omega,pivot->own,pivot->oid);
+/*******************************************************************************
+ new_trait put the trait in the graph  i_graph=0
+ *******************************************************************************/
+static int _new_trait(ob_tPrivateTemp *privt, ob_tId Xoid, ob_tId Yoid) {
+	ob_tTrait trait;
+	int ret = 0;
+	DBT ds_trait,ks_fleche;
+
+	obMtDbtS(ds_trait, trait);
+	obMtDbtS(ks_fleche, trait.rid);
+
+	trait.igraph = 0;
+	trait.rid.Xoid = Xoid;
+	trait.rid.Yoid = Yoid;
 
 
-	/* cursor for iteration on points for a given ob_tMar moY.ar containing (layer,igraph) */
-	ret = privt->mar_points->cursor(privt->mar_points,NULL,&cmar_pointY,0);
-	if(ret) {obMTRACE(ret); goto fin;}
+	ret = privt->traits->put(privt->traits, 0, &ks_fleche, &ds_trait, 0);
+	if (ret) obMTRACE(ret);
+	//printf("trait %lli->%lli\n",Xoid,Yoid);
+	return ret;
+}
 
-	/* cursor for insertion and read of points */
-	ret = privt->points->cursor(privt->points,NULL,&c_point,0);
-	if(ret) {obMTRACE(ret); goto fin;}
+/*******************************************************************************/
+static int _init_Pivot(privt,pivot,stockPivot,deposOffre,pversionSg)
+	ob_tPrivateTemp *privt;
+	ob_tNoeud *pivot;
+	ob_tStock *stockPivot;
+	bool deposOffre;
+	ob_tId *pversionSg;
+{
+	ob_tMarqueOffre mo;
+	int ret;
 
-	privt->versionSg = 0;
-
-	/* the pivot is inserted on the first layer (moY.ar.layer==1). it is not source, hence mo.av.layer = 0 */
-	memset(&moY,0,sizeof(moY));
-	memcpy(&moY.offre,pivot,sizeof(moY.offre));//ob_tNoeud
-	moY.ar.layer = 1 ;// moY.ar.igraph = 0
-	Yoid = pivot->oid; 
-	ret = privt->points->put(privt->points,0,&ku_Yoid,&du_moY,DB_NOOVERWRITE);
+	/* the pivot is inserted on the first layer (moY.ar.layer==1).
+	 * it is not source, hence mo.av.layer = 0 */
+	memset(&mo,0,sizeof(mo));
+	memcpy(&mo.offre,pivot,sizeof(mo.offre));//ob_tNoeud
+	mo.ar.layer = 1 ;// moY.ar.igraph,layer = 0,0
+	ret = iterators_idPut(privt->points,
+			&pivot->oid,&mo,sizeof(ob_tMarqueOffre),DB_NOOVERWRITE);
 	if(ret) {obMTRACE(ret);goto fin;}
 
-	
-	if(privt->deposOffre) {
-		// the stock of the pivot is inserted
-		memcpy(&stock,stockPivot,sizeof(ob_tStock));
+	*pversionSg = 0;
+	if(deposOffre) {
+		ret = _put_stocktemp4(privt,stockPivot,pversionSg);
 	} else {
-		// the stock of the pivot is created temporarily with sid=0
-		memset(&stock,0,sizeof(ob_tStock));
+		ob_tStock stock;
+
+		memset(&stock,0,sizeof(ob_tStock)); // sid == 0
 		stock.nF = pivot->nF;
 		// stock.own = stock.qtt = stock.sid = stock.version = 0
+		ret = _put_stocktemp4(privt,&stock,pversionSg);
+		// pversionSg == 0
 	}
+fin:
+	return ret;
+}
+/*******************************************************************************/
+static int _getLimit(int quotaTrait,int layer,int nbTrait,int* nbNoeudLayer) {
+	int limit;
+	//int quotaMax = 1<<15;
 
-#ifdef ob_chemin_PRINTDBG
-	msg.begin = NULL;
-	retm = ob_flux_makeMessage(&msg,"ParcoursArriere:\nPivot:");
-	retm = _svoirPoint(&msg,pivot,NULL,stockPivot);
-#endif
+	limit = quotaTrait - nbTrait;
+	*nbNoeudLayer =0;
+	if(limit <=0) return 0;
+	return limit;
+}
+/*******************************************************************************/
+int _parcours_arriere(envt,pivot,stockPivot,deposOffre,versionSg,pnbSrc)
+	DB_ENV *envt;
+	ob_tNoeud *pivot;
+	ob_tStock *stockPivot;
+	bool deposOffre;
+	ob_tId *versionSg;
+	int* pnbSrc;
+{
+	ob_tPrivateTemp *privt = envt->app_private;
+	ob_tNoeud offreX;
+	ob_tStock stock;
+	int layer,ret,nbTrait=0,nbNoeudLayer,nbSrc = 0;
 
-	ret = ob_iternoeud_put_stocktemp3(envt,&stock);
-	if(ret){obMTRACE(ret);goto fin;}
+	ob_tSIterator cmar_pointY;
+	ob_tAIterator c_point;
+	Portal cvy_offreX = NULL;
 
-	/* Begin **************************************************************/
-	layer = 1;
-	sources = false;
+	/* cursor for iteration on points
+	 * for a given ob_tMar moY.ar containing (layer,igraph) */
+	initSIterator(&cmar_pointY,privt->mar_points,
+			sizeof(ob_tMar),sizeof(ob_tId),sizeof(ob_tMarqueOffre));
 
-	/*********************************************************************/
-	while(true) { // while [A] layer<obCMAXCYCLE and layer non empty
+	/* cursor for insertion and read of points */
+	initAIterator(&c_point,privt->points,
+			sizeof(ob_tId),sizeof(ob_tMarqueOffre));
+
+	ret = _init_Pivot(privt,pivot,stockPivot,deposOffre,versionSg);
+	if(ret) {obMTRACE(ret); goto fin;}
+
+	/**************************************************************************
+	 *  [A] while layer<obCMAXCYCLE and layer non empty                        */
+	layer = 0;
+	nbSrc = 0;
+	nbNoeudLayer = 1;
+	while(layer < obCMAXCYCLE) { // [A]
 		bool layerX_empty = true;// reset when some points are on layer+1
 		ob_tMar marqueYar;
-		DBT ks_marqueYar;
 
-		obMtDbtS(ks_marqueYar,marqueYar);
+		layer +=1;
+		// layer in [1,obCMAXCYCYLE]
+		/***********************************************************************
+		loop [B] for all (moY,pointY) having
+			(pointY.mo.ar.layer,pointY.mo.ar.igraph) == (layer,0)   	       */
 
-		//elog(INFO,"Start new layer %i",layer);
-		/**********************************************************************************
-		loop [B] ALL (moY,Yoid) on layer
-		for all pointY having (pointY.mo.ar.layer,pointY.mo.ar.igraph) == (layer,0)
-		*/
 		marqueYar.layer = layer;
 		marqueYar.igraph = 0;
+		//printf("init layer: %i\n",layer);
+		ret = openSIterator(&cmar_pointY,&marqueYar);
+		if(ret) {obMTRACE(ret); goto fin;}
 
-		ret = cmar_pointY->pget(cmar_pointY,&ks_marqueYar,&ku_Yoid,&du_moY,DB_SET);
-		// sets Yoid and moY
-#ifdef ob_chemin_PRINTDBG
-		retm = ob_flux_makeMessage(&msg,"\nlayer %i Y:",layer);
-		retm = _svoirPoint(&msg,&moY.offre,&Yoid,NULL);
-#endif
-		if(!ret) do { // [B]
-			//elog(INFO,"Layer %i, Yoid=%lli found",layer,Yoid);
-			
-			/*******************************************************************************/
-			/* [C] ALL (offreX,Xoid,stock)  such as offreX.nF =moY.offre.nR and stock.qtt != 0
-			" the portal cvy_offreX is the following sql:
-				SELECT NOX.*,S.* FROM ob_tnoeud NOX INNER JOIN ob_stock S ON (NOX.sid =S.id)
-				WHERE NOX.nf=Y_nR AND S.qtt!=0 
-			*/
-			cvy_offreX = ob_iternoeud_GetPortal2(envt,Yoid,moY.offre.nR);
-			if( cvy_offreX == NULL)  {
-				ret = ob_chemin_CerIterNoeudErr;
-				obMTRACE(ret);
-				goto fin;
+		while(true) { // [B]
+			ob_tId Yoid;
+			ob_tMarqueOffre moY;
+			int limit;
+
+			ret = nextSIterator(&cmar_pointY,&Yoid,&moY);
+			if(ret) {
+				if(ret == DB_NOTFOUND) {ret = 0; break; }
+				//printf("Yoid=%lli on layer %i\n",Yoid,marqueYar.layer);
+				obMTRACE(ret); goto fin;
 			}
-			//elog(INFO,"ob_iternoeud_GetPortal2(Yoid=%lli,nR=%lli)",Yoid,moY.offre.nR);
+			//
 
-			while(true) { 
+			/*******************************************************************
+			[C] ALL (offreX,Xoid,stock)
+			 * 		such as offreX.nF =moY.offre.nR and stock.qtt != 0         */
+
+			limit = _getLimit(privt->quotaTrait,layer,nbTrait,&nbNoeudLayer);
+			//printf("limit %i,nF %lli\n",limit,moY.offre.nR);
+			cvy_offreX = ob_iternoeud_GetPortalA(envt,Yoid,moY.offre.nR,limit);
+			if( cvy_offreX == NULL)  {
+				ret = ob_chemin_CerIterNoeudErr;obMTRACE(ret);goto fin;
+			}
+			while(true) { // [C]
+				ob_tId Xoid;
+				ob_tMarqueOffre moX;
 				bool XoidNotFound = false;
 
-				// next element of the select [C]
-				ret = ob_iternoeud_Next2(cvy_offreX,&Xoid,&offreX,&stock);
-				if(ret == DB_NOTFOUND) break;
-				else if (ret !=0) { obMTRACE(ret); goto fin;}
-
-				//elog(INFO,"ob_iternoeud_Next2(Yoid=%lli,nR=%lli) found offreX.oid=%lli with offreX.nF=nR and offreX.nR=%lli",Yoid,moY.offre.nR,Xoid,offreX.nR);
-#ifdef ob_chemin_PRINTDBG
-				ret = ob_flux_makeMessage(&msg,"%05lli->%05lli,",Xoid,Yoid);
-				//retm = ob_flux_makeMessage(&msg,"\n\tX:");
-				//retm = _svoirPoint(&msg,&offreX,&Xoid,&stock);
-#endif
-				if( Xoid != pivot->oid) { // traits[pivot->source] are not inserted
-					ret = ob_point_new_trait(envt,Xoid,Yoid);
-					if(ret) { obMTRACE(ret);goto fin; }
+				ret = ob_iternoeud_NextA(cvy_offreX,&Xoid,&offreX,&stock);
+				//printf("on est la ret=%i\n",ret);
+				if( ret != 0 ) {
+					// printf("ret=%i\n",ret);
+					if(ret == DB_NOTFOUND) { ret=0; break; }
+					if( ret == ob_chemin_LimitReached) break;
+					obMTRACE(ret); goto fin;
 				}
-				//elog(INFO,"trait %lli->%lli inserted",offreX.oid,moY.offre.oid);
+				// printf("layer=%i X %lli->Y %lli\n",layer,Xoid,Yoid);
+				//printf("found Xoid %lli,nR %lli\n",Xoid,offreX.nR);
+				if( Xoid != pivot->oid ) { // traits[pivot->source] not inserted
+					ret = _new_trait(privt,Xoid,Yoid);
+					if(ret) { obMTRACE(ret);goto fin; }
+					nbTrait +=1;
+					//printf("trait %lli->%lli written\n",Xoid,Yoid);
+				} else {
+					//printf("trait %lli->%lli NOT written\n",Xoid,Yoid);
+				}
 
-				ret = c_point->get(c_point,&ks_Xoid,&du_moX,DB_SET);
-				if(ret == DB_NOTFOUND ) XoidNotFound = true;
-				else if( ret != 0 ) { obMTRACE(ret); goto fin;}
+				ret = getAIterator(&c_point,&Xoid,&moX,DB_SET);
+				if( ret != 0 ){
+					if(ret == DB_NOTFOUND ) XoidNotFound = true;
+					else { obMTRACE(ret); goto fin;}
+				}
 
-				/*
-				if points[Xoid] is found nothing is done,
-				=> this point will not belong to layer+1, and the path from it will be stopped even if traits[X,Y] was written.
-
-				If points[Xoid]  is not found
+				/* if points[Xoid] is found nothing is done,
+				=> this point will not belong to layer+1, and the path from it
+					will be stopped even if traits[X,Y] was written.
 				*/
-
 				if( XoidNotFound) {
-
-					layerX_empty = false;
-
-					ret = ob_iternoeud_put_stocktemp3(envt,&stock);
+					ret = _put_stocktemp4(privt,&stock,versionSg);
 					if(ret) {obMTRACE(ret);goto fin;}
 
 					memset(&moX,0,sizeof(ob_tMarqueOffre));
-					// moX.ar.layer =0, moY.ar.igraph = 0, moY.av.layer = 0, moY.av.igraph = 0
+					// moX.ar.layer = 0, moY.ar.igraph = 0,
+					// moY.av.layer = 0, moY.av.igraph = 0
 					memcpy(&moX.offre,&offreX,sizeof(ob_tNoeud));
-					moX.ar.layer = layer+1;
 
-					if(pivot->nF == moX.offre.nR) { // moX is client of the pivot
-						moX.av.layer = 1; sources = true;
-#ifdef ob_chemin_PRINTDBG
-						retm = ob_flux_makeMessage(&msg," SOURCE");
-#endif
+					if(pivot->nF == moX.offre.nR)  {
+						/* moX is client of the pivot
+						the path is terminated => layerX_empty unchanged,
+						 and moX.ar.layer = 0,  */
+						moX.av.layer = 1; // it is a source
+						nbSrc +=1;
+					} else {
+						layerX_empty = false;
+						moX.ar.layer = layer+1;
 					}
 
-					ret = c_point->put(c_point,&ks_Xoid,&du_moX,DB_KEYFIRST);
+					/*printf("Xoid %lli %lli->%lli written on layer %i igraph %i\n",
+							Xoid,moX.offre.nR,moX.offre.nF,moX.ar.layer,moX.ar.igraph);*/
+					ret = putAIterator(&c_point,&Xoid,&moX,DB_KEYFIRST);
 					if(ret) { obMTRACE(ret);goto fin; }
-					//elog(DEBUG,"Xoid=%lli inserted into points layer=%i",Xoid,layer);
+					nbNoeudLayer +=1;
 				}
-				/* TODO what does it mean??
-				 * all traits[X,Y] have a point[X] that belongs to layer+1 or not */
-			}
+			}  // end [C]
 			SPI_cursor_close(cvy_offreX);cvy_offreX = NULL;
-			// end while [C].next
-			/*******************************************************************************/
+			/*******************************************************************/
+			if(ret == ob_chemin_LimitReached) {ret = 0;break;}
+		} // end [B]
+		if(ret) {obMTRACE(ret); goto fin;}
+		/***********************************************************************/
 
-			// next Yoid,moY from privt->points[Yoid] having moY.ar.layer==layer
-			ret = cmar_pointY->pget(cmar_pointY,&ks_marqueYar,&ku_Yoid,&du_moY,DB_NEXT_DUP);
-		} while(!ret);
-		if (ret == DB_NOTFOUND) ret = 0;
-		else { obMTRACE(ret);  goto fin;}
-		// end loop [B] cmar_pointY on the layer
-		/*************************************************************/
-
-		// break condition for [A]
-
-		if (layerX_empty)  {
-			/* No point where inserted on layer+1
-			=> max(point.layer) = layer
-			 */
-			//elog(INFO,"Layer %i empty - BREAK",layer+1);
-			break; 
-		}
-
+		// break conditions for [A]
+		if (layerX_empty)  break;
+		/*
+		// No point where inserted on layer+1 => max(point.layer) = layer
 		if(layer == (obCMAXCYCLE -1)) {
-			// some point are inserted on layer+1
-			layer +=1;
-			/* max(point.layer) = obCMACCYCLE
-			 */
-			//elog(INFO,"Layer %i == %i reached - BREAK",layer,obCMAXCYCLE);
-			break;
+			// some point are inserted on layer+1, max(point.layer) = obCMACCYCLE
+			layer +=1; break;
 		}
-		layer +=1;
+		layer +=1; */
 	} // end [A]
-
-	/*********************************************************************/
+	/***************************************************************************/
 	// layer is the number of layer inserted, and point.layer in [1,obCMAXCYCLE]
 	// mo.ar.layer in [1,layer] since layer is the last inserted
-	if(sources) {
-		*nblayer = layer;
-		//elog(INFO,"%i layers found",layer);
-	} else {
-		*nblayer = 0; // there is no clients of pivot
-		//elog(INFO,"no sources found with layer %i",layer);
-	}
+	//privt->versionSg = versionSg;
+
 fin:
-	obMCloseCursor(cmar_pointY);
-	obMCloseCursor(c_point);
+	*pnbSrc =nbSrc;
+	ret = closeSIterator(&cmar_pointY,ret);
+	ret = closeAIterator(&c_point,ret);
 	if(cvy_offreX != NULL) SPI_cursor_close(cvy_offreX);
-#ifdef ob_chemin_PRINTDBG
-	retm = ob_flux_makeMessage(&msg,"\nFIN ParcoursArriere: nblayer %i\n",*nblayer);
-	if(retm == 0) {
-		elog(INFO,"%s",msg.begin);
-		ob_flux_writeFile(&msg); // pfree is included
-	} else elog(INFO,"Error in ob_flux_makeMessage");
-#endif
-	return (ret);
+	return ret;
 }
-/*******************************************************************************
-parcours_avant()
+/*******************************************************************************/
+// sources are moved from the old graph (i_graph) to the new (i_graph+1)
 
-	build a graph(i_graph+1) from graph(i_graph).
-	This graph excludes arcs going from the pivot to sources, and allows
-	bellman ford on paths going from sources to the pivot.
-	walks the graph from the sources to the pivot
-	i_graph is the old graph and new_igraph=i_graph+1 is the new one.
-	at the first call i_graph==0, and source have (av.igraph,av.layer) = 0,1
+static int _src_move_to_new(ob_tPrivateTemp *privt,ob_tSIterator *cmav_point,
+		int i_graph,int *nbSource){
 
-	all sources are passed to the new graph new_igraph.
-	foreach pointX (layer,new_igraph) , starting from sources av.layer=1
-		foreach pointY connected with a trait to this pointX:
-			point.mo.av.igraph = new_igraph
-			point.mo.av.layer = layer+1
-			trait.igraph = new_igraph
-
-		layer +=1
-
-	a cycle is detected when layer > nblayer
-
-	at the end nbSource = 0 means the graph is empty
-
-	returns 0 if no error
-	ob_chemin_CerLoopOnOffer when a loop is found
-		then loop is set
-
-*******************************************************************************/
-static int _parcours_avant(envt,nblayer,i_graph,nbSource,loop)
-	DB_ENV *envt;
-	int 		nblayer;
-	int 		i_graph;
-	int 		*nbSource;
-	ob_tLoop	*loop;
-{
-	ob_tPrivateTemp *privt = envt->app_private;
-	ob_tNoeud *pivot = privt->pivot;
-	int layer,ret,ret_t,new_igraph;
-	ob_tMar marqueXav;
-	bool layerY_empty,_no_path_to_pivot;
-	ob_tFleche fleche;
+	int ret = 0;
 	ob_tId Xoid;
-	ob_tTrait trait;
-	ob_tPoint pointX,pointY;
-	DBT ks_marqueXav,ku_Xoid,ks_Xoid,du_pointX,du_pointY,ks_fleche_Yoid,ku_fleche,du_trait,ks_fleche;
-	DBC *cmav_point = NULL;
-	DBC *cx_trait = NULL;
-	DBC *c_point = NULL;
-#ifdef ob_chemin_PRINTDBG
-	ob_tMsg msg;
-	int retm;
-#endif
-
-	obMtDbtS(ks_marqueXav,marqueXav);
-	obMtDbtU(ku_Xoid,Xoid);
-	obMtDbtS(ks_Xoid,Xoid);
-
-	obMtDbtU(du_pointX,pointX);
-	obMtDbtU(du_pointY,pointY);
-
-	obMtDbtS(ks_fleche_Yoid,fleche.Yoid);
-	obMtDbtU(ku_fleche,fleche);
-	obMtDbtU(du_trait,trait);
-
-	obMtDbtS(ks_fleche,fleche);
-
-	_no_path_to_pivot = true;
-
-	ret = privt->mav_points->cursor(privt->mav_points,NULL,&cmav_point,0);
-	if(ret) {obMTRACE(ret); goto fin;}
-
-	ret = privt->px_traits->cursor(privt->px_traits,NULL,&cx_trait,0);
-	if(ret) {obMTRACE(ret); goto fin;}
-
-	ret = privt->points->cursor(privt->points,NULL,&c_point,0);
-	if(ret) {obMTRACE(ret); goto fin;}
-
-
-	//*********************************************************************
-	// sources are moved from the old graph (i_graph) to the new (i_graph+1)
-
-	marqueXav.igraph = i_graph; // source in the old graph
-	marqueXav.layer = 1;
-	new_igraph = i_graph+1;
+	ob_tPoint pointX;
+	ob_tMar marqueXav = {1,i_graph}; // layer,i_graph
 
 	*nbSource = 0;
-	// select pointX where pointX.mo.av=(i_graph,1)
-	ret = cmav_point->pget(cmav_point,&ks_marqueXav,&ku_Xoid,&du_pointX,DB_SET);
-	while(!ret) {
-		pointX.mo.av.igraph = new_igraph;
+	ret = openSIterator(cmav_point,&marqueXav);
+	if(ret) {obMTRACE(ret); return ret;}
+
+	while(true) {
+
+		ret = nextSIterator(cmav_point,&Xoid,&pointX);
+		if( ret != 0) {
+			if(ret == DB_NOTFOUND) return 0;
+			else {obMTRACE(ret); return ret;}
+		}
+		//printf("Xoid %lli is source.\n",Xoid);
+		pointX.mo.av.igraph = i_graph+1;
 		pointX.mo.av.layer = 1;
-		ret = ob_point_initPoint(privt,&pointX);
+		ret = _initPoint(privt,&pointX);
 		// pointX is written to new_igraph only if ret == 0
-		if (ret == 0)
-			*nbSource +=1;
-		else if (ret!=ob_point_CerStockEpuise) {obMTRACE(ret); goto fin;}
-
-		ret = cmav_point->pget(cmav_point,&ks_marqueXav,&ku_Xoid,&du_pointX,DB_NEXT_DUP);
+		if (ret == 0) *nbSource +=1;
+		else if (ret!=ob_chemin_CerStockEpuise) {obMTRACE(ret); return ret;}
 	}
-	if (ret == DB_NOTFOUND) ret = 0;
-	else {obMTRACE(ret);  goto fin;}
+}
 
-#ifdef ob_chemin_PRINTDBG
-	msg.begin = NULL;
-	retm = ob_flux_makeMessage(&msg,"\nParcoursAvant new_graph %i:",new_igraph);
-#endif
+/*******************************************************************************/
 
-	if(!*nbSource) goto fin;
+int _parcours_avant(privt,pivot,i_graph,nbSource)
 
-	//*********************************************************************
-	layer = 1;
-	do { // loop [D] while(!layerY_empty)
-		layerY_empty = true;
+	ob_tPrivateTemp *privt;
+	ob_tNoeud 	*pivot;
+	int 		i_graph;
+	int 		*nbSource;
+{
 
-		//*************************************************************
-		// select (pointX,Xoid) from points having layer,igraph == layer,new_igraph
-
-		marqueXav.igraph = new_igraph;
-		marqueXav.layer = layer;
-		ks_marqueXav.data = &marqueXav;
-		ret = cmav_point->pget(cmav_point,&ks_marqueXav,&ku_Xoid,&du_pointX,DB_SET);
+	ob_tSIterator cmav_point,cx_trait;
+	ob_tAIterator c_point,c_trait;
+	//Portal cvy_offreX = NULL;
+	int layer,ret;
+	const int new_igraph = i_graph+1;
+	bool _path_to_pivot = false;
 
 
-#ifdef ob_chemin_PRINTDBG
-		retm = ob_flux_makeMessage(&msg,"\nlayer %i X:",layer);
-		retm = _svoirPoint(&msg,&pointX.mo.offre,&Xoid,NULL);
-#endif
-		if(!ret) do { // loop [E] cmav_point
+	initSIterator(&cmav_point,privt->mav_points,
+			sizeof(ob_tMar),sizeof(ob_tId),sizeof(ob_tPoint));
 
-			//*****************************************************
+	initSIterator(&cx_trait,privt->px_traits,
+			sizeof(ob_tId),sizeof(ob_tFleche),sizeof(ob_tTrait));
+
+	initAIterator(&c_point,privt->points,
+			sizeof(ob_tId),sizeof(ob_tPoint));
+
+	initAIterator(&c_trait,privt->traits,
+			sizeof(ob_tFleche),sizeof(ob_tTrait));
+
+
+	ret = _src_move_to_new(privt,&cmav_point,i_graph,nbSource);
+	if(ret) goto fin;
+	if(*nbSource == 0 ) {
+			ret = ob_chemin_CerNoSource;
+			goto fin;
+	}
+
+	layer = 0;
+	while(true) { // loop [D] while(!layerY_empty)
+		ob_tMar marqueXav = {layer+1,new_igraph}; // layer,i_graph
+		bool layerY_empty = true;
+
+		layer += 1;
+		/* [E] select (pointX,Xoid) having layer,igraph == layer,new_igraph */
+		ret = openSIterator(&cmav_point,&marqueXav);
+		if(ret) {obMTRACE(ret); goto fin;}
+
+		while(true) { // loop [E] cmav_point
+			ob_tId Xoid;
+			ob_tPoint pointX;
+
+			ret = nextSIterator(&cmav_point,&Xoid,&pointX);
+			if(ret) {
+				if(ret == DB_NOTFOUND) {ret = 0;break;}
+				obMTRACE(ret); goto fin;
+			}
+
 			// [F] select (trait,fleche) from traits having fleche.Xoid == Xoid
-			ks_Xoid.data = &Xoid; // useless
-			ret = cx_trait->pget(cx_trait,&ks_Xoid,&ku_fleche,&du_trait,DB_SET);
+			ret = openSIterator(&cx_trait,&Xoid);
+			if(ret) {obMTRACE(ret); goto fin;}
 
-			if(!ret) do { // loop [F]
-				//elog(INFO,"%lli->%lli layer %i X.ar %i X.av %i",fleche.Xoid,fleche.Yoid,layer,pointX.mo.ar.layer,pointX.mo.av.layer);
-				// get points[fleche.Yoid]
-				ret = c_point->get(c_point,&ks_fleche_Yoid,&du_pointY,DB_SET);
-				if (ret) {obMTRACE(ret); goto fin;}
-				// it must be found
+			while(true) { // loop [F] cx_trait
+				ob_tFleche fleche;
+				ob_tTrait trait;
+				ob_tPoint pointY;
+
+				ret = nextSIterator(&cx_trait,&fleche,&trait);
+				if(ret != 0) {
+					if(ret == DB_NOTFOUND) { ret = 0; break; }
+					else {obMTRACE(ret); goto fin;}
+				}
+
+				ret = getAIterator(&c_point,&fleche.Yoid,&pointY,DB_SET);
+				if(ret) {obMTRACE(ret); goto fin;} // should be found
 
 				pointY.mo.av.igraph = new_igraph;
 				pointY.mo.av.layer = layer+1;
-				ret = ob_point_initPoint(privt,&pointY);
-				// points[Y] written into i_graph+1 only if ret == 0
+				ret = _initPoint(privt,&pointY);
 
-#ifdef ob_chemin_PRINTDBG
-				retm = ob_flux_makeMessage(&msg,"\n\tY:");
-				retm = _svoirPoint(&msg,&pointY.mo.offre,&fleche.Yoid,NULL);
-#endif
 				if(ret == 0 ) { // stock of pointY is not empty
-
 					layerY_empty = false;
-
 					trait.igraph = new_igraph;
-					ret = privt->traits->put(privt->traits,0,&ks_fleche,&du_trait,0);
+					ret = putAIterator(&c_trait,&fleche,&trait,DB_KEYFIRST);
 					if (ret) { obMTRACE(ret); goto fin; }
 
-					// The graph is not empty if the pivot is found
 					if(pointY.mo.offre.oid == pivot->oid)
-						_no_path_to_pivot = false;
+						_path_to_pivot = true;
 
-				} else if ( ret != ob_point_CerStockEpuise) {obMTRACE(ret); goto fin;}
-
-				// next (trait,fleche)
-				ret = cx_trait->pget(cx_trait,&ks_Xoid,&ku_fleche,&du_trait,DB_NEXT_DUP);
-			} while(!ret);
-			if (ret == DB_NOTFOUND) ret = 0;
-			else {obMTRACE(ret); goto fin;}
-			// end [F] cx_trait
-			//*****************************************************
-
-			// next (pointX,Xoid) on layer,igraph == layer,new_igraph
-			ret = cmav_point->pget(cmav_point,&ks_marqueXav,&ku_Xoid,&du_pointX,DB_NEXT_DUP);
-		}  while(!ret);
-		if (ret == DB_NOTFOUND) ret = 0;
-		else {obMTRACE(ret); goto fin;}
-		// end [E] cmav_point
-		/*****************************************************/
-
+				} else if ( ret == ob_chemin_CerStockEpuise) ret = 0;
+				else {obMTRACE(ret); goto fin;}
+			} // end F
+		} // end E
 		if (layerY_empty) break;
-
-		layer +=1;
-		// pointY.layer = layer
-		if(layer > nblayer) {
-			ret = ob_chemin_CerLoopOnOffer;
-			//elog(INFO,"ob_chemin_CerLoopOnOffer layer=%i nblayer=%i",layer,nblayer);
-			memcpy(&loop->rid,&fleche,sizeof(ob_tFleche));
-			elog(INFO,"loop found on Xoid=%lli Yoid=%lli",loop->rid.Xoid,loop->rid.Yoid);
-
-			goto fin;
-		}
-	} while(true); //!layerY_empty);
-	// end [D] loop while(!layerY_empty)
-	//*********************************************************************
+	} // end D
+	// should have fount some source
+	if(!_path_to_pivot) ret = ob_chemin_CerNoSource;
+	//printf("fin de parcours avant nbScr %i\n",*nbSource);
 fin:
-	if(_no_path_to_pivot) *nbSource = 0;
-	obMCloseCursor(cx_trait);
-	obMCloseCursor(cmav_point);
-	obMCloseCursor(c_point);
 
-#ifdef ob_chemin_PRINTDBG
-	retm = ob_flux_makeMessage(&msg,"\nFIN ParcoursAvant: nbSource %i\n",*nbSource);
-	if(retm == 0) {
-		elog(INFO,"%s",msg.begin);
-		ob_flux_writeFile(&msg); // pfree is included
-	} else elog(INFO,"Error in ob_flux_makeMessage");
-#endif
-
-	return(ret);
+	ret = closeSIterator(&cmav_point,ret);
+	ret = closeSIterator(&cx_trait,ret);
+	ret = closeAIterator(&c_point,ret);
+	ret = closeAIterator(&c_trait,ret);
+	return ret;
 }
-/*******************************************************************************
-bellman_ford_in
-
-point.chemin is a path from a source to pivot, or is empty.
-on the trait pointX->pointY, if pointX.chemin is empty, nothing is done.
-If it is not, we consider the path that follows the path pointX.chemin and goes to pointY.
-It is compared with pointY.chemin using their prodOmega.
-If this path is better than pointY.chemin, it is written into pointY.chemin.
-
-return ret!=0 on error
-*******************************************************************************/
-static int _bellman_ford_in(privt,trait,loop)
-	ob_tPrivateTemp *privt;
-	ob_tTrait *trait;
-	ob_tLoop	*loop;
-{
-	int ret;
-	ob_tId oid;
-	ob_tPoint point,pointY;
-	double oldOmega,newOmega;
-	ob_tStock *pstockY;
-	DBT ks_oid,ds_point;
-
-	obMtDbtS(ks_oid,oid);
-	obMtDbtS(ds_point,point);
-
-	ret = ob_point_getPoint(privt,&trait->rid.Xoid,&point);
-	if(ret) goto fin;
-
-	// if pointX (here point) is empty,
-	// we do not modify pointY, (it must also be empty)
-	if(!ob_flux_McheminGetNbNode(&point.chemin)) goto fin;
-
-	// check if insertion attempt should form a loop
-	ret = ob_flux_cheminLoop(&point.chemin,trait->rid.Yoid);
-	if(ret == ob_flux_CerLoopOnOffer) {
-		// pointY forms a loop on chemin
-		// it is not added to chemin, but bellman continue
-		ret = 0; goto fin;
-	}
-	if(ret)	{ obMTRACE(ret);goto fin;}
-
-	ret = ob_point_getPoint(privt,&trait->rid.Yoid,&pointY);
-	if(ret) goto fin;
-
-
-	oldOmega = ob_flux_McheminGetOmega(&pointY.chemin);
-	// 0. if the path is empty
-
-	pstockY = ob_flux_cheminGetAdrStockLastNode(&pointY.chemin);
-
-	ret =ob_flux_cheminAjouterNoeud(&point.chemin,pstockY,&pointY.mo.offre,loop);
-	if (ret) {obMTRACE(ret);goto fin;}
-
-	if(trait->rid.Yoid == privt->pivot->oid) {
-		ret = ob_flux_fluxMaximum(&point.chemin);
-		if(ret) goto fin; // flow undefined or error
-	}
-	newOmega = ob_flux_McheminGetOmega(&point.chemin);
-	if (newOmega <= oldOmega)  goto fin; // omega is weaker
-
-	// writes point.chemin into points[trait->rid.Yoid]
-	memcpy(&point.mo,&pointY.mo,sizeof(ob_tMarqueOffre));
-	oid = trait->rid.Yoid;
-
-	ds_point.size = sizeof(ob_tPoint);//ob_point_getsizePoint(&point);
-	ret = privt->points->put(privt->points,0,&ks_oid,&ds_point,0);
-	if (ret) {obMTRACE(ret); goto fin;}
-
-fin:
-	return(ret);
-}
-
 /*******************************************************************************
 bellman_ford
 
@@ -620,187 +472,143 @@ _bellman_ford_in is called for each trait of i_graph+1
 
 return ret!=0 on error
 *******************************************************************************/
-static int _bellman_ford(privt,chemin,i_graph,loop)
+
+/*******************************************************************************
+bellman_ford_in
+
+point.chemin is a path from a source to pivot, or is empty.
+on the trait pointX->pointY, if pointX.chemin is empty, nothing is done.
+If it is not, we consider the path that follows the path pointX.chemin and goes
+to pointY. It is compared with pointY.chemin using their prodOmega.
+If this path is better than pointY.chemin, it is written into pointY.chemin.
+
+return ret!=0 on error
+*******************************************************************************/
+static int _bellman_ford_in(c_point,ppivotId,trait)
+	ob_tAIterator *c_point;
+	ob_tId *ppivotId;
+	ob_tTrait *trait;
+{
+	int ret;
+	ob_tPoint pointX,pointY;
+	double oldOmega,newOmega;
+	ob_tStock *pstockY;
+	ob_tLoop loop;
+
+	ret = getAIterator(c_point,&trait->rid.Xoid,&pointX,DB_SET);
+	if(ret) {obMTRACE(ret); goto fin;} // should be found
+
+	// if pointX is empty, pointY is unchanged
+	if(ob_flux_McheminGetNbNode(&pointX.chemin) == 0) goto fin;
+
+
+	ret = getAIterator(c_point,&trait->rid.Yoid,&pointY,DB_SET);
+	if(ret) {obMTRACE(ret); goto fin;} // should be found
+
+	oldOmega = ob_flux_McheminGetOmega(&pointY.chemin);
+	// 0. if the path is empty
+
+	pstockY = ob_flux_cheminGetAdrStockLastNode(&pointY.chemin);
+
+	ret =ob_flux_cheminAjouterNoeud(
+			&pointX.chemin,
+			pstockY,
+			&pointY.mo.offre,&loop);
+	if (ret) {
+		if(ret == ob_flux_CerLoopOnOffer) {
+			// pointY forms a loop on chemin
+			// it is not added to chemin, but bellman continue
+			ret = 0; goto fin;
+		}
+		if(ret == ob_flux_CerCheminTropLong ) {
+			//printf("chemin.nbNoeud=%i, Y=%lli, trop long\n",pointX.chemin.nbNoeud,trait->rid.Yoid);
+			//prChemin(&pointX.chemin);
+			ret = 0; goto fin;
+		}
+		obMTRACE(ret);goto fin;}
+
+	//printf("c'est pas plante pour XY=(%lli,%lli)\n",trait->rid.Xoid,trait->rid.Yoid);
+	//printf("chemin.nbNoeud=%i, Y=%lli, ",pointX.chemin.nbNoeud,trait->rid.Yoid);
+	//prChemin(&pointX.chemin);
+
+	if(trait->rid.Yoid == *ppivotId) {
+		ret = ob_flux_fluxMaximum(&pointX.chemin);
+		if(ret) goto fin; // flow undefined or error
+	}
+	//printf("ici\n");
+	newOmega = ob_flux_McheminGetOmega(&pointX.chemin);
+	if (newOmega <= oldOmega)  goto fin;
+	// when pointY.chemin is empty, oldOmega == 0.
+
+	// writes pointX.chemin into points[trait->rid.Yoid]
+	memcpy(&pointX.mo,&pointY.mo,sizeof(ob_tMarqueOffre));
+
+	ret = putAIterator(c_point,&trait->rid.Yoid,&pointX,DB_CURRENT);
+	// the key is ignored
+	if(ret) {obMTRACE(ret); goto fin;}
+
+fin:
+
+	return	ret;
+}
+
+static int _bellman_ford(privt,ppivotId,chemin,i_graph)
 	ob_tPrivateTemp *privt;
+	ob_tId *ppivotId;
 	ob_tChemin *chemin;
 	int i_graph;
-	ob_tLoop	*loop;
+
 {
-	int _iter,ret,ret_t;
+	int _iter,ret;
 	ob_tPoint pointPivot;
-	ob_tTrait trait;
-	ob_tFleche rid;
-	DBT ks_marque,ku_rid,du_trait,ks_pivotId,du_pointPivot;
-	DBC *cm_trait = NULL;
+	ob_tSIterator cm_trait;
+	ob_tAIterator c_point;
+	// DBT  ks_pivotId,du_pointPivot;
 	int _new_graph = i_graph+1;
 
-	obMtDbtS(ks_marque,_new_graph);
-	obMtDbtU(ku_rid,rid);
-	obMtDbtU(du_trait,trait);
-	obMtDbtpS(ks_pivotId,&privt->pivot->oid);
+	initSIterator(&cm_trait,privt->m_traits,
+			sizeof(int),sizeof(ob_tFleche),sizeof(ob_tTrait));
 
-	obMtDbtU(du_pointPivot,pointPivot);
+	initAIterator(&c_point,privt->points,sizeof(ob_tId),sizeof(ob_tPoint));
 
-	ret=privt->m_traits->cursor(privt->m_traits,NULL,&cm_trait,0);
-	if (ret) { obMTRACE(ret); goto fin;}
-	
+
+
 	obMRange(_iter,obCMAXCYCLE) {
-		// [G] for all traits where trait.igraph=_new_graph
-		ks_marque.data = &_new_graph;
-		ret = cm_trait->pget(cm_trait,&ks_marque,&ku_rid,&du_trait,DB_SET);
-		if(!ret) do {
-			ret = _bellman_ford_in(privt,&trait,loop);
+
+		ret = openSIterator(&cm_trait,&_new_graph);
+		if (ret) { obMTRACE(ret); goto fin;}
+
+		while(true) {
+			ob_tTrait trait;
+			ob_tFleche rid;
+
+			ret = nextSIterator(&cm_trait,&rid,&trait);
+			if(ret) {
+				if(ret == DB_NOTFOUND) {ret = 0;break;}
+				obMTRACE(ret); goto fin;
+			}
+
+			ret = _bellman_ford_in(&c_point,ppivotId,&trait);
 			if(ret) goto fin;
-			ret = cm_trait->pget(cm_trait,&ks_marque,&ku_rid,&du_trait,DB_NEXT_DUP);
-		} while(!ret);
-		if (ret == DB_NOTFOUND) ret = 0;
-		else {obMTRACE(ret); goto fin;}
+		}
 	}
 
-	ret = privt->points->get(privt->points,0,&ks_pivotId,&du_pointPivot,0);
-	if (ret) { obMTRACE(ret); goto fin;}
+	ret = getAIterator(&c_point,ppivotId,&pointPivot,DB_SET);
+	if(ret) {obMTRACE(ret); goto fin;} // should be found
+	//printf("Chemin trouve\n");
 	// pivot should be found since it was found by parcours_avant
-
 	memcpy(chemin,&(pointPivot.chemin),ob_flux_cheminGetSize(&pointPivot.chemin));
 
 fin:
-	obMCloseCursor(cm_trait);
-	return(ret);
-}
-
-/*******************************************************************************
-diminuer
-	decreases stocks after a draft has been found
-	if privt->deposOffre, the stock of the pivot is considered
-	else, it is not
-*******************************************************************************/
-static int _diminuer(privt,pchemin)
-	ob_tPrivateTemp *privt;
-	ob_tChemin *pchemin;
-{
-	int _i,nbNoeud,nbStock,ret = 0,ret_t;
-	//ob_tQtt qtt;
-	ob_tStock stock,*pflux;
-	ob_tId _sid,oid;
-	ob_tPoint point;
-	ob_tStock tabFlux[obCMAXCYCLE];
-	DBT ks_sid,du_stock,ds_stock,ku_oid,du_point;
-	DBC *cst_point = NULL;
-	bool _someStockExhausted = false;
-
-
-	obMtDbtS(ks_sid,_sid);
-	obMtDbtU(du_stock,stock);
-	obMtDbtS(ds_stock,stock);
-	obMtDbtU(ku_oid,oid);
-	obMtDbtU(du_point,point);
-
-	ret=privt->st_points->cursor(privt->st_points,NULL,&cst_point,0);
-	if (ret) { obMTRACE(ret); goto fin;}
-
-	nbNoeud = ob_flux_GetTabStocks(pchemin,tabFlux,&nbStock);
-		
-	obMRange(_i,nbStock) {
-		pflux = &tabFlux[_i];
-
-		// when the stock is that of the pivot,
-		// it is never shared with other nodes. The stock is reduced
-		// only if privt->deposOffre, otherwise, it remains empty.
-		if(	(pflux->sid == privt->pivot->stockId)
-			&&	(!privt->deposOffre)) continue;
-
-		// stock <-stocktemps[pflux->sid], should be found
-		ks_sid.data = &pflux->sid;
-		du_stock.data = &stock;
-		ret = privt->stocktemps->get(privt->stocktemps,0,
-				&ks_sid,&du_stock,0);
-		if (ret) {obMTRACE(ret); goto fin;}
-
-		if ( stock.qtt < pflux->qtt) {
-			// the stocktemps[sid] cannot afford this flow
-			ret = ob_point_CerStockNotNeg;obMTRACE(ret);goto fin;
-
-		} else if (stock.qtt > pflux->qtt) {
-			// stocktemps[sid]  updated to stock if it is not empty
-			stock.qtt -= pflux->qtt;
-			ret = privt->stocktemps->put(privt->stocktemps,0,
-				&ks_sid,&ds_stock,0);
-			if(ret) {obMTRACE(ret);goto fin;}
-			continue;
-		} else {
-			/* otherwise, the stock is empty: stock.qtt == pflux->qtt.
-			it is useless to update it, since points and traits that use it
-			will not belong to the next graph.
-			The stock is now empty */
-			_someStockExhausted = true;
-		}
-
-		// all point and traits that use it are deleted
-		// ************************************************************
-		// loop cst_point
-
-		ks_sid.data = &pflux->sid;
-		ku_oid.data = &oid;
-		ret = cst_point->pget(cst_point,
-				&ks_sid,&ku_oid,&du_point,DB_SET);
-		if(!ret) do {
-
-#ifndef NDEBUG // mise au point
-			// elog(INFO,"NDEBUG is undefined"); IT IS UNDEFINED
-			if(point.mo.offre.oid != *((ob_tId*)ku_oid.data))
-			{ret = ob_chemin_CerPointIncoherent;obMTRACE(ret); goto fin;}
-			if(point.mo.offre.stockId != pflux->sid)
-			{ret = ob_chemin_CerPointIncoherent;obMTRACE(ret); goto fin;}
-#endif
-			// all points that touch this point are deleted
-			ret = privt->points->del(privt->points,0,&ku_oid,0);
-			if (ret) {obMTRACE(ret); goto fin;}
-
-			// all traits that touch this point are deleted
-			ret = privt->px_traits->del(privt->px_traits,0,&ku_oid,0);
-			if (ret) {
-				if(ret==DB_NOTFOUND) ret = 0;
-				else {obMTRACE(ret); goto fin;}
-			}
-
-			ret = privt->py_traits->del(privt->py_traits,0,&ku_oid,0);
-			if (ret) {
-				if(ret == DB_NOTFOUND) ret = 0;
-				else {obMTRACE(ret); goto fin;}
-			}
-
-			ret = cst_point->pget(cst_point,&ks_sid,&ku_oid,&du_point,DB_NEXT_DUP);
-		} while (!ret); if(ret == DB_NOTFOUND) ret = 0;
-		else {obMTRACE(ret);goto fin;}
-		// end loop cst_point
-		// ************************************************************
-	}
-	/* if no stock is exhausted, it is not the maximum flow,
-	and the draft would make a len(girth) <= obCMAXCYCLE
-	 */
-	if(!_someStockExhausted) {
-		ret = ob_flux_CerCheminNotMax;obMTRACE(ret); goto fin;
-	}
-fin:
-	obMCloseCursor(cst_point);
-	return(ret);
-}
-static void _voirChemin(ob_tChemin *chemin)	{
-	ob_tMsg msg;
-	int ret;
-
-	msg.begin = NULL;
-	ret = ob_flux_svoirChemin(&msg,chemin,0);
-	if(ret == 0) {
-		elog(INFO,"%s",msg.begin);
-		ob_flux_writeFile(&msg); // pfree is included
-	} else elog(INFO,"Error in ob_flux_svoirChemin");
-	return;
+	ret = closeSIterator(&cm_trait,ret);
+	ret = closeAIterator(&c_point,ret);
+	//if(ret) printf("Err %i à la fin\n",ret);
+	return ret;
 }
 
 
 /*******************************************************************************
-ob_chemin_faire_accords
+int ob_chemin_get_commit(ob_getdraft_ctx *ctx)
 
 It is a bid deposit when pivot->stockId!=0,
 else it is a omega computation.
@@ -817,69 +625,250 @@ for an omega calulation:
 	a special node is created for loop calculation
 	the stock of this node does not limit the flow.
 
-	env
-		environment
-	versionSg
-		the version number of the graph observed
-	nbAccord
-		the size of the array of accords
-	paccord
-		(out) the array of agreements returned
-		this array must be freed when nbAccord!=0
+********************************************************************************
+USAGE:
+	ob_getdraft_ctx ctx;
+
+
+	//  ctx.pivot,ctx.stockPivot are set
+	// in ob_getdraft_getcommit_init_new(&ctx)
+	ctx.i_graph = 0;ctx.i_commit;ctx.end = false;
+
+	while((ret = ob_chemin_get_commit(&ctx)) == 0) {
+		ob_tNo *node  = &ctx->accord.chemin.no[ctx->i_commit];
+		.....
+	}
 *******************************************************************************/
 
-/***************************************************************************************
-* called by ob_getdraft_get_commit and then by ob_getdraft_getcommit_next
-***************************************************************************************/
-int ob_chemin_get_draft_next(ob_getdraft_ctx *ctx) {
-	int ret,_nbSource;
-	ob_tPrivateTemp *privt = ctx->envt->app_private;
+/*******************************************************************************
+ *  ATTENTION
+remplacer int ob_getdraft_get_commit(ob_getdraft_ctx *ctx)
+par ob_chemin_get_commit(ob_getdraft_ctx *ctx)
+et ob_getdraft_getcommit_init()
+par ob_getdraft_getcommit_init_new()
+*******************************************************************************/
+
+void ob_chemin_get_commit_init(ob_getdraft_ctx *ctx) {
+	ctx->state = 0;
+	ctx->envt = NULL;
+}
+static int _get_draft_next(ob_getdraft_ctx *ctx);
+int ob_chemin_get_commit(ob_getdraft_ctx *ctx) {
+	int ret;
+
+	if(ctx->state == 2)
+		return ob_chemin_CerNoDraft;
+
+	if(ctx->state == 1) {
+		ctx->i_commit += 1;
+		if(ctx->i_commit < ctx->accord.chemin.nbNoeud)
+			return 0;
+	}
+
+	ctx->i_commit = 0;
+	ret = _get_draft_next(ctx);
+	if(ret) ctx->state = 2;
+	else ctx->state = 1;
+
+	return ret;
+
+}
+
+/*******************************************************************************
+* ctx->pivot et ctx->stockPivot are set
+* ob_chemin_get_commit_init(ctx) has been called
+*******************************************************************************/
+static int _get_draft_next(ob_getdraft_ctx *ctx) {
+
+	int ret,ret_t,_nbSource;
+	DB_ENV *envt;
+	ob_tPrivateTemp *privt ;
 	ob_tAccord *paccord = &ctx->accord;
 
+	if(ctx->envt == NULL) {
+		envt = NULL;
+		ret = ob_dbe_openEnvTemp(&envt);
+		if (ret) { ctx->envt = NULL; obMTRACE(ret); return ret;}
 
-	if( ctx->nblayer == 0 ) {
+		ctx->envt = envt;
+		privt = envt->app_private;
+
+		ctx->i_graph = 0;
+		privt->cflags = 0;
+		privt->quotaTrait = 1<<15;
+
+		if(ctx->pivot.stockId == 0) {
+			privt->cflags |= ob_flux_CLastIgnore;
+			privt->deposOffre = false;
+		} else  {
+			privt->cflags &= ~ob_flux_CLastIgnore;
+			privt->deposOffre = true;
+		}
+		//elog(INFO,"begin sid=%lli=%lli\n",ctx->pivot.stockId,ctx->stockPivot.sid);
+		ret = _parcours_arriere(envt,&ctx->pivot,
+				&ctx->stockPivot,privt->deposOffre,&privt->versionSg,&_nbSource);
+		if(ret) goto closeEnv;
+		//elog(INFO,"parcours_arriere nbSrc=%i version=%lli\n",_nbSource,privt->versionSg);
+		//printf("fin parcours_arriere,ret==0, nbSrc %i\n",_nbSource);
+
+		if(!_nbSource) {
+			ret = ob_chemin_CerNoDraft;
+			goto closeEnv;
+		}
+	} else {
+		envt = ctx->envt;
+		privt = ctx->envt->app_private;
+		ctx->i_graph = ctx->i_graph + 1;
+	}
+
+	ret = _parcours_avant(privt,&ctx->pivot,ctx->i_graph,&_nbSource);
+	if(ret == ob_chemin_CerNoSource) {
 		ret = ob_chemin_CerNoDraft; // normal termination
-		goto fin;
+		goto closeEnv;
 	}
+	if(ret) goto closeEnv;
+	//elog(INFO,"parcours_avant nbSrc %i\n",_nbSource);
+	//printf("fin parcours_avant nbSrc %i\n",_nbSource);
 
-	// ctx->i_graph starts at 0, incremented at each call
-	// traversal of graph from sources
 
-	ret = _parcours_avant(ctx->envt,ctx->nblayer,ctx->i_graph,&_nbSource,&ctx->loop);
-	if(ret){
-		if(ret != ob_chemin_CerLoopOnOffer) obMTRACE(ret);
-		goto fin;
-	}
-	// elog(INFO,"parcours_avant( nblayer %i,i_graph %i)->nbSource %i",ctx->nblayer,ctx->i_graph,_nbSource);
-
-	if(!_nbSource) {
-		ret = ob_chemin_CerNoDraft; // normal termination
-		goto fin;
-	}
-	paccord->nbSource = _nbSource;
-
-	// elog(INFO,"_bellman_ford()->chemin.cflags %x",paccord->chemin.cflags);
 	// competition on omega
-	ret = _bellman_ford(privt,&paccord->chemin,ctx->i_graph,&ctx->loop);
-	if(ret)	{ obMTRACE(ret);goto fin;
-	}
-
-	//elog(INFO,"_bellman_ford()->chemin.cflags %x",paccord->chemin.cflags);
+	ret = _bellman_ford(privt,&ctx->pivot.oid,&paccord->chemin,ctx->i_graph);
+	if(ret)	goto closeEnv;
 
 	// normal end when the flow is undefined
 	if(!(paccord->chemin.cflags & ob_flux_CFlowDefined)) {
 		ret = ob_chemin_CerNoDraft;
-		goto fin;
+		goto closeEnv;
 	}
 	// an agreement was found
 	paccord->status = DRAFT;
 	paccord->versionSg = privt->versionSg;
-	// _voirChemin(&paccord->chemin);
+	paccord->nbSource = _nbSource;
+	// elog(INFO,"bellman draft found with %i nodes",ob_flux_McheminGetNbNode(&paccord->chemin));
+	//printf("accord found with %i nodes\n",ob_flux_McheminGetNbNode(&paccord->chemin));
 
-	ret = _diminuer(privt,&paccord->chemin);
-	if(ret) {
-		obMTRACE(ret);goto fin;}
+	ret = _diminuer(privt,&paccord->chemin,&ctx->pivot.stockId);
+	return ret;
+
+closeEnv:
+	ret_t = ob_dbe_closeEnvTemp(envt);
+	if (ret_t) obMTRACE(ret_t);
+	ctx->envt = NULL;
+	return ret;
+}
+
+
+/*******************************************************************************
+diminuer
+	decreases stocks after a draft has been found
+	if privt->deposOffre, the stock of the pivot is considered
+	else, it is not
+*******************************************************************************/
+static int _diminuer(privt,pchemin,stockPivotId)
+	ob_tPrivateTemp *privt;
+	ob_tChemin *pchemin;
+	ob_tId* stockPivotId;
+
+{
+	int _i,nbNoeud,nbStock,ret = 0;
+	ob_tStock stock;
+	ob_tId oid;
+	ob_tPoint point;
+	ob_tStock tabFlux[obCMAXCYCLE];
+	bool _someStockExhausted = false;
+	ob_tSIterator cst_point;
+	ob_tAIterator c_stock;
+
+	initSIterator(&cst_point,privt->st_points,
+			sizeof(ob_tId),sizeof(ob_tId),sizeof(ob_tPoint));
+	initAIterator(&c_stock,privt->stocktemps,
+			sizeof(ob_tId),sizeof(ob_tStock));
+	//printf("in _diminuer\n");
+	nbNoeud = ob_flux_GetTabStocks(pchemin,tabFlux,&nbStock);
+	//printf("in _diminuer\n");
+	obMRange(_i,nbStock) {
+		ob_tStock *pflux = &tabFlux[_i];
+
+		// when the stock is that of the pivot,
+		// it is never shared with other nodes. The stock is reduced
+		// only if privt->deposOffre, otherwise, it remains empty.
+		if(	(pflux->sid == *stockPivotId)
+			&&	(!privt->deposOffre)) continue;
+
+		// stock <-stocktemps[pflux->sid], should be found
+		ret = getAIterator(&c_stock,&pflux->sid,&stock,DB_SET);
+		if (ret) {obMTRACE(ret); goto fin;}
+
+		if (stock.qtt != pflux->qtt) {
+			if (stock.qtt > pflux->qtt) {
+				// stocktemps[sid]  updated to stock if it is not empty
+				stock.qtt -= pflux->qtt;
+				ret = putAIterator(&c_stock,&pflux->sid,&stock,DB_CURRENT);
+				if(ret) {obMTRACE(ret);goto fin;}
+				continue; // obMRange
+			} else {
+				// the stocktemps[sid] cannot afford this flow
+				ret = ob_point_CerStockNotNeg;obMTRACE(ret);goto fin;
+			}
+		}
+
+		/* the stock is empty: stock.qtt == pflux->qtt.
+		it is useless to update it, since points and traits that use it
+		will not belong to the next graph.
+		The stock is now empty */
+		_someStockExhausted = true;
+
+
+		// all point and traits that use it are deleted
+		// ************************************************************
+		ret = openSIterator(&cst_point,&pflux->sid);
+		if (ret) { obMTRACE(ret); goto fin;}
+
+		while(true) {
+			DBT *dbt = &cst_point.du_key;
+
+			ret = nextSIterator(&cst_point,&oid,&point);
+			if(ret) {
+				if(ret == DB_NOTFOUND) {ret = 0;break;}
+				obMTRACE(ret); goto fin;
+			}
+
+#ifndef NDEBUG // mise au point
+			// elog(INFO,"NDEBUG is undefined"); IT IS UNDEFINED
+			if(point.mo.offre.oid != *((ob_tId*)dbt->data))
+			{ret = ob_chemin_CerPointIncoherent;obMTRACE(ret); goto fin;}
+			if(point.mo.offre.stockId != pflux->sid)
+			{ret = ob_chemin_CerPointIncoherent;obMTRACE(ret); goto fin;}
+#endif
+			// the point are deleted
+			ret = privt->points->del(privt->points,0,dbt,0);
+			if (ret) {obMTRACE(ret); goto fin;}
+
+			// all traits that touch this point are deleted
+			ret = privt->px_traits->del(privt->px_traits,0,dbt,0);
+			if (ret) {
+				if(ret==DB_NOTFOUND) ret = 0;
+				else {obMTRACE(ret); goto fin;}
+			}
+
+			ret = privt->py_traits->del(privt->py_traits,0,dbt,0);
+			if (ret) {
+				if(ret == DB_NOTFOUND) ret = 0;
+				else {obMTRACE(ret); goto fin;}
+			}
+		}
+		// end loop cst_point
+		// ************************************************************
+	}
+	/* if no stock is exhausted, it is not the maximum flow,
+	and the draft would make a len(girth) <= obCMAXCYCLE
+	 */
+	if(!_someStockExhausted) {
+		ret = ob_flux_CerCheminNotMax;obMTRACE(ret); goto fin;
+	}
 fin:
-	//elog(INFO,"ob_chemin_get_draft_next() ret= %i",ret);
+	ret = closeSIterator(&cst_point,ret);
+	ret = closeAIterator(&c_stock,ret);
+	// obMCloseCursor(cst_point);
 	return ret;
 }

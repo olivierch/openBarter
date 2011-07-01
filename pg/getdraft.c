@@ -122,8 +122,10 @@ iterator ob_getdraft_getcommit
 	ob_getdraft_ctx* ctx = NULL;
 	HeapTuple	*tuple;
 	ctx = ob_getdraft_getcommit_init(tuple,PG_FUNCTION_ARGS)
-	while ((ret = int ob_getdraft_getcommit_next(ctx,&tuple) ) == 0) {
-		use of tuple;
+	if(ctx) {
+		while ((ret = int ob_getdraft_getcommit_next(ctx,&tuple) ) == 0) {
+			use of tuple;
+		}
 	}
 ***************************************************************************************/
 
@@ -131,32 +133,21 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 {
 	ob_getdraft_ctx *ctx;
 	ob_tNoeud	*pivot;
-	ob_tStock 	stock;
-	ob_tPrivateTemp *privt;
-	//int _nblayer,i_graph,ret=0,ret_t,_nbSource,_lo;
+	ob_tStock 	*stock;
 	int ret;
 #ifdef ob_getdraft_PRINTDBG
 	ob_tMsg msg;
 	int retm;
 #endif
-	
+
 	ctx = &openbarter_g.ctx;
 	//ob_utils_timerStart(&openbarter_g.timerPG);
 
-	ctx->i_graph = -1;
 	ctx->tuple_desc = tuple_desc;
-	ctx->end = false;
 
-	if(ob_dbe_resetEnvTemp(&ctx->envt)) {
-		elog(INFO,"could not reset EnvTemp1");
-		return NULL;
-	}
-
-	privt = ctx->envt->app_private;
-	
 	pivot = &ctx->pivot;
+	stock = &ctx->stockPivot;
 
-	privt->pivot 	= pivot;
 	pivot->stockId 	= PG_GETARG_INT64(0);
 	pivot->omega	= PG_GETARG_FLOAT8(1);
 	pivot->nF 		= PG_GETARG_INT64(2);
@@ -166,17 +157,9 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 		goto err;
 	}
 
-	privt->cflags = 0;
-	if(pivot->stockId == 0) { 
-		privt->cflags |= ob_flux_CLastIgnore;
-		privt->deposOffre = false;
-	} else  {
-
-		privt->cflags &= ~ob_flux_CLastIgnore;
-		privt->deposOffre = true;
-
-		stock.sid = pivot->stockId;
-		ret = ob_iternoeud_getStock(&stock);
+	if(pivot->stockId != 0) {
+		stock->sid = pivot->stockId;
+		ret = ob_iternoeud_getStock(stock);
 		if(ret) {
 			if(ret == DB_NOTFOUND) {
 				elog(INFO,"stockId not found");
@@ -184,27 +167,10 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 				elog(INFO,"error %i in ob_iternoeud_getStock",ret);
 			goto err;
 		}
-		pivot->own = stock.own;
+		pivot->own = stock->own;
 	}
+	ob_chemin_get_commit_init(ctx);
 
-	//elog(INFO,"pivotx stockId %016llx nF %llx nR %llx omega %f own %llx oid %llx",pivot->stockId,pivot->nF,pivot->nR,pivot->omega,pivot->own,pivot->oid);
-
-	ret = ob_chemin_parcours_arriere(ctx->envt,NULL,&ctx->nblayer,&stock);
-	if (ret) {
-		elog(INFO,"Error %i in _parcours_arriere",ret);
-		goto err;
-	}
-	//elog(INFO,"parcours_arriere %i layer",ctx->nblayer);
-	ctx->i_graph = -1;
-	goto end;
-
-err:
-	ob_dbe_closeEnvTemp(ctx->envt);
-	ctx->envt = NULL; // Done
-	// pfree(ctx);
-	ctx = NULL;
-
-end:
 #ifdef ob_getdraft_PRINTDBG
 	retm = ob_flux_makeMessage(&msg,"ob_getdraft_get2(%05lli,%6.3f,%03lli,%03lli)\n",
 			pivot->stockId,pivot->omega,pivot->nF,pivot->nR);
@@ -215,6 +181,8 @@ end:
 #endif
 
 	return ctx;
+err:
+	return NULL;
 }
 /***************************************************************************************/
 /* Sets ctx->i_commit to the next index of ctx->accord.chemin.no[]
@@ -222,7 +190,7 @@ end:
  * ctx->i_graph == -1 at the first call
  *
  * Returns an error
- */
+ */ /*
 static int ob_getdraft_get_commit(ob_getdraft_ctx *ctx) {
 	int ret;
 
@@ -236,7 +204,7 @@ static int ob_getdraft_get_commit(ob_getdraft_ctx *ctx) {
 		ret = 0;
 	}
 	return ret;
-}
+} */
 /***************************************************************************************/
 static int ob_getdraft_getcommit_next(ctx,ptuple) 
 	ob_getdraft_ctx *ctx;
@@ -245,7 +213,7 @@ static int ob_getdraft_getcommit_next(ctx,ptuple)
 	int ret = 0;
 	
 	if(ctx == NULL) return -1;
-	
+	/*
 	// the graph is empty,normal termination
 	if (ctx->nblayer == 0) {
 		ret = 1;
@@ -253,8 +221,8 @@ static int ob_getdraft_getcommit_next(ctx,ptuple)
 	}
 	
 	if(ctx->end) return 1;
-
-	ret = ob_getdraft_get_commit(ctx);
+	*/
+	ret = ob_chemin_get_commit(ctx);
 	//elog(INFO,"ob_getdraft_get_commit _graph=%i i_commit=%i",ctx->i_graph,ctx->i_commit);
 	if (ret == 0 ) {
 		ob_tNo *node  = &ctx->accord.chemin.no[ctx->i_commit];
@@ -303,7 +271,7 @@ static int ob_getdraft_getcommit_next(ctx,ptuple)
 		Datum values[12];
 		bool nulls[] = {false,true,true,true,true,false,false,false,true,true,false,true};
 		//elog(INFO,"Xoid=%lli Yoid=%lli",ctx->loop.rid.Xoid,ctx->loop.rid.Yoid);
-		ctx->end = true; // will return 1 the next call.
+		//ctx->end = true; // will return 1 the next call.
 		values[0] = Int64GetDatum(ctx->i_graph);
 		values[5] = Int64GetDatum(ctx->loop.rid.Xoid);
 		values[6] = Int64GetDatum(ctx->loop.rid.Yoid);
@@ -320,7 +288,7 @@ static int ob_getdraft_getcommit_next(ctx,ptuple)
 		ret = -1;
 
 	}
-endloop:
+//endloop:
 	/*
 	ob_dbe_closeEnvTemp(ctx->envt);
 	ctx->envt = NULL; // Done

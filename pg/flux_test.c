@@ -1,7 +1,8 @@
 
-#include <point.h>
+//#include <point.h>
 #include <flux.h>
 #include <tests.h>
+#include <pg_test.h>
 
 typedef struct ob__Stocktest {
 	ob_tId own;
@@ -21,17 +22,7 @@ typedef struct ob__CheminEnv {
 	ob_tNo __no[obCMAXCYCLE];
 } ob_tCheminEnv;
 
-void
-elog_start(const char *filename, int lineno, const char *funcname)
-{
-}
 
-void
-elog_finish(int elevel, const char *fmt,...)
-{
-	fprintf(stderr, "ERROR: %s\n", fmt);
-	exit(1);
-}
 
 static int taille(ob_tNoeudtest *noeuds) {
 	int j = 0;
@@ -216,6 +207,7 @@ test1(const char **msg, bool msg_only, svn_test_opts_t *opts) {
 			OB_NOEUD_NULL };
 	ob_tQtt fluxArrondi[] = { 20, 80, 40 };
 	//	printf("st->%i,->%f\n",noeuds->stockId,noeuds->omega);
+	// elog(INFO,"ici %s","on est la");
 	return test_flux(stocks, noeuds, fluxArrondi, 0);
 }
 

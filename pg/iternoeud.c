@@ -227,8 +227,8 @@ fin:
 ******************************************************************************/
 
 static int _ob_iternoeud_PrepareIterNoeuds2(void) { // called by _SPI_init->_ob_iternoeud_Init()
-	char cmde[] = "SELECT NOX.id,NOX.sid,NOX.omega,NOX.nr,NOX.nf,NOX.own,S.qtt,S.version FROM ob_tnoeud NOX INNER JOIN ob_tstock S ON (NOX.sid =S.id) WHERE NOX.nf=$2 AND S.qtt!=0 and S.type='S'";
-	Oid oids[2];
+	char cmde[] = "SELECT NOX.id,NOX.sid,NOX.omega,NOX.nr,NOX.nf,NOX.own,S.qtt,S.version FROM ob_tnoeud NOX INNER JOIN ob_tstock S ON (NOX.sid =S.id) WHERE NOX.nf=$2 AND S.qtt!=0 and S.type='S' LIMIT $3";
+	Oid oids[3];
 	ob_tGlob *ob = &openbarter_g;
 	const char s_Yid[] = "id";
 	const char s_Ynr[] = "nr";
@@ -239,9 +239,11 @@ static int _ob_iternoeud_PrepareIterNoeuds2(void) { // called by _SPI_init->_ob_
 	if(!oids[0]) goto err;
 	oids[1] = ob_iternoeud_SPI_gettypeid(ob->tupDescNoeud,s_Ynr);
 	if(!oids[1]) goto err;
+	oids[2] = oids[1];
+
 
 	/* prepare plan and save it. */
-	ob->planIterNoeuds2 =  SPI_prepare(cmde,2,oids);
+	ob->planIterNoeuds2 =  SPI_prepare(cmde,3,oids);
 	if(ob->planIterNoeuds2 == NULL) {
 		elog(ERROR, "prepare _ob_iternoeud_PrepareIterNoeuds failure");
 		goto err;
@@ -255,20 +257,24 @@ static int _ob_iternoeud_PrepareIterNoeuds2(void) { // called by _SPI_init->_ob_
 err:
 	return ob_chemin_CerIterNoeudErr;
 }
-Portal ob_iternoeud_GetPortal2(envt,yoid,nr)
+Portal ob_iternoeud_GetPortalA(envt,yoid,nr,limit)
 	DB_ENV *envt;
 	ob_tId  yoid;
 	ob_tId  nr;
+	int limit;
 {
-	char nulls[] = {' ',' '};
-	Datum values[2];
+	char nulls[] = {' ',' ',' '};
+	Datum values[3];
 	Portal portal;
 	SPIPlanPtr planPtr = openbarter_g.planIterNoeuds2;
 	int64  _yoid =(int64) yoid;
 	int64  _nr =(int64) nr;
+	int64 _limit = (int64) limit;
 	
 	values[0] = Int64GetDatum(_yoid);
 	values[1] = Int64GetDatum(_nr);
+	values[2] = Int64GetDatum(_limit);
+
 	// elog(INFO,"yoid=%lli,nr=%lli",_yoid,_nr);
 	if (!SPI_is_cursor_plan(planPtr)) {
 		elog(ERROR,"the cursor is not a plan");
@@ -283,7 +289,7 @@ Portal ob_iternoeud_GetPortal2(envt,yoid,nr)
 	return portal;
 }
 
-int ob_iternoeud_Next2(portal,Xoid,offreX,stock)
+int ob_iternoeud_NextA(portal,Xoid,offreX,stock)
 	Portal portal;
 	ob_tId *Xoid;
 	ob_tNoeud *offreX;

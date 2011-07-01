@@ -96,4 +96,6 @@ enum svn_test_mode_t
 	*msg = mssg; \
 	if (msg_only) return SVN_NO_ERROR
 
+/******************************************************************************/
+
 #endif /* defined__tests_svn_h */

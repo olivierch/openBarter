@@ -10,7 +10,6 @@
 #include <syslog.h>
 
 // includes necessary for replication
-#include <stdlib.h>
 #include <string.h> // memset
 #include <stdio.h> // printf
 #include <pthread.h>
@@ -45,6 +44,9 @@ the error name space from -30,100 to -30,299.
 #define ob_chemin_CerStockEmpty		ob_chemin_CerOff-5
 #define ob_chemin_CerNoDraft	 	ob_chemin_CerOff-6
 #define ob_chemin_CerIterNoeudErr	 ob_chemin_CerOff-7
+#define ob_chemin_LimitReached		ob_chemin_CerOff-8
+#define ob_chemin_CerNoSource		ob_chemin_CerOff-9
+#define ob_chemin_CerStockEpuise	ob_chemin_CerOff-10
 
 #define ob_dbe_CerInit				ob_dbe_CerOff-1
 #define ob_dbe_CenvUndefined			ob_dbe_CerOff-2
@@ -114,10 +116,7 @@ error code offset:
 #define obMRange(v,S) for (v=0;v<(S);v++)
 #define obMMax(a,b) ((a)<(b))?(a):(b)
 
-#ifdef obCTESTCHEM
-//#define obMTRACE(err) svn_tests_trace(ret,__FILE__,__LINE__)
-#define obMTRACE(err) printf("%s:%i error %i:%s\n",__FILE__,__LINE__,(err),db_strerror(err))
-#else
+#ifndef obCTEST
 #define obMTRACE(err) do { \
 	if( -30999 <=err && err <=-30800 ) \
 		ereport(INFO,(errmsg("Error BDB %s:%i err=%i: %s",__FILE__,__LINE__,err,db_strerror(err)))); \
@@ -133,6 +132,7 @@ error code offset:
 #define obCOFPROFONDEUR 3
 #define obCMAXCYCLE (1<<obCOFPROFONDEUR)
 #define obCGIRTH (obCMAXCYCLE+1)
+
 // it is the girth of the graph.
 
 /*********************************************************************
@@ -200,7 +200,15 @@ typedef int64 ob_tQuaId;
 typedef int64 ob_tOwnId;
 
 
+struct ob__Stock;typedef struct ob__Stock ob_tStock;
+struct ob__Noeud;typedef struct ob__Noeud ob_tNoeud;
+struct ob__No;typedef struct ob__No ob_tNo;
+struct ob__Chemin;typedef struct ob__Chemin ob_tChemin;
+struct ob__Msg;typedef struct ob__Msg ob_tMsg;
+
+/*
 #ifdef obCTESTCHEM
+
 typedef struct  {
 	DBC *dbc;
 	bool begin;
@@ -209,15 +217,25 @@ typedef struct  {
 	DB_ENV *envt;
 } ob_cPortal;
 typedef ob_cPortal* ob_tPortal;
+
+#else */
+#ifdef obCTEST
+struct  PortalData {
+	ob_tId yoid,nr;
+	ob_tId limit;
+	ob_tId nbCallNext;
+	ob_tId nbCallArbre;
+}  ;
+typedef struct PortalData *Portal;
+
 #else
-typedef Portal ob_tPortal;
+
+typedef struct PortalData *ob_tPortal;
 #endif
 
-struct ob__Stock;typedef struct ob__Stock ob_tStock;
-struct ob__Noeud;typedef struct ob__Noeud ob_tNoeud;
-struct ob__No;typedef struct ob__No ob_tNo;
-struct ob__Chemin;typedef struct ob__Chemin ob_tChemin;
-struct ob__Msg;typedef struct ob__Msg ob_tMsg;
+//#endif
+
+
 /*
 #define ob_CSIZEID 2
 
@@ -384,8 +402,9 @@ struct ob__PrivateTemp {
 	ob_tId versionSg; // max of stock.version
 	ob_tInterdit interdit; // arc interdit, (ret=obCerLoopOnOffer)
 	ob_tNoeud *pivot;
+	ob_tStock *stockPivot;
+	int quotaTrait; //nbmax of traits
 };
-
 
 
 #endif // defined__common_h

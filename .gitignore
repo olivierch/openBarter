@@ -6,5 +6,8 @@
 pg/.deps/
 pg/results/
 pg/openbarter.sql
+pg/flux_test
+pg/tbdb_test
+pg/bdb/
 logs/
 media/

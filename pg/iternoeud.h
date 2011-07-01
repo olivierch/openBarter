@@ -13,8 +13,8 @@
 void		_PG_init(void);
 void		_PG_fini(void);
 int ob_iternoeud_getStock(ob_tStock *stock);
-Portal ob_iternoeud_GetPortal2(DB_ENV *envt,ob_tId yoid,ob_tId nr);
-int ob_iternoeud_Next2(ob_tPortal portal,ob_tId *Xoid,ob_tNoeud *offreX,ob_tStock *stock);
+Portal ob_iternoeud_GetPortalA(DB_ENV *envt,ob_tId yoid,ob_tId nr,int limit);
+int ob_iternoeud_NextA(ob_tPortal portal,ob_tId *Xoid,ob_tNoeud *offreX,ob_tStock *stock);
 int ob_iternoeud_put_stocktemp3(DB_ENV *envt,ob_tStock *pstock);
 
 int ob_iternoeud_getTupleDesc(const char *table,TupleDesc *ptupdesc);

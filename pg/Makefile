@@ -7,7 +7,7 @@
 #-------------------------------------------------------------------------
 
 MODULE_big = openbarter
-OBJS	= iternoeud.o utils.o dbe.o chemin.o flux.o getdraft.o point.o  appel.o balance.o
+OBJS	= iternoeud.o utils.o dbe.o chemin.o flux.o getdraft.o point.o  appel.o balance.o iterators.o
 SHLIB_LINK +=  $(filter -l%, $(LIBS)) -ldb -lpq -lpthread #  -lpthread  -print-search-dirs
 # CPPFLAGS += -I/home/olivier/project/include
 DATA_built = openbarter.sql 

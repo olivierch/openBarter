@@ -33,10 +33,12 @@ typedef struct {
 	int 	i_commit,i_graph;
 	DB_ENV	*envt;
 	ob_tNoeud	pivot;
+	ob_tStock 	stockPivot;
 	int nblayer;
 	ob_tAccord accord;
 	ob_tLoop	loop;
-	bool	end;
+	//bool	end;
+	int state;
 } ob_getdraft_ctx;
 
 /* Used  by appel.c */

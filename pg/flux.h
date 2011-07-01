@@ -1,7 +1,13 @@
 /* $Id: flux.h 22 2010-01-15 16:00:22Z olivier.chaussavoine $ */
 #ifndef defined__flux_h
 #define defined__flux_h
+//#ifndef TBDB
+#ifndef obCTEST
 #include "openbarter.h"
+#else
+#include "common.h"
+#include "pg_test.h"
+#endif
 
 // #include <stdbool.h>
 #include <stdio.h>
@@ -19,10 +25,10 @@ defined in svn_test_main */
  
 #define ob_flux_McheminGetOmega(pchemin) (pchemin)->prodOmega
 
-#define ob_flux_MMinCYCLE(i) ((((int) i )< obCMAXCYCLE)? ((int) i ) : (obCMAXCYCLE-1) )
-#define ob_flux_McheminGetNbNode(pchemin)  ob_flux_MMinCYCLE((pchemin)->nbNoeud)
-#define ob_flux_McheminGetNbStock(pchemin) ob_flux_MMinCYCLE((pchemin)->nbStock)
-#define ob_flux_McheminGetNbOwn(pchemin)   ob_flux_MMinCYCLE((pchemin)->nbOwn)
+//#define ob_flux_MMinCYCLE(i) ((((int) i )< obCMAXCYCLE)? ((int) i ) : (obCMAXCYCLE-1) )
+#define ob_flux_McheminGetNbNode(pchemin)  ((pchemin)->nbNoeud)
+#define ob_flux_McheminGetNbStock(pchemin) ((pchemin)->nbStock)
+#define ob_flux_McheminGetNbOwn(pchemin)   ((pchemin)->nbOwn)
 
 // points to the place where the first stock node should be inserted
 #define ob_flux_McheminGetAdrFirstStock(pchemin) &((pchemin)->no[0].stock)

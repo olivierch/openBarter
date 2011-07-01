@@ -18,11 +18,16 @@
 
  olivier.chaussavoine@openbarter.org
  */
+#ifdef obCTEST
+#include <stdbool.h>
+#include "common.h"
+#include "pg_test.h"
+#include "chemin_test.h"
+#else
 #include <dbe.h>
 #include "openbarter.h"
-//#include <errno.h>
+#endif
 #include <sys/stat.h>
-//#include <utils.h>
 
 static int point_get_nX(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
 static int point_get_nY(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
@@ -44,7 +49,7 @@ static void errcallback(const DB_ENV *dbenv, const char *errpfx,
 
 static int openBasesTemp(DB_ENV *envt);
 static int closeBasesTemp(ob_tPrivateTemp *privt);
-static int truncateBasesTemp(ob_tPrivateTemp *privt);
+int truncateBasesTemp(ob_tPrivateTemp *privt);
 
 /******************************************************************************
  directory creation
@@ -80,21 +85,18 @@ int ob_dbe_dircreate(char * path) {
  * return 0 or an error
  *******************************************************************************/
 
-/*
-static void *_palloc(Size size) {
-	return palloc(size);
-}
-*/
+
 int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 	int ret = 0, ret_t;
 	DB_ENV *envt = NULL;
 	u_int32_t  _flagsenv;
 	ob_tPrivateTemp *privt;
+	char *pathEnv;
 
 	ret = ob_makeEnvDir(openbarter_g.pathEnv);
 	// elog(INFO,"Create envtemp in %s",openbarter_g.pathEnv);
 	if(ret) return(ob_dbe_CerDirErr);
-
+	pathEnv = openbarter_g.pathEnv;
 	ret = db_env_create(&envt, 0);
 	if (ret) {
 		obMTRACE(ret);
@@ -134,7 +136,7 @@ int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 	 *	are expected to access the environment, the DB_PRIVATE flag should not be specified.
 	 */
 	_flagsenv = DB_CREATE | DB_INIT_MPOOL | DB_PRIVATE;
-	ret = envt->open(envt, openbarter_g.pathEnv, _flagsenv, 0);
+	ret = envt->open(envt, pathEnv, _flagsenv, 0);
 	if (ret) {
 		obMTRACE(ret);
 		goto abort;
@@ -187,7 +189,9 @@ int ob_dbe_closeEnvTemp(DB_ENV *envt) {
 	if (ret_t != 0 && ret == 0)
 		ret = ret_t;
 	// elog( ERROR,"Appel de ob_rmPath avec %s",openbarter_g.pathEnv );
+
 	ob_rmPath(openbarter_g.pathEnv,true);
+
 	return ret;
 }
 
@@ -392,6 +396,24 @@ fin:
 	return (ret);
 }
 /******************************************************************************/
+/*
+#ifdef TBDB
+#define ob_dbe_MCloseBase(base) if ((base)!=NULL){ \
+		int ret_t; \
+		ret_t = (base)->close((base),0); \
+		if( ret_t) { \
+			if(!ret) ret = ret_t; \
+		} \
+		(base) = NULL; \
+	}
+#define ob_dbe_MTruncateBase(base) if ((base)!=NULL) { \
+		int ret_t; u_int32_t cnt; \
+		ret_t = (base)->truncate((base),NULL,&cnt,0); \
+		if( ret_t) { \
+			if(!ret) ret = ret_t; \
+		} \
+	}
+#else */
 #define ob_dbe_MCloseBase(base) do { int ret_t; if ((base)!=NULL){ \
 		ret_t = (base)->close((base),0); \
 		if( ret_t) { \
@@ -407,6 +429,7 @@ fin:
 		} \
 	} else elog(ERROR,"batabase is null - could not truncate"); \
 	} while(0)
+// #endif
 /******************************************************************************/
 /******************************************************************************/
 static int closeBasesTemp(ob_tPrivateTemp *privt) {
@@ -438,7 +461,7 @@ static int closeBasesTemp(ob_tPrivateTemp *privt) {
  * when the main table is truncated, associated indexes are also truncated
  *
  */
-static int truncateBasesTemp(ob_tPrivateTemp *privt) {
+int truncateBasesTemp(ob_tPrivateTemp *privt) {
 	int ret = 0;
 
 	if (!privt) {
@@ -456,12 +479,16 @@ static int truncateBasesTemp(ob_tPrivateTemp *privt) {
  *******************************************************************************/
 static void errcallback(const DB_ENV *dbenv, const char *errpfx,
 		const char *msg) {
-
+/*
 #ifdef obCTESTCHEM
 	fprintf(stderr, "ob>%s> %s\n", errpfx, msg);
 #else
+#ifdef TBDB
+	printf("ob>%s> %s\n", errpfx, msg);
+#else */
 	elog(ERROR, "ob>%s> %s\n", errpfx, msg);
-#endif
+//#endif
+//#endif
 	return;
 }
 
