@@ -1,0 +1,26 @@
+dans les fichiers C
+*******************
+chemin.c
+si TBDB	stdbool.h,common.h,flux.h,iterators.h,chemin_test.h
+sinon 	chemin.h,common.h,flux.h,iterators.h,iternoeud.h,dbe.h
+
+dans les fichier H
+******************
+chemin.h contient
+	openbarter.h,point.h,getdraft.h
+	
+iternoeud.h n'inclut rien
+
+common.h contient:
+	assert.h,stdlib.h,syslog.h,stdlib.h,string.h,stdio.h,pthread.h,stdarg.h,db.h
+
+openbarter.h contient:
+	postgres.h,db.h,funcapi.h,executor/spi.h,common.h,../interfaces/libqp/libqp-fe.h,utils/timestamp.h
+	
+balance.h n'inclut rien,
+il utilise struct ob_ConnectDesc definie dans openbarter.h
+
+chemin_test.h n'inclut rien
+
+dbe.h inclut openbarter.h
+
