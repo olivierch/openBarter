@@ -136,6 +136,8 @@ static svn_error_t * test_flux(stocks, noeuds, fluxArrondi, flags)
 	ob_tNoeud *_noeuds;
 	ob_tLoop loop;
 
+	openbarter_g.maxCommit =obCMAXCYCLE;
+
 	pchem = &envchemin.chemin;
 
 	setStockNoeud(&err, stocks, noeuds, &_stocks, &_noeuds, &_len);

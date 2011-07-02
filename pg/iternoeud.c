@@ -1,5 +1,7 @@
 
+
 #include "openbarter.h"
+#include <utils/guc.h>
 #include "iternoeud.h"
 #include "point.h"
 // #include "funcapi.h"
@@ -14,7 +16,7 @@
 static int _ob_iternoeud_PrepareGetStock(void);
 //static int _ob_iternoeud_PrepareIterNoeuds(void);
 static int _ob_iternoeud_PrepareIterNoeuds2(void);
-static int _ob_iternoeud_Init(void);
+
 
 /********************************************************************
  * general utilities
@@ -59,17 +61,68 @@ Oid ob_iternoeud_SPI_gettypeid(const TupleDesc rowdesc, const char * colname) {
 	return oid;
 
 }
-/*****************************************************************
-init
- *****************************************************************/
+/*******************************************************************************
+init guc in postgres.conf
+
+********************************************************************************
+shared_preload_libraries = 'openbarter'
+
+custom_variable_classes = 'openbarter'
+#------------------------------------------------------------------------------
+# OPENBARTER
+#------------------------------------------------------------------------------
+openbarter.cachesize = 16MB	# more than 1MB
+openbarter.maxarrow = 32768		# 32*1024
+openbarter.maxcommit = 8
+
+ ******************************************************************************/
+static void _obinit_guc(void) {
+
+	/* Define custom GUC variables. */
+	DefineCustomIntVariable("openbarter.cachesize",
+		 "Sets the cache size of berkeley database.",
+						 "Sets the cache size of berkeley database.",
+							&openbarter_g.cacheSizeKb,
+							16*1024,
+							1024, INT_MAX,
+							PGC_SUSET,
+							GUC_UNIT_KB,
+							NULL,
+							NULL);
+
+	DefineCustomIntVariable("openbarter.maxarrow",
+		 "Sets the maximum number of arrow.",
+						 "Sets the maximum number of arrow of the graph of bids.",
+							&openbarter_g.maxArrow,
+							32*1024,
+							128, INT_MAX,
+							PGC_SUSET,
+							0,
+							NULL,
+							NULL);
+
+	DefineCustomIntVariable("openbarter.maxcommit",
+		 "Sets the maximum number of commits in agreement.",
+						 "Sets the maximum number of commits in agreement.",
+							&openbarter_g.maxCommit,
+							obCMAXCYCLE,
+							3, obCMAXCYCLE,
+							PGC_SUSET,
+							0,
+							NULL,
+							NULL);
+
+	EmitWarningsOnPlaceholders("openbarter");
+
+}
 void		_PG_init(void) {
-	int ret;
+	//int ret;
 
 	memset(&openbarter_g,0,sizeof(ob_tGlob));
+	_obinit_guc(); /*
 	ret = _ob_iternoeud_Init();
 	if(ret) elog(ERROR,"_PG_init() failed");
-	//elog(INFO,"on est passé par _PG_init()");
-	ob_getdraft_init();
+	ob_getdraft_init(); */
 
 	return;
 }
@@ -80,7 +133,7 @@ void		_PG_fini(void) {
  *  to be called once before
  *  		ob_iternoeud_getStock or ob_iternoeud_GetPortal
  *****************************************************************/
-static int _ob_iternoeud_Init(void) {
+int ob_iternoeud_Init(void) {
 	int failed = 1,ret;
 	bool connected = false;
 	ob_tGlob *ob = &openbarter_g;
@@ -103,6 +156,7 @@ err:
 		if(ret != SPI_OK_FINISH) elog(INFO,":SPI_finish() -> %i",ret);
 	}
 	if(failed) elog(ERROR,"_ob_iternoeud_Init failed");
+
 	return failed;
 }
 

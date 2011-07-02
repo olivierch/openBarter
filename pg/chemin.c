@@ -142,12 +142,11 @@ fin:
 	return ret;
 }
 /*******************************************************************************/
-static int _getLimit(int quotaTrait,int layer,int nbTrait,int* nbNoeudLayer) {
+static int _getLimit(int layer,int nbTrait,int* nbNoeudLayer) {
 	int limit;
-	//int quotaMax = 1<<15;
 
-	limit = quotaTrait - nbTrait;
-	*nbNoeudLayer =0;
+	limit = openbarter_g.maxArrow - nbTrait;
+	*nbNoeudLayer = 0;
 	if(limit <=0) return 0;
 	return limit;
 }
@@ -182,16 +181,16 @@ int _parcours_arriere(envt,pivot,stockPivot,deposOffre,versionSg,pnbSrc)
 	if(ret) {obMTRACE(ret); goto fin;}
 
 	/**************************************************************************
-	 *  [A] while layer<obCMAXCYCLE and layer non empty                        */
+	 *  [A] while layer<openbarter_g.maxCommit and layer non empty                        */
 	layer = 0;
 	nbSrc = 0;
 	nbNoeudLayer = 1;
-	while(layer < obCMAXCYCLE) { // [A]
+	while(layer < openbarter_g.maxCommit) { // [A]
 		bool layerX_empty = true;// reset when some points are on layer+1
 		ob_tMar marqueYar;
 
 		layer +=1;
-		// layer in [1,obCMAXCYCYLE]
+		// layer in [1,openbarter_g.maxCommit]
 		/***********************************************************************
 		loop [B] for all (moY,pointY) having
 			(pointY.mo.ar.layer,pointY.mo.ar.igraph) == (layer,0)   	       */
@@ -205,7 +204,7 @@ int _parcours_arriere(envt,pivot,stockPivot,deposOffre,versionSg,pnbSrc)
 		while(true) { // [B]
 			ob_tId Yoid;
 			ob_tMarqueOffre moY;
-			int limit;
+			int limit,cnt_cvy_OffreX;
 
 			ret = nextSIterator(&cmar_pointY,&Yoid,&moY);
 			if(ret) {
@@ -219,12 +218,13 @@ int _parcours_arriere(envt,pivot,stockPivot,deposOffre,versionSg,pnbSrc)
 			[C] ALL (offreX,Xoid,stock)
 			 * 		such as offreX.nF =moY.offre.nR and stock.qtt != 0         */
 
-			limit = _getLimit(privt->quotaTrait,layer,nbTrait,&nbNoeudLayer);
+			limit = _getLimit(layer,nbTrait,&nbNoeudLayer);
 			//printf("limit %i,nF %lli\n",limit,moY.offre.nR);
-			cvy_offreX = ob_iternoeud_GetPortalA(envt,Yoid,moY.offre.nR,limit);
+			cvy_offreX = ob_iternoeud_GetPortalA(envt,Yoid,moY.offre.nR,limit+1);
 			if( cvy_offreX == NULL)  {
 				ret = ob_chemin_CerIterNoeudErr;obMTRACE(ret);goto fin;
 			}
+			cnt_cvy_OffreX = 0;
 			while(true) { // [C]
 				ob_tId Xoid;
 				ob_tMarqueOffre moX;
@@ -235,9 +235,12 @@ int _parcours_arriere(envt,pivot,stockPivot,deposOffre,versionSg,pnbSrc)
 				if( ret != 0 ) {
 					// printf("ret=%i\n",ret);
 					if(ret == DB_NOTFOUND) { ret=0; break; }
-					if( ret == ob_chemin_LimitReached) break;
 					obMTRACE(ret); goto fin;
 				}
+				if(cnt_cvy_OffreX == limit+1) {
+					ret = ob_chemin_LimitReached; break;
+				}
+				cnt_cvy_OffreX += 1;
 				// printf("layer=%i X %lli->Y %lli\n",layer,Xoid,Yoid);
 				//printf("found Xoid %lli,nR %lli\n",Xoid,offreX.nR);
 				if( Xoid != pivot->oid ) { // traits[pivot->source] not inserted
@@ -573,7 +576,7 @@ static int _bellman_ford(privt,ppivotId,chemin,i_graph)
 
 
 
-	obMRange(_iter,obCMAXCYCLE) {
+	obMRange(_iter,openbarter_g.maxCommit) {
 
 		ret = openSIterator(&cm_trait,&_new_graph);
 		if (ret) { obMTRACE(ret); goto fin;}
@@ -695,7 +698,7 @@ static int _get_draft_next(ob_getdraft_ctx *ctx) {
 
 		ctx->i_graph = 0;
 		privt->cflags = 0;
-		privt->quotaTrait = 1<<15;
+		// privt->quotaTrait = 1<<15;
 
 		if(ctx->pivot.stockId == 0) {
 			privt->cflags |= ob_flux_CLastIgnore;

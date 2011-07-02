@@ -403,7 +403,6 @@ struct ob__PrivateTemp {
 	ob_tInterdit interdit; // arc interdit, (ret=obCerLoopOnOffer)
 	ob_tNoeud *pivot;
 	ob_tStock *stockPivot;
-	int quotaTrait; //nbmax of traits
 };
 
 

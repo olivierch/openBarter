@@ -90,10 +90,12 @@ int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 	int ret = 0, ret_t;
 	DB_ENV *envt = NULL;
 	u_int32_t  _flagsenv;
+
+
 	ob_tPrivateTemp *privt;
 	char *pathEnv;
 
-	ret = ob_makeEnvDir(openbarter_g.pathEnv);
+	ret = ob_makeEnvDir(&openbarter_g);
 	// elog(INFO,"Create envtemp in %s",openbarter_g.pathEnv);
 	if(ret) return(ob_dbe_CerDirErr);
 	pathEnv = openbarter_g.pathEnv;
@@ -111,11 +113,28 @@ int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 		obMTRACE(ret);
 		goto abort;
 	} */
-	// the size of the in memory cache
-	ret = envt->set_cachesize(envt, 0, ob_dbe_CCACHESIZETEMP, 1);
-	if (ret) {
-		obMTRACE(ret);
-		goto abort;
+	{
+		//int nbcache;
+		u_int32_t gby,by; //,rgby,rby;
+		/* the size of the in memory cache is openbarter_g.cacheSizeKb << 10
+		guc variable openbarter_g.cacheSizeKb set to 16*1024
+		it cannot be set in postgres.conf when the module is loaded at server start*/
+		//elog(INFO,"size of cache %i",openbarter_g.cacheSizeKb);
+		gby = openbarter_g.cacheSizeKb >> (32-10);
+		by = openbarter_g.cacheSizeKb << 10;
+		// number of Giga bytes,of bytes ,of cache
+		ret = envt->set_cachesize(envt, gby, by, 1);
+		if (ret) {
+			obMTRACE(ret);
+			goto abort;
+		}
+		/*
+		ret = envt->get_cachesize(envt,&rgby,&rby,&nbcache);
+		if (ret) {
+			obMTRACE(ret);
+			goto abort;
+		}
+		elog(INFO,"bdb cache %i bytes,%i gbytes",rby,rgby); */
 	}
 	/* DB_INIT_MPOOL (docs/api_reference/C/envopen.html#open_DB_INIT_MPOOL)
 	 * 	Initialize the shared memory buffer pool subsystem.

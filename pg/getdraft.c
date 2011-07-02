@@ -24,7 +24,6 @@ PG_MODULE_MAGIC;
 
 ob_tGlob openbarter_g;
 
-int ob_getdraft_init(void);
 Datum ob_getdraft_get(PG_FUNCTION_ARGS);
 
 /***************************************************************************************
@@ -41,9 +40,6 @@ sql declaration:
 static int ob_getdraft_getcommit_next(ob_getdraft_ctx *ctx,HeapTuple *ptuple);
 static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCTION_ARGS);
 
-int ob_getdraft_init(void) {
-	return 0;
-}
 
 /*
 
@@ -78,6 +74,13 @@ Datum ob_getdraft_get(PG_FUNCTION_ARGS) { // FunctionCallInfo fcinfo
 
 		MemoryContext oldcontext;
 		TupleDesc tupdesc;
+		ob_tGlob *ob = &openbarter_g;
+
+		if(!ob->initialized) {
+			if(ob_iternoeud_Init())
+				elog(ERROR,"ob_iternoeud_Init error");
+			ob->initialized = true;
+		}
 
 		//elog(INFO,"ob_getdraft_get first call");
 

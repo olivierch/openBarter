@@ -401,10 +401,10 @@ int ob_flux_cheminAjouterNoeud(ob_tChemin *pchemin, const ob_tStock *pstock,
 		_ret = ob_flux_CerNoeudNotStock;
 		return _ret;
 	}
-	/* pchemin->nbNoeud<=obCMAXCYCLE after increment,
-	 * hence <obCMAXCYCLE before.
+	/* pchemin->nbNoeud<=openbarter_g.maxCommit after increment,
+	 * hence <openbarter_g.maxCommit before.
 	 */
-	if (pchemin->nbNoeud >= obCMAXCYCLE) { 
+	if (pchemin->nbNoeud >= openbarter_g.maxCommit) {
 		_ret = ob_flux_CerCheminTropLong;
 		return _ret;
 	}
@@ -670,16 +670,19 @@ double ob_flux_cheminGetOmega(ob_tChemin *pchemin) {
 int ob_flux_cheminGetNbNode(ob_tChemin *pchemin) {
 	int i;
 	i = (int) pchemin->nbNoeud;
+	if(i>=obCMAXCYCLE) elog(ERROR,"nbNode of chemin too long");
 	return ((i < obCMAXCYCLE) ? i : obCMAXCYCLE);
 }
 int ob_flux_cheminGetNbStock(ob_tChemin *pchemin) {
 	int i;
 	i = (int) pchemin->nbStock;
+	if(i>=obCMAXCYCLE) elog(ERROR,"nbStock of chemin too long");
 	return ((i < obCMAXCYCLE) ? i : obCMAXCYCLE);
 }
 int ob_flux_cheminGetNbOwn(ob_tChemin *pchemin) {
 	int i;
 	i = (int) pchemin->nbOwn;
+	if(i>=obCMAXCYCLE) elog(ERROR,"nbOwn of chemin too long");
 	return ((i < obCMAXCYCLE) ? i : obCMAXCYCLE);
 }
 // adress of the node[io]

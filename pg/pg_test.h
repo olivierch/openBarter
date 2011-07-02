@@ -78,18 +78,11 @@ int FreeFile(FILE *file);
 struct ob__Glob;
 typedef struct ob__Glob ob_tGlob;
 struct ob__Glob {
-	/*DB_ENV *envt;
-	TupleDesc tupDescQuality;
-	TupleDesc tupDescStock;
-	TupleDesc tupDescNoeud;
-	SPIPlanPtr planIterNoeuds2;
-	SPIPlanPtr planGetStock;*/
 	char pathEnv[MAXPGPATH];
-	/*ob_getdraft_ctx ctx;
-	ob_appel_ctx	actx; */
-	//ob_tTimer timerPG;
-	//ob_tTimer timerBDB;
+	int	cacheSizeKb; // number of kBytes
+	int maxArrow;
+	int maxCommit;
 };
-ob_tGlob openbarter_g;
+extern ob_tGlob openbarter_g;
 int ob_rmPath(char *path,bool also_me);
 #endif /* PG_TEST_H_ */

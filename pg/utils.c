@@ -19,11 +19,11 @@ static int ob_makeEnvDir_int(char *direnv);
 
 /* creates a directory DataDir/openbarter/pid
  * direnv should be a char[MAXPGPATH] */
-int ob_makeEnvDir(char *direnv)
+int ob_makeEnvDir(ob_tGlob *glob)
 {
 	int ret;
 	pid_t pid;
-	char pid_str[32];
+	char pid_str[32],*direnv = glob->pathEnv;
 
 	join_path_components(direnv,DataDir,"openbarter");
 	ret = ob_makeEnvDir_int(direnv);
@@ -104,7 +104,7 @@ static int ob_makeEnvDir_int(char *direnv)
 				(errmsg("creating missing directory \"%s\"", direnv))); */
 		if (mkdir(direnv, 0700) < 0) {
 			ereport(ERROR,
-					(errmsg("could not create missing directory \"%s\": %m",
+					(errmsg("could not create missing directory \"%s\" ",
 							direnv)));
 			ret = -2;
 		}

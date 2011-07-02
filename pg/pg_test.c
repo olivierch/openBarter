@@ -13,8 +13,11 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+// #include "common.h"
 //
 #include "pg_test.h"
+
+ob_tGlob openbarter_g;
 
 void
 elog_start(const char *filename, int lineno, const char *funcname)
@@ -63,18 +66,18 @@ int ob_rmPath(char *path,bool also_me)
 	return 0;
 }
 
-int ob_makeEnvDir(char *direnv,bool alsome)
+int ob_makeEnvDir(ob_tGlob* glob)
 {
 	struct stat stat_buf;
 	int ret = 0;
 
-	strcpy(direnv,"./bdb");
-	if (stat(direnv, &stat_buf) == 0)
+	strcpy(glob->pathEnv,"./bdb");
+	if (stat(glob->pathEnv, &stat_buf) == 0)
 	{
 		/* Check for weird cases where it exists but isn't a directory */
 		if (!S_ISDIR(stat_buf.st_mode)) {
 			elog(ERROR,"required directory \"%s\" does not exist",
-							direnv);
+					glob->pathEnv);
 			ret = -1;
 		}
 	}
@@ -84,11 +87,15 @@ int ob_makeEnvDir(char *direnv,bool alsome)
 		// this message is reported to server but not to client, prefix LOG
 		ereport(LOG,
 				(errmsg("creating missing directory \"%s\"", direnv))); */
-		if (mkdir(direnv, 0700) < 0) {
+		if (mkdir(glob->pathEnv, 0700) < 0) {
 			elog(ERROR,"could not create missing directory \"%s\" ",
-							direnv);
+					glob->pathEnv);
 			ret = -2;
 		}
 	}
+	// guc normally set by _obinit_guc in iternoeud.c
+	glob->cacheSizeKb = 16*1024;
+	glob->maxArrow = 1<<15;
+	glob->maxCommit = 8; // MUST be equal to obCMAXCYCLE
 	return ret;
 }

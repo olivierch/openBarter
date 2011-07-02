@@ -64,12 +64,18 @@ struct ob__Glob {
 	char pathEnv[MAXPGPATH];
 	ob_getdraft_ctx ctx;
 	ob_appel_ctx	actx;
+
+	// guc variables
+	int	cacheSizeKb; // guc - number of kBytes
+	int maxArrow;
+	int maxCommit;
+	bool initialized;
 	//ob_tTimer timerPG;
 	//ob_tTimer timerBDB;
 };
 
 // utils.c
-extern int ob_makeEnvDir(char *direnv);
+extern int ob_makeEnvDir(ob_tGlob *ob);
 extern int ob_rmPath(char *path,bool also_me);
 extern int ob_utils_Init(ob_tGlob *ob);
 extern int ob_utils_PrepareIterNoeuds(ob_tGlob *ob);

@@ -12,6 +12,7 @@
 
 void		_PG_init(void);
 void		_PG_fini(void);
+int ob_iternoeud_Init(void);
 int ob_iternoeud_getStock(ob_tStock *stock);
 Portal ob_iternoeud_GetPortalA(DB_ENV *envt,ob_tId yoid,ob_tId nr,int limit);
 int ob_iternoeud_NextA(ob_tPortal portal,ob_tId *Xoid,ob_tNoeud *offreX,ob_tStock *stock);

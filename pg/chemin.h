@@ -7,6 +7,8 @@
 
 int ob_chemin_parcours_arriere(DB_ENV *envt,ob_tNoeud *pivot,
 		ob_tStock *stockPivot,bool deposOffre,ob_tId *versionSg);
+int _parcours_arriere(DB_ENV *envt,ob_tNoeud *pivot,ob_tStock *stockPivot,
+		bool deposOffre,ob_tId *versionSg,int* pnbSrc);
 int _parcours_avant(ob_tPrivateTemp *privt,ob_tNoeud *pivot,
 		int i_graph,int *nbSource);
 void ob_chemin_get_commit_init(ob_getdraft_ctx *ctx);
