@@ -332,7 +332,7 @@ static int _src_move_to_new(ob_tPrivateTemp *privt,ob_tSIterator *cmav_point,
 	*nbSource = 0;
 	ret = openSIterator(cmav_point,&marqueXav);
 	if(ret) {obMTRACE(ret); return ret;}
-
+	//elog(INFO,"Find source on igraph=%i.",i_graph);
 	while(true) {
 
 		ret = nextSIterator(cmav_point,&Xoid,&pointX);
@@ -340,6 +340,7 @@ static int _src_move_to_new(ob_tPrivateTemp *privt,ob_tSIterator *cmav_point,
 			if(ret == DB_NOTFOUND) return 0;
 			else {obMTRACE(ret); return ret;}
 		}
+		//elog(INFO,"Xoid %lli is source.",Xoid);
 		//printf("Xoid %lli is source.\n",Xoid);
 		pointX.mo.av.igraph = i_graph+1;
 		pointX.mo.av.layer = 1;

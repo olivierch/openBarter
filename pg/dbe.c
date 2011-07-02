@@ -261,7 +261,6 @@ static int open_db(DB_ENV *env, bool is_secondary, DB *db, char *name,
 			obMTRACE(ret);
 			goto err;
 		}
-		_flags = _flags & ~DB_TRUNCATE;
 	}
 
 	/* DB->open(DB *db, DB_TXN *txnid, const char *file, const char *database, DBTYPE type, u_int32_t flags, int mode);

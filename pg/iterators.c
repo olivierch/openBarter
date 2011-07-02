@@ -96,7 +96,7 @@ int nextSIterator(ob_tSIterator *iter,void *key,void *data) {
 	if(iter->error) return iter->error;
 
 	if(iter->cursor == NULL || (iter->state == 0)) {
-		printf("state %i\n",iter->state);
+		//printf("state %i\n",iter->state);
 		iter->error = ob_chemin_CerIterNoeudErr;
 		return ob_chemin_CerIterNoeudErr;
 	}
@@ -121,8 +121,14 @@ int nextSIterator(ob_tSIterator *iter,void *key,void *data) {
 #endif
 
 	ret = iter->cursor->pget(iter->cursor,&iter->ks_skey,&iter->du_key,&iter->du_data,flags);
-	if(ret == DB_NOTFOUND) { // || ret == DB_SECONDARY_BAD) {
-		ret = DB_NOTFOUND;
+
+	if(ret) {
+		if(ret == DB_NOTFOUND) { // || ret == DB_SECONDARY_BAD) {
+			ret = DB_NOTFOUND;
+			return closeSIterator(iter,ret);
+		}
+		elog(LOG,"error %i",ret);
+		iter->error = ret;
 		return closeSIterator(iter,ret);
 	}
 
@@ -136,11 +142,6 @@ int nextSIterator(ob_tSIterator *iter,void *key,void *data) {
 	}
 #endif
 
-	if(ret) {
-		elog(LOG,"error %i",ret);
-		iter->error = ret;
-		return closeSIterator(iter,ret);
-	}
 	return 0;
 }
 /* AIterator
