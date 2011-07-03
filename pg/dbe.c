@@ -28,6 +28,40 @@
 #include "openbarter.h"
 #endif
 #include <sys/stat.h>
+/*
+TABLES
+******
+* traits
+	struct ob__Trait { // traits[rid]
+		ob_tFleche rid; (Xoid,Yoid)
+		int igraph;
+	};
+	INDEX:
+	px_traits,trait_get_Xoid index sur Xoid
+	py_traits,trait_get_Yoid index sur Yoid
+	m_traits,trait_get_marque index sur igraph
+
+* points
+	struct ob__Point {
+		ob_tMarqueOffre mo;
+		ob_tChemin chemin;
+		ob_tNo	__no[obCMAXCYCLE];
+	};
+	struct ob__MarqueOffre {
+		ob_tNoeud offre; (oid,stockId,omega,nR,nF,own)
+		ob_tMar ar; (layer,igraph)
+		ob_tMar av; (layer,igraph)
+	};
+	INDEX:
+	vx_points,point_get_nX index on mo.offre.nF
+	vy_points,point_get_nY index on mo.offre.nR
+	st_points,point_get_stockId, index on mo.offre.stockId
+	mar_points,point_get_mar index on mo.ar
+	mav_points,point_get_mav index on mo.av
+
+* stocktemps
+
+*/
 
 static int point_get_nX(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
 static int point_get_nY(DB *sdbp, const DBT *pkey, const DBT *pdata, DBT *skey);
