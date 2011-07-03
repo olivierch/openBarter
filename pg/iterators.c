@@ -287,3 +287,13 @@ int iterators_idGet(DB *db,void *key,void *data,size_t size_data,u_int32_t flags
 
 	return db->get(db, 0,&dbt[0], &dbt[1], flags);
 }
+
+int iterators_idDel(DB *db,void *key,size_t size_key) {
+	DBT dbt;
+
+	memset(&dbt,0,sizeof(DBT));
+	dbt.size = size_key;
+	dbt.data = key;
+
+	return db->del(db,0,&dbt,0);
+}

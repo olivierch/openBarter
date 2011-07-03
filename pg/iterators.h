@@ -37,6 +37,6 @@ int putAIterator(ob_tAIterator *iter,void *key,void *data,u_int32_t flags);
 
 int iterators_idPut(DB *db,void *key,void *data,size_t size_data,u_int32_t flags);
 int iterators_idGet(DB *db,void *key,void *data,size_t size_data,u_int32_t flags);
-
+int iterators_idDel(DB *db,void *key,size_t size_data);
 
 #endif /* ITERATORS_H_ */

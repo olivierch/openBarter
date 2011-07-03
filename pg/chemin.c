@@ -829,7 +829,7 @@ static int _diminuer(privt,pchemin,stockPivotId)
 		if (ret) { obMTRACE(ret); goto fin;}
 
 		while(true) {
-			DBT *dbt = &cst_point.du_key;
+			//DBT *dbt = &cst_point.du_key;
 
 			ret = nextSIterator(&cst_point,&oid,&point);
 			if(ret) {
@@ -839,23 +839,26 @@ static int _diminuer(privt,pchemin,stockPivotId)
 
 #ifndef NDEBUG // mise au point
 			// elog(INFO,"NDEBUG is undefined"); IT IS UNDEFINED
-			if(point.mo.offre.oid != *((ob_tId*)dbt->data))
+			if(point.mo.offre.oid != oid) //*((ob_tId*)dbt->data))
 			{ret = ob_chemin_CerPointIncoherent;obMTRACE(ret); goto fin;}
 			if(point.mo.offre.stockId != pflux->sid)
 			{ret = ob_chemin_CerPointIncoherent;obMTRACE(ret); goto fin;}
 #endif
 			// the point are deleted
-			ret = privt->points->del(privt->points,0,dbt,0);
+			ret = iterators_idDel(privt->points,&oid,sizeof(ob_tId));
+			// ret = privt->points->del(privt->points,0,dbt,0);
 			if (ret) {obMTRACE(ret); goto fin;}
 
 			// all traits that touch this point are deleted
-			ret = privt->px_traits->del(privt->px_traits,0,dbt,0);
+			ret = iterators_idDel(privt->px_traits,&oid,sizeof(ob_tId));
+			//ret = privt->px_traits->del(privt->px_traits,0,dbt,0);
 			if (ret) {
 				if(ret==DB_NOTFOUND) ret = 0;
 				else {obMTRACE(ret); goto fin;}
 			}
 
-			ret = privt->py_traits->del(privt->py_traits,0,dbt,0);
+			ret = iterators_idDel(privt->py_traits,&oid,sizeof(ob_tId));
+			//ret = privt->py_traits->del(privt->py_traits,0,dbt,0);
 			if (ret) {
 				if(ret == DB_NOTFOUND) ret = 0;
 				else {obMTRACE(ret); goto fin;}
