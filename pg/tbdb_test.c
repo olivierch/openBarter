@@ -34,17 +34,18 @@ static int _Next6(Portal portal,ob_tNoeud *offreX,ob_tStock *stock);
 
 
 /* ========================================================================== */
-/*SVN_DECLARE_FCT(test1);
-SVN_DECLARE_FCT(test2);
-SVN_DECLARE_FCT(test3);
-SVN_DECLARE_FCT(test4);
-SVN_DECLARE_FCT(test5);
-SVN_DECLARE_FCT(test6);
-SVN_DECLARE_FCT(test7);
-SVN_DECLARE_FCT(test8);
-SVN_DECLARE_FCT(test9);
-SVN_DECLARE_FCT(test10);
-*/
+void initGuc(int testNum) {
+
+	ob_tGlob *glob = &openbarter_g;
+
+	memset(testCtx,0,sizeof(struct TestCtxData));
+	testCtx->testNum = testNum;
+
+	// guc normally set by _obinit_guc in iternoeud.c
+	glob->cacheSizeKb = 16*1024;
+	glob->maxArrow = 1<<15;
+	glob->maxCommit = 8; // MUST be equal to obCMAXCYCLE
+}
 
 void prChemin(ob_tChemin* ch){
 	int i;
@@ -107,9 +108,7 @@ SVN_DECLARE_FCT(test2) {
 	int ret;
 	SVN_BEGIN_FCT("ouverture fermeture d'environnement");
 
-	memset(testCtx,0,sizeof(struct TestCtxData));
-
-	testCtx->testNum = 2;
+	initGuc(2);
 
 	ret = initEnv(&env);
 	if(ret) MakeBdbErr(ret,err);
@@ -131,8 +130,7 @@ SVN_DECLARE_FCT(test3) {
 
 	SVN_BEGIN_FCT("test gtIdArbre");
 
-	memset(testCtx,0,sizeof(struct TestCtxData));
-	testCtx->testNum = 3; // ob_iternoeud_NextA() uses _Next3()
+	initGuc(3); // ob_iternoeud_NextA() uses _Next3()
 
 	testCtx->q = 3;
 	testCtx->nlMax = 4;
@@ -163,8 +161,7 @@ SVN_DECLARE_FCT(test4) {
 
 	SVN_BEGIN_FCT("test ouverture fermeture de bases");
 
-	memset(testCtx,0,sizeof(struct TestCtxData));
-	testCtx->testNum = 4;
+	initGuc(4);
 
 	ret = ob_dbe_openEnvTemp(&env);
 	if(ret) MakeBdbErr(ret,err);
@@ -182,8 +179,7 @@ SVN_DECLARE_FCT(test5) {
 
 	SVN_BEGIN_FCT("lancement de parcours arriere");
 
-	memset(testCtx,0,sizeof(struct TestCtxData));
-	testCtx->testNum = 5; // ob_iternoeud_NextA() uses _Next3()
+	initGuc(5); // ob_iternoeud_NextA() uses _Next3()
 
 	ret = ob_dbe_openEnvTemp(&env);
 
@@ -230,27 +226,22 @@ SVN_DECLARE_FCT(test6) {
 
 	SVN_BEGIN_FCT("test getIdFuseau");
 
-	memset(testCtx,0,sizeof(struct TestCtxData));
-	testCtx->testNum = 6; // ob_iternoeud_NextA() uses _Next6()
+	initGuc(6);  // ob_iternoeud_NextA() uses _Next6()
 
 	testCtx->q = 3;
 	testCtx->nlMax = 1;
 
-	// computes idMax = sum(q^i for i in [0,testCtx->nlMax])
-	/*for (idMax =0,id =0,p = 1;
-			id <= testCtx->nlMax;
-			idMax += p,p *= testCtx->q, id +=1 );*/
-	//printf("idMax %lli\n",idMax);
 	_getIdLevel(testCtx->nlMax,testCtx->q,&idMax);
 
 	for(id=1;id <= idMax+30;id+=1) {
 		portal = ob_iternoeud_GetPortalA(env,0,id,100000);
 		// testCtx->id = id;
-		while(!ob_iternoeud_NextA(portal,&Xoid,&offreX,&stock)) {
+		while(!(ret = ob_iternoeud_NextA(portal,&Xoid,&offreX,&stock))) {
 			; //printf("Xoid %lli %lli->%lli\n",Xoid,offreX.nR,offreX.nF);
 		}
 		free(portal);
 	}
+	if(ret != DB_NOTFOUND)MAKE_ERROR("erreur dans ob_iternoeud", &err);
 
 	return SVN_NO_ERROR;
 }
@@ -261,8 +252,7 @@ SVN_DECLARE_FCT(test7) {
 
 	SVN_BEGIN_FCT("lancement de parcours avant");
 
-	memset(testCtx,0,sizeof(struct TestCtxData));
-	testCtx->testNum = 7; // ob_iternoeud_NextA() uses _Next6()
+	initGuc(7);  // ob_iternoeud_NextA() uses _Next6()
 	testCtx->q = 3;
 	testCtx->nlMax = 1;
 
@@ -309,8 +299,7 @@ SVN_DECLARE_FCT(test8) {
 
 	SVN_BEGIN_FCT("test iterateurs");
 
-	memset(testCtx,0,sizeof(struct TestCtxData));
-	testCtx->testNum = 8;
+	initGuc(8);
 
 	ret = ob_dbe_openEnvTemp(&env);
 	if(ret) MakeBdbErr(ret,err);
@@ -356,62 +345,76 @@ fin:
 	return SVN_NO_ERROR;
 }
 
+svn_error_t *in_test9(svn_error_t *err) {
+	int ret;
+	ob_getdraft_ctx ctx;
+
+	memset(&ctx.pivot,0,sizeof(ob_tNoeud));
+	ctx.pivot.stockId = 1;ctx.pivot.oid = 1; ctx.pivot.omega = 2.;
+	ctx.pivot.nF = NF_PIVOT; ctx.pivot.nR = 1;ctx.pivot.own = 1;
+
+	_reset_stock(&ctx.pivot,&ctx.stockPivot);
+	ctx.stockPivot.qtt=100;ctx.stockPivot.version=1;
+
+	ob_chemin_get_commit_init(&ctx);
+
+	while((ret = ob_chemin_get_commit(&ctx)) == 0) {
+		ob_tNo *node  = &ctx.accord.chemin.no[ctx.i_commit];
+		char *s;
+		;/*
+		s=(ctx.i_commit < ctx.accord.chemin.nbNoeud-1)?"":"\n";
+		if(ctx.i_commit == 0)
+
+			printf("graph %i\tcommit %i: ",ctx.i_graph,ctx.i_commit);
+		printf("->%lli%s",node->noeud.oid,s);
+		//printf("%lli,%lli->%s",node->noeud.nF,node->fluxArrondi,s);
+		*/
+	}
+	if((ctx.i_commit ==0 && ctx.i_graph ==0))
+		MAKE_ERROR("should find some draft", &err);
+	// printf("i_graph %i\n",ctx.i_graph);
+
+	if(ret != ob_chemin_CerNoDraft) {
+		printf("err %i\n",ret);
+		MAKE_ERROR("err ret!=0", &err);
+	}
+
+	return err;
+}
+
 SVN_DECLARE_FCT(test9) {
 	DB_ENV *env;
 	int ret;
 
 	SVN_BEGIN_FCT("draft with 8 nodes");
 
-	memset(testCtx,0,sizeof(struct TestCtxData));
-	testCtx->testNum = 7; // ob_iternoeud_NextA() uses _Next6()
+	initGuc(7);  // ob_iternoeud_NextA() uses _Next6()
 	testCtx->q = 3;
 	testCtx->nlMax = 6; // 8 nodes
 
-	// l'env est ouvert
-	{
-		ob_getdraft_ctx ctx;
-
-		memset(&ctx.pivot,0,sizeof(ob_tNoeud));
-		ctx.pivot.stockId = 1;ctx.pivot.oid = 1; ctx.pivot.omega = 2.;
-		ctx.pivot.nF = NF_PIVOT; ctx.pivot.nR = 1;ctx.pivot.own = 1;
-
-		_reset_stock(&ctx.pivot,&ctx.stockPivot);
-		ctx.stockPivot.qtt=100;ctx.stockPivot.version=1;
-
-		ob_chemin_get_commit_init(&ctx);
-
-		while((ret = ob_chemin_get_commit(&ctx)) == 0) {
-			ob_tNo *node  = &ctx.accord.chemin.no[ctx.i_commit];
-			char *s;
-			;/*
-			s=(ctx.i_commit < ctx.accord.chemin.nbNoeud-1)?"":"\n";
-			if(ctx.i_commit == 0)
-
-				printf("graph %i\tcommit %i: ",ctx.i_graph,ctx.i_commit);
-			printf("->%lli%s",node->noeud.oid,s);
-			//printf("%lli,%lli->%s",node->noeud.nF,node->fluxArrondi,s);
-			*/
-		}
-		if((ctx.i_commit ==0 && ctx.i_graph ==0))
-			MAKE_ERROR("should find some draft", &err);
-		if(ret != ob_chemin_CerNoDraft) {
-			printf("err %i\n",ret);
-			MAKE_ERROR("err ret!=0", &err);
-		}
-
-	}
-	return err;
+	return in_test9(err);
 }
-
 
 SVN_DECLARE_FCT(test10) {
 	DB_ENV *env;
 	int ret;
 
+	SVN_BEGIN_FCT("draft with 6 nodes,maxCommit=6");
+
+	initGuc(7);  // ob_iternoeud_NextA() uses _Next6()
+	testCtx->q = 3;
+	testCtx->nlMax = 4; // 6 nodes
+	openbarter_g.maxCommit =6;
+
+	return in_test9(err);
+}
+SVN_DECLARE_FCT(test11) {
+	DB_ENV *env;
+	int ret;
+
 	SVN_BEGIN_FCT("no draft with 9 nodes");
 
-	memset(testCtx,0,sizeof(struct TestCtxData));
-	testCtx->testNum = 7; // ob_iternoeud_NextA() uses _Next6()
+	initGuc(7); // ob_iternoeud_NextA() uses _Next6()
 	testCtx->q = 3;
 	testCtx->nlMax = 7; // 9 nodes
 
@@ -463,6 +466,7 @@ struct svn_test_descriptor_t test_funcs[] = {
 		SVN_TEST_PASS(test8),
 		SVN_TEST_PASS(test9),
 		SVN_TEST_PASS(test10),
+		SVN_TEST_PASS(test11),
 		SVN_TEST_NULL
 };
 /*****************************************************************************/

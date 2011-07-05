@@ -93,9 +93,6 @@ int ob_makeEnvDir(ob_tGlob* glob)
 			ret = -2;
 		}
 	}
-	// guc normally set by _obinit_guc in iternoeud.c
-	glob->cacheSizeKb = 16*1024;
-	glob->maxArrow = 1<<15;
-	glob->maxCommit = 8; // MUST be equal to obCMAXCYCLE
+
 	return ret;
 }
