@@ -1,11 +1,26 @@
 /*
 postgres			C		nb bytes
-***************************************************************************
+*******************************************************************
 int8,bigint,bigserial 		int64		8, signed interger
 int4,integer			int32		4, signed interger
 int2,smallint			int16		2, signed interger
 double precision		float8		8, long float
 char				char		1 			(postgres.h)
+
+STOCK MOVEMENTS
+
+addaccount	stockA[market] -=qtt	stockA[owner] +=qtt
+subaccount	stockA[market] +=qtt	stockA[owner] -=qtt
+create stock	stockA[owner]  -=qtt		stockS[owner] +=qtt
+create draft	stockS[owner]  -=qtt		stockD[owner] +=qtt
+
+execut draft	stockD[owner]  -=qtt	
+		stockA[newowner] =+qtt (commit.sid_src -> commit.sid_dst)
+		
+refuse draft	stockD[owner]  -=qtt	
+		stockS[owner] +=qtt  (commit.sid_dst -> commit.sid_src)
+		
+delete bid	stockS[owner]  -=qtt		stockA[owner] +=qtt
 
 */
 /*
@@ -14,20 +29,24 @@ CREATE ROLE depositary LOGIN;
 */
 create sequence ob_tdraft_id_seq; 
 select setval('ob_tdraft_id_seq',1);
---------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- TRIGGERS
---------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_ftime_created() RETURNS trigger AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ob_ftime_created() 
+	RETURNS trigger AS $$
 BEGIN
 	NEW.created := statement_timestamp();
 	RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
---------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ob_ftime_updated 
 --	trigger before insert on ob_tquality, ob_towner, ob_tomega, ob_tstock
---------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_ftime_updated() RETURNS trigger AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ob_ftime_updated() 
+	RETURNS trigger AS $$
 BEGIN
 	IF (TG_OP = 'INSERT') THEN
 		NEW.created := statement_timestamp();
@@ -37,19 +56,23 @@ BEGIN
 	RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
---------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ob_ins_version
---------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_ins_version() RETURNS trigger AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ob_ins_version() 
+	RETURNS trigger AS $$
 BEGIN
 	SELECT last_value INTO NEW.version from ob_tdraft_id_seq;
 	RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
---------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ob_fcurrval_tdraft
---------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_fcurrval_tdraft() RETURNS int8 AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ob_fcurrval_tdraft() 
+	RETURNS int8 AS $$
 DECLARE
 	res	int8;
 BEGIN
@@ -57,16 +80,15 @@ BEGIN
 	RETURN res;
 END;
 $$ LANGUAGE plpgsql;
----------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- OB_TQUALITY
----------------------------------------------------------------
+--------------------------------------------------------------------------------
 --create sequence ob_tquality_id_seq;
 create table ob_tquality (
-    --id int8 UNIQUE not NULL default nextval('ob_tquality_id_seq'),
     id bigserial UNIQUE not NULL,
     name text,
-    -- own name references pg_catalog.pg_user(usename) on update restrict on delete restrict not NULL,
-    own name not NULL, -- references pg_catalog.pg_authid(rolname) on update restrict on delete restrict not NULL,
+    own name not NULL, 
     qtt bigint default 0,
     created timestamp,
     updated timestamp,
@@ -76,11 +98,13 @@ create table ob_tquality (
 alter sequence ob_tquality_id_seq owned by ob_tquality.id;
 create index ob_tquality_name_idx on ob_tquality(name);
 create index ob_tquality_own_idx on ob_tquality(own);
-CREATE TRIGGER trig_befa_ob_tquality BEFORE INSERT OR UPDATE ON ob_tquality FOR EACH ROW 
-  EXECUTE PROCEDURE ob_ftime_updated();
----------------------------------------------------------------
+CREATE TRIGGER trig_befa_ob_tquality BEFORE INSERT 
+	OR UPDATE ON ob_tquality FOR EACH ROW 
+	EXECUTE PROCEDURE ob_ftime_updated();
+	
+--------------------------------------------------------------------------------
 -- OB_TOWNER
----------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- create sequence ob_towner_id_seq;
 create table ob_towner (
     -- id int8 UNIQUE not NULL default nextval('ob_towner_id_seq'),
@@ -95,30 +119,25 @@ alter sequence ob_towner_id_seq owned by ob_towner.id;
 create index ob_towner_name_idx on ob_towner(name);
 insert into ob_towner (name) values ('market');
 
-CREATE TRIGGER trig_befa_ob_towner BEFORE INSERT OR UPDATE ON ob_towner FOR EACH ROW 
-  EXECUTE PROCEDURE ob_ftime_updated();
+CREATE TRIGGER trig_befa_ob_towner BEFORE INSERT 
+	OR UPDATE ON ob_towner FOR EACH ROW 
+	EXECUTE PROCEDURE ob_ftime_updated();
 
----------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- OB_TSTOCK
 -- stores a value owned.
-/*	
-	addaccount	stockA[market] -=qtt	stockA[owner] +=qtt
-	subaccount	stockA[market] +=qtt	stockA[owner] -=qtt
-	create stock	stockA[owner]  -=qtt	stockS[owner] +=qtt
-	create draft	stockS[owner]  -=qtt	stockD[owner] +=qtt
-	execut draft	stockD[owner]  -=qtt	stockA[newowner] =+qtt (commit.sid_src -> commit.sid_dst)
-	refuse draft	stockD[owner]  -=qtt	stockS[owner] +=qtt  (commit.sid_dst -> commit.sid_src)
-	delete bid	stockS[owner]  -=qtt	stockA[owner] +=qtt
-*/
----------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 create sequence ob_tstock_id_seq;
 create table ob_tstock (
     id int8 UNIQUE not NULL
     	default nextval('ob_tstock_id_seq'),
-    own int8 references ob_towner(id) on update cascade on delete restrict not NULL,
+    own int8 references ob_towner(id) on update cascade 
+	on delete restrict not NULL,
 		-- owner can be deleted only if he has not stock
     qtt bigint not null, -- 64 bits
-    nf int8 references ob_tquality(id) on update cascade on delete restrict not NULL,
+    nf int8 references ob_tquality(id) on update cascade 
+	on delete restrict not NULL,
     version int8, 
     type char,
     	-- A account
@@ -132,31 +151,38 @@ create table ob_tstock (
     	-- market has only stock.qtt <=0
     	or (type='A' and (own!=1) and (qtt > 0 or qtt = 0))
     	-- owners have only stock.qtt >=0
-    	or ((type='S' or type='D') /*and (own!=1) */ and (qtt > 0 or qtt = 0)))
+    	or ((type='S' or type='D') and (qtt > 0 or qtt = 0)))
 );
 alter sequence ob_tstock_id_seq owned by ob_tstock.id;
 create index ob_tstock_own_idx on ob_tstock(own);
 create index ob_tstock_nf_idx on ob_tstock(nf,type);
 
-CREATE TRIGGER trig_befa_ob_tstock BEFORE INSERT OR UPDATE ON ob_tstock  FOR EACH ROW 
-  EXECUTE PROCEDURE ob_ftime_updated(); 
+CREATE TRIGGER trig_befa_ob_tstock BEFORE INSERT 
+	OR UPDATE ON ob_tstock  FOR EACH ROW 
+	EXECUTE PROCEDURE ob_ftime_updated(); 
 
-CREATE TRIGGER trig_befb_ob_tstock BEFORE INSERT OR UPDATE ON ob_tstock FOR EACH ROW 
-  EXECUTE PROCEDURE ob_ins_version();
----------------------------------------------------------------
+CREATE TRIGGER trig_befb_ob_tstock BEFORE INSERT 
+	OR UPDATE ON ob_tstock FOR EACH ROW 
+	EXECUTE PROCEDURE ob_ins_version();
+	
+--------------------------------------------------------------------------------
 -- OB_TNOEUD
----------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- create sequence ob_tnoeud_id_seq;
 create table ob_tnoeud ( -- bid
-    --id int8 UNIQUE not NULL default nextval('ob_tnoeud_id_seq'),
     id bigserial UNIQUE not NULL,
-    sid int8 references ob_tstock(id) on update cascade on delete cascade not NULL , -- refers to a stock
+    sid int8 references ob_tstock(id) on update cascade 
+	on delete cascade not NULL , -- refers to a stock
     omega double precision check(omega > 0),
-    nr int8 references ob_tquality(id) on update cascade on delete cascade not NULL ,
-    nf int8 references ob_tquality(id) on update cascade on delete cascade not NULL ,
-    own int8 references ob_towner(id) on update cascade on delete cascade not NULL ,
+    nr int8 references ob_tquality(id) on update cascade 
+	on delete cascade not NULL ,
+    nf int8 references ob_tquality(id) on update cascade 
+	on delete cascade not NULL ,
+    own int8 references ob_towner(id) on update cascade 
+	on delete cascade not NULL ,
     provided_quantity int8,
-    required_quantity int8, -- omega = provided_quantity/required_quantity
+    required_quantity int8, 
+	-- omega = provided_quantity/required_quantity
     created timestamp,
     PRIMARY KEY (id)
 );
@@ -166,15 +192,17 @@ create index ob_tnoeud_nr_idx on ob_tnoeud(nr);
 create index ob_tnoeud_nf_idx on ob_tnoeud(nf);
 create index ob_tnoeud_own_idx on ob_tnoeud(own);
 
-CREATE TRIGGER trig_befa_ob_tnoeud BEFORE INSERT ON ob_tnoeud  FOR EACH ROW 
-  EXECUTE PROCEDURE ob_ftime_created(); 
----------------------------------------------------------------
+CREATE TRIGGER trig_befa_ob_tnoeud BEFORE 
+	INSERT ON ob_tnoeud  FOR EACH ROW 
+	EXECUTE PROCEDURE ob_ftime_created(); 
+	
+--------------------------------------------------------------------------------
 -- OB_TDRAFT
 -- draft		status
 -- created		D<-
 -- accepted		A<-D	all commit are accepted
 -- refused		R<-D	one (or more) commit is refused
----------------------------------------------------------------
+--------------------------------------------------------------------------------
 create table ob_tdraft (
     id int8 UNIQUE not NULL, -- never 0, but 1..n for n drafts
     status char,
@@ -191,24 +219,29 @@ create table ob_tdraft (
      CHECK (nbnoeud <= 8 ),
     PRIMARY KEY(id)
 );
-
-CREATE TRIGGER trig_befa_ob_tdraft BEFORE INSERT ON ob_tdraft  FOR EACH ROW 
-  EXECUTE PROCEDURE ob_ftime_created(); 
-  
 -- alter sequence ob_tdraft_id_seq owned by ob_tdraft.id;
----------------------------------------------------------------
+CREATE TRIGGER trig_befa_ob_tdraft BEFORE INSERT 
+	ON ob_tdraft  FOR EACH ROW 
+	EXECUTE PROCEDURE ob_ftime_created(); 
+
+--------------------------------------------------------------------------------
 -- OB_TCOMMIT
----------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- create sequence ob_tcommit_id_seq;
 create table ob_tcommit (
 	--id int8 UNIQUE not NULL default nextval('ob_tcommit_id_seq'),
 	id bigserial UNIQUE not NULL,
-	did int8 references ob_tdraft(id) on update cascade on delete cascade,
-	bid int8 references ob_tnoeud(id) on update cascade,
-	sid_src int8 references ob_tstock(id) on update cascade,
-	sid_dst int8 references ob_tstock(id) on update cascade,
+	did int8 references ob_tdraft(id) 
+		on update cascade on delete cascade,
+	bid int8 references ob_tnoeud(id) 
+		on update cascade,
+	sid_src int8 references ob_tstock(id) 
+		on update cascade,
+	sid_dst int8 references ob_tstock(id) 
+		on update cascade,
 	--qid	int8 references ob_tquality(id) on update cascade,
-	wid	int8 references ob_towner(id) on update cascade,
+	wid	int8 references ob_towner(id) 
+		on update cascade,
 	flags int4, 	-- [0] draft did accepted by owner wid,
 			-- [1] draft did refused by owner wid,
 			-- [2] exhausted: stock.qtt=fluxarrondi for sid
@@ -219,12 +252,13 @@ create index ob_tcommit_did_idx on ob_tcommit(did);
 create index ob_tcommit_sid_src_idx on ob_tcommit(sid_src);
 create index ob_tcommit_sid_dst_idx on ob_tcommit(sid_dst);
 
----------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- OB_TLDRAFT
----------------------------------------------------------------
+-- commit description of a draft produced by ob_getdraft_get()
+--------------------------------------------------------------------------------
 create table ob_tldraft (
-	-- draft
-    id int8, 					--[0] get_draft supposes that it is  >0 : 1,2,3 ... changes for each draft
+    id int8, 					--[0] 
+	-- get_draft supposes that it is  >0 : 1,2,3 ... changes for each draft
     cix int2, -- between 0..nbnoeud-1	--[1] 
     nbsource int2,				--[2] 
     nbnoeud int2,				--[3] 
@@ -237,15 +271,18 @@ create table ob_tldraft (
     ret_algo int4,				--[10]
     versionsg int8
 );
----------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- OB_TOMEGA
----------------------------------------------------------------
+--------------------------------------------------------------------------------
 create table ob_tomega (
 	scale integer, 
 	-- scale=2, omega= "234.23"
 	-- scale=NULL omega= "0.23423E03"
-	nr int8 references ob_tquality(id) on update cascade on delete cascade not null,
-	nf int8 references ob_tquality(id) on update cascade on delete cascade not null,
+	nr int8 references ob_tquality(id) 
+		on update cascade on delete cascade not null,
+	nf int8 references ob_tquality(id) 
+		on update cascade on delete cascade not null,
 	name	text,
 	created timestamp,
 	updated timestamp,
@@ -253,43 +290,53 @@ create table ob_tomega (
 );
 create index ob_tomega_name_idx on ob_tomega(name);
 
-CREATE TRIGGER trig_befa_ob_tomega BEFORE INSERT OR UPDATE ON ob_tomega  FOR EACH ROW 
-  EXECUTE PROCEDURE ob_ftime_updated(); 
----------------------------------------------------------------
+CREATE TRIGGER trig_befa_ob_tomega BEFORE INSERT 
+	OR UPDATE ON ob_tomega  FOR EACH ROW 
+	EXECUTE PROCEDURE ob_ftime_updated(); 
+	
+--------------------------------------------------------------------------------
 -- OB_TLOMEGA
----------------------------------------------------------------
+--------------------------------------------------------------------------------
 create table ob_tlomega ( -- prices
 	qttr bigint check (qttr >=0) not null,
 	qttf bigint check (qttf >=0) not null,
-	nr int8 references ob_tquality(id) on update cascade on delete cascade not null,
-	nf int8 references ob_tquality(id) on update cascade on delete cascade not null,
-	flags int4,	-- [0] when the read_omega(dnr,dnf) that inserted it was such as (dnr,dnf)=(nr,nf)
-			-- [1] when inserted while a bid is inserted
+	nr int8 references ob_tquality(id) 
+		on update cascade on delete cascade not null,
+	nf int8 references ob_tquality(id) 
+		on update cascade on delete cascade not null,
+	flags int4,	
+		/* 
+		[0] when the read_omega(dnr,dnf) 
+			that inserted it was such as (dnr,dnf)=(nr,nf)
+		[1] when inserted while a bid is inserted */
 	created timestamp
 );
 create index ob_tlomega_nr_idx on ob_tlomega(nr);
 create index ob_tlomega_nf_idx on ob_tlomega(nf);
-CREATE TRIGGER trig_befa_ob_tlomega BEFORE INSERT ON ob_tlomega  FOR EACH ROW 
-  EXECUTE PROCEDURE ob_ftime_created(); 
----------------------------------------------------------------
+CREATE TRIGGER trig_befa_ob_tlomega BEFORE 
+	INSERT ON ob_tlomega  FOR EACH ROW 
+	EXECUTE PROCEDURE ob_ftime_created(); 
+--------------------------------------------------------------------------------
 -- OB_TMVT
 --	An owner can be deleted only if he owns no stocks.
 --	When it is deleted, it's movements are deleted
----------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- create sequence ob_tmvt_id_seq;
 create table ob_tmvt (
     	--id int8 UNIQUE not NULL default nextval('ob_tmvt_id_seq'),
         id bigserial UNIQUE not NULL,
-    	did int8 references ob_tmvt(id) on delete cascade default NULL, 
+    	did int8 references ob_tmvt(id) 
+		on delete cascade default NULL, 
     	-- References the first mvt of a draft.
 		-- NULL when movement add_account()
 		-- not NULL for a draft executed. 
-	-- src int8 references ob_tstock(id) on update cascade on delete set null,
-	own_src int8 references ob_towner(id) on update cascade on delete cascade not null, 
-	-- dst int8 references ob_tstock(id) on update cascade on delete set null,
-	own_dst int8  references ob_towner(id) on update cascade on delete cascade not null,
+	own_src int8 references ob_towner(id) 
+		on update cascade on delete cascade not null, 
+	own_dst int8  references ob_towner(id) 
+		on update cascade on delete cascade not null,
 	qtt bigint check (qtt >0 or qtt = 0) not null,
-	nat int8 references ob_tquality(id) on update cascade on delete cascade not null,
+	nat int8 references ob_tquality(id) 
+		on update cascade on delete cascade not null,
 	created timestamp
 );
 create index ob_tmvt_did_idx on ob_tmvt(did);
@@ -300,9 +347,11 @@ create index ob_tmvt_own_src_idx on ob_tmvt(own_src);
 create index ob_tmvt_own_dst_idx on ob_tmvt(own_dst);
 -- create index ob_tmvt_nat_idx on ob_tmvt(nat);
 
-CREATE TRIGGER trig_befa_ob_tmvt BEFORE INSERT ON ob_tmvt  FOR EACH ROW 
-  EXECUTE PROCEDURE ob_ftime_created();
----------------------------------------------------------------  
+CREATE TRIGGER trig_befa_ob_tmvt BEFORE INSERT 
+	ON ob_tmvt  FOR EACH ROW 
+	EXECUTE PROCEDURE ob_ftime_created();
+	
+--------------------------------------------------------------------------------  
 DROP TYPE IF EXISTS ob_tlmvt CASCADE;
 create type ob_tlmvt AS (
         id int8,
@@ -314,9 +363,10 @@ create type ob_tlmvt AS (
 	qtt bigint,
 	nat int8
 );
- ------------------------------------------------------------------------
+
+ -----------------------------------------------------------------------------------------
  -- 
- ------------------------------------------------------------------------
+ -----------------------------------------------------------------------------------------
 create table ob_tconnectdesc (
     conninfo text UNIQUE,
     conn_datas int8[], -- list of 8 int8 expressed in microseconds
@@ -324,17 +374,19 @@ create table ob_tconnectdesc (
     PRIMARY KEY (conninfo)
 );
 INSERT INTO ob_tconnectdesc (conninfo,valid) VALUES ('dbname = ob user=olivier',true);
- ------------------------------------------------------------------------
- -- Roles
- ------------------------------------------------------------------------
 
+ -----------------------------------------------------------------------------------------
+ -- Roles
+ -----------------------------------------------------------------------------------------
 -- privileges granted to public
-GRANT SELECT ON TABLE ob_tconnectdesc,ob_tquality,ob_towner,ob_tstock,ob_tnoeud,ob_tdraft,
-	ob_tcommit,ob_tomega,ob_tlomega,ob_tmvt TO PUBLIC;
+GRANT SELECT ON TABLE 
+	ob_tconnectdesc,ob_tquality,ob_towner,ob_tstock,ob_tnoeud,ob_tdraft,
+	ob_tcommit,ob_tomega,ob_tlomega,ob_tmvt 
+	TO PUBLIC;
 /*
- ------------------------------------------------------------------------
+ -----------------------------------------------------------------------------------------
  Public functions
- ------------------------------------------------------------------------
+ -----------------------------------------------------------------------------------------
 ret int = ob_fadd_account(owner text,quality text,_qtt int8)
 ret int = ob_fsub_account(owner text,quality text,_qtt int8)
 
@@ -346,9 +398,9 @@ ret int = ob_faccept_draft(draft_id int8,owner text)
 ret int = ob_frefuse_draft(draft_id int8,owner text)
 err int = ob_fdelete_bid(bid_id int8)
 ob_fstats() RETURNS SETOF ob_tret_stats
-------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
 Calling tree of PUBLIC
-------------------------------------------------------------------------
+-----------------------------------------------------------------------------------------
 ob_fbatch_omega
 	ob_fread_omega
 		ob_finsert_omega
@@ -445,16 +497,15 @@ error codes are 'OBxxxx'
 -30400 to -30499 psql error
 
 */
--------------------------------------------------------------------------------------------------------------------
-create or replace function ob_getdraft_get(int8,double precision,int8,int8) returns setof ob_tldraft
-	as '$libdir/openbarter','ob_getdraft_get' language C strict;
-/*
-create or replace function ob_getdraft_get(int8,double precision,int8,int8) returns setof ob_tldraft
-	as '$libdir/openbarter','ob_appel_from_master' language C strict;
-*/
-----------------------------------------------------------------------------------------------------------------
+-----------------------------------------------------------------------------------
+create or replace function ob_getdraft_get(int8,double precision,int8,int8) 
+	returns setof ob_tldraft
+	as '$libdir/openbarter','ob_getdraft_get' 
+	language C strict;
+
+--------------------------------------------------------------------------------
 -- ob_fcreate_quality
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PUBLIC
 /* usage: 
 	ob_fcreate_quality(_owner text,_name text)
@@ -464,8 +515,9 @@ create or replace function ob_getdraft_get(int8,double precision,int8,int8) retu
 	returns 0 or 
 		[-30432] The quality already exists
 */
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_fcreate_quality(_name text) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION ob_fcreate_quality(_name text) 
+	RETURNS int AS $$
 DECLARE 
 	_q 	ob_tquality%rowtype;
 	_n	text;
@@ -481,11 +533,12 @@ BEGIN
 	RETURN 0;
 END;
 $$ LANGUAGE plpgsql;
+GRANT EXECUTE ON FUNCTION 
+	ob_fcreate_quality(_name text) TO market,depositary;
 
-GRANT EXECUTE ON FUNCTION ob_fcreate_quality(_name text) TO market,depositary;
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_fupdate_status_commits
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PRIVATE called by ob_faccept_draft() and ob_frefuse_draft() to update flags of commits 
 /* usage: 
 	cnt_updated int = ob_fupdate_status_commits(draft_id int8,own_id int8,_flags int4,mask int4)
@@ -493,8 +546,10 @@ GRANT EXECUTE ON FUNCTION ob_fcreate_quality(_name text) TO market,depositary;
 	updates flags of commits of a draft for a given owner with _flags and mask
 	or error -30416,-30417; then, commits remain unchanged:
 */
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_fupdate_status_commits(draft_id int8,own_id int8,_flags int4,mask int4) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_fupdate_status_commits(draft_id int8,own_id int8,_flags int4,mask int4) 
+	RETURNS int AS $$
 DECLARE 
 	_commot ob_tcommit%rowtype;
 	cnt		int := 0;
@@ -510,21 +565,26 @@ BEGIN
 	END IF; 
 	cnt := 0;
 	<<UPDATE_STATUS>>
-	FOR _commot IN SELECT * FROM ob_tcommit WHERE did = draft_id AND wid = own_id LOOP 
-		UPDATE ob_tcommit SET flags = (_flags & mask) |(flags & (~mask)) WHERE  id = _commot.id;
+	FOR _commot IN SELECT * FROM ob_tcommit 
+		WHERE did = draft_id AND wid = own_id LOOP 
+		UPDATE ob_tcommit 
+		SET flags = (_flags & mask) |(flags & (~mask)) 
+		WHERE  id = _commot.id;
 		cnt := cnt +1;
 	END LOOP UPDATE_STATUS;
 	if(cnt =0) THEN 
-		SELECT name INTO own_name FROM ob_towner WHERE id=own_id;
+		SELECT name INTO own_name FROM ob_towner 
+		WHERE id=own_id;
 		RAISE NOTICE '[-30417] The owner % is not partner of the Draft %',own_name,draft_id;
 		RETURN -30417;
 	END IF;
 	RETURN cnt;
 END;
 $$ LANGUAGE plpgsql;
-----------------------------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ob_fread_status_draft
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PRIVATE  used by ob_faccept_draft,ob_frefuse_draft,ob_fstats
 /* usage: 
 	ret int = ob_fread_status_draft(draft ob_tdraft)
@@ -540,9 +600,11 @@ returns:
 	-30418,-30419	error
 
 */
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION ob_fread_status_draft(draft ob_tdraft) RETURNS int AS $$
+CREATE OR REPLACE 
+	FUNCTION ob_fread_status_draft(draft ob_tdraft) 
+	RETURNS int AS $$
 DECLARE
 	_commot	ob_tcommit%rowtype;
 	cnt		int := 0;
@@ -550,7 +612,9 @@ DECLARE
 	_orflags	int4 := 0;
 	expected	char;
 BEGIN	-- 
-	SELECT bit_and(flags),bit_or(flags),count(id) INTO _andflags,_orflags,cnt FROM ob_tcommit WHERE did = draft.id;
+	SELECT bit_and(flags),bit_or(flags),count(id) 
+		INTO _andflags,_orflags,cnt FROM ob_tcommit 
+		WHERE did = draft.id;
 	IF(cnt <2) THEN
 		RAISE NOTICE '[-30418] Less than 2 commit found for the draft %',draft.id;
 		RETURN -30418;
@@ -579,9 +643,9 @@ BEGIN	--
 END;
 $$ LANGUAGE plpgsql;
 
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_fstats
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PUBLIC
 /* usage:
 	ret ob_fstats = ob_fstats()
@@ -589,7 +653,7 @@ $$ LANGUAGE plpgsql;
 
 	returns a list of ob_tret_stats
 */
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 DROP TYPE IF EXISTS ob_tret_stats CASCADE;
 CREATE TYPE ob_tret_stats AS (
 
@@ -603,10 +667,8 @@ CREATE TYPE ob_tret_stats AS (
 	nb_stocks_a	int8,
 	nb_qualities 	int8,
 	nb_owners		int8,
-
 	
-	-- should be all 0
-	
+	-- followings should be all 0
 	unbananced_qualities 	int8,
 	corrupted_draft		int8,
 	corrupted_stock_s	int8,
@@ -647,10 +709,11 @@ BEGIN
 	ret.nb_owners := cnt;	
 
 	-- number of unbalanced qualities 
-	-- for a given quality:
+	-- for a given quality, we should have:
 	-- 	sum(stock_A.qtt)+sum(stock_S.qtt)+sum(stock_D.qtt) = quality.qtt 
 	SELECT count(*) INTO cnt FROM (
-		SELECT sum(abs(s.qtt)) FROM ob_tstock s,ob_tquality q where s.nf=q.id
+		SELECT sum(abs(s.qtt)) 
+		FROM ob_tstock s,ob_tquality q where s.nf=q.id
 		GROUP BY s.nf,q.qtt having (sum(abs(s.qtt))!= q.qtt)
 	) as q;
 	ret.unbananced_qualities := cnt;
@@ -669,22 +732,24 @@ BEGIN
 	
 	-- stock corrupted
 	-- stock_s unrelated to a bid should not exist 
-	SELECT count(s.id) INTO err FROM ob_tstock s LEFT JOIN ob_tnoeud n ON n.sid=s.id
+	SELECT count(s.id) INTO err FROM ob_tstock s 
+		LEFT JOIN ob_tnoeud n ON n.sid=s.id
 	WHERE s.type='S' AND n.id is NULL;
 	ret.corrupted_stock_s := err;
 	-- Stock_A not unique
 	SELECT count(*) INTO err FROM(
-		SELECT count(s.id) FROM ob_tstock s WHERE s.type='A'
+		SELECT count(s.id) FROM ob_tstock s 
+		WHERE s.type='A'
 		GROUP BY s.nf,s.own HAVING count(s.id)>1) as c;
 	ret.corrupted_stock_a := err;
 	RETURN ret;
 END; 
 $$ LANGUAGE plpgsql;
 GRANT EXECUTE ON FUNCTION ob_fstats() TO market;
--- TODO
-----------------------------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ob_fexecute_commit
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PRIVATE used by ob_fexecute_draft()
 /* usage: 
 	mvt_id int8 = ob_fexecute_commit(commit_src ob_tcommit,commitsdt ob_tcommit)
@@ -700,39 +765,38 @@ actions:
 returns:
 	the id of the movement
 */
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION ob_fexecute_commit(commit_src ob_tcommit,commit_dst ob_tcommit) RETURNS int8 AS $$
+CREATE OR REPLACE FUNCTION 
+	ob_fexecute_commit(commit_src ob_tcommit,commit_dst ob_tcommit) 
+	RETURNS int8 AS $$
 DECLARE
 	m ob_tstock%rowtype;
 	stock_src ob_tstock%rowtype;
 	id_mvt int8;
 	res int8;
 BEGIN
-	SELECT s.* INTO stock_src FROM ob_tstock s WHERE s.id = commit_src.sid_dst and s.type='D';
+	SELECT s.* INTO stock_src FROM ob_tstock s 
+		WHERE s.id = commit_src.sid_dst and s.type='D';
 	IF NOT FOUND THEN
 		RAISE NOTICE '[-30429] for commit % the stock_src % was not found',commit_src.id,commit_src.sid_dst;  
 		RETURN -30429;
 	END IF;
-	UPDATE ob_tstock SET qtt = qtt - stock_src.qtt WHERE id = commit_src.sid_dst and type='D' RETURNING qtt INTO res;
+	UPDATE ob_tstock SET qtt = qtt - stock_src.qtt 
+		WHERE id = commit_src.sid_dst and type='D' 
+		RETURNING qtt INTO res;
 	IF NOT(res = 0) THEN
 		RAISE NOTICE '[-30429] for commit % the stock_src % was not found',commit_src.id,commit_src.sid_dst;  
 		RETURN -30429;
 	END IF;	
 	-- should become 0
-/*
-	SELECT s.* INTO m FROM ob_tstock s WHERE s.own = commit_dst.wid AND s.nf = stock_src.nf AND s.type = 'A' LIMIT 1;
-	IF NOT FOUND THEN
-		INSERT INTO ob_tstock (own,qtt,nf,type) VALUES (commit_dst.wid,stock_src.qtt,stock_src.nf,'A') RETURNING * INTO m;
-	ELSE
-		UPDATE ob_tstock SET qtt = qtt + stock_src.qtt WHERE id = m.id RETURNING * INTO m;
-	END IF;
-*/
+
 	UPDATE ob_tstock SET qtt = qtt + stock_src.qtt 
 		WHERE own = commit_dst.wid AND nf = stock_src.nf AND type = 'A'  
 		RETURNING * INTO m;
 	IF NOT FOUND THEN
-		INSERT INTO ob_tstock (own,qtt,nf,type) VALUES (commit_dst.wid,stock_src.qtt,stock_src.nf,'A') 
+		INSERT INTO ob_tstock (own,qtt,nf,type) 
+			VALUES (commit_dst.wid,stock_src.qtt,stock_src.nf,'A') 
 			RETURNING * INTO m; 
 	END IF;
 	INSERT INTO ob_tmvt (own_src,own_dst,qtt,nat) 
@@ -745,18 +809,19 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_fexecute_draft
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PRIVATE called by ob_faccept_draft() when the draft should be executed 
 /* usage: 
 	cnt_commit integer = ob_fexecute_draft(draft_id int8)
 action:
 	execute ob_fexecute_commit(commit_src,commit_dst) for successive commits
 */
-----------------------------------------------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION ob_fexecute_draft(draft_id int8) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE 
+	FUNCTION ob_fexecute_draft(draft_id int8) 
+	RETURNS int AS $$
 DECLARE
 	prev_commit	ob_tcommit%rowtype;
 	first_commit	ob_tcommit%rowtype;
@@ -766,7 +831,8 @@ DECLARE
 	mvt_id	int8;
 BEGIN
 	cnt := 0;
-	FOR _commot IN SELECT * FROM ob_tcommit WHERE did = draft_id  ORDER BY id ASC LOOP
+	FOR _commot IN SELECT * FROM ob_tcommit 
+		WHERE did = draft_id  ORDER BY id ASC LOOP
 		IF (cnt = 0) THEN
 			first_commit := _commot;
 		ELSE
@@ -785,38 +851,47 @@ BEGIN
 	mvt_id := ob_fexecute_commit(_commot,first_commit);
 	if(mvt_id < 0) THEN  RETURN mvt_id; END IF;
 	-- sets did of movements to the first mvt.id
-	UPDATE ob_tmvt set did=first_mvt_id where id>= first_mvt_id and id <= mvt_id;
+	UPDATE ob_tmvt set did=first_mvt_id 
+	where id>= first_mvt_id and id <= mvt_id;
 	RETURN cnt;
 END;
 $$ LANGUAGE plpgsql;
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PRIVATE 
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_finsert_omegap(_nr int8,_nf int8) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_finsert_omegap(_nr int8,_nf int8) 
+	RETURNS int AS $$
 DECLARE
 	t		int8;
 	namef		text;
 	namer		text;
 
 BEGIN
-	SELECT o.nf INTO t FROM ob_tomega o WHERE o.nr = _nr and o.nf = _nf;
+	SELECT o.nf INTO t FROM ob_tomega o 
+		WHERE o.nr = _nr and o.nf = _nf;
 	IF (NOT FOUND) THEN
 		SELECT name INTO namef FROM ob_tquality WHERE id=_nf;
 		SELECT name INTO namer FROM ob_tquality WHERE id=_nr;
-		INSERT INTO ob_tomega (nr,nf,name) VALUES (_nr,_nf,namer || '/' || namef);
+		INSERT INTO ob_tomega (nr,nf,name) 
+			VALUES (_nr,_nf,namer || '/' || namef);
 	ELSE
 		-- it will be at the last position for candidates for update in ob_fbatch_omega
-		UPDATE ob_tomega SET updated=statement_timestamp()  WHERE nr = _nr and nf = _nf;
+		UPDATE ob_tomega SET updated=statement_timestamp()  
+			WHERE nr = _nr and nf = _nf;
 	END IF;
 	RETURN 0;
 END; 
 $$ LANGUAGE plpgsql;
-----------------------------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- PRIVATE called by ob_fomega_draft() while inserting a new bid
 -- ret int = ob_finsert_omega_int(sid_src int8,sid_dst int8) used by ob_finsert_omega
 -- sid_src,sid_dst are two commit.sid_dst of successive commmits of a draft
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_finsert_omega_int(sid_src int8,sid_dst int8) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_finsert_omega_int(sid_src int8,sid_dst int8) 
+	RETURNS int AS $$
 DECLARE
 	_nr		int8;
 	_nf		int8;
@@ -829,24 +904,31 @@ DECLARE
 	ret		int;
 
 BEGIN
-	SELECT nf,qtt INTO _nf,_flux_src FROM ob_tstock WHERE id=sid_src;
+	SELECT nf,qtt INTO _nf,_flux_src FROM ob_tstock 
+		WHERE id=sid_src;
 	IF NOT FOUND THEN
 		RAISE NOTICE '[-30409] stock % not found',sid_src;
 		RETURN -30409;
 	END IF;
-	SELECT nf,qtt INTO _nr,_flux_dst FROM ob_tstock WHERE id=sid_dst;
+	
+	SELECT nf,qtt INTO _nr,_flux_dst FROM ob_tstock 
+		WHERE id=sid_dst;
 	IF NOT FOUND THEN
 		RAISE NOTICE '[-30409] stock % not found',sid_dst;
 		RETURN -30409;
 	END IF;
+	
 	ret := ob_finsert_omegap(_nr,_nf);
-	INSERT INTO ob_tlomega(nr,nf,qttr,qttf,flags) VALUES (_nr,_nf,_flux_src,_flux_dst,_flags);
+	INSERT INTO ob_tlomega(nr,nf,qttr,qttf,flags) 
+		VALUES (_nr,_nf,_flux_src,_flux_dst,_flags);
 	RETURN 0;
+	
 END; 
 $$ LANGUAGE plpgsql;
-----------------------------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ob_fomega_draft
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PRIVATE called by ob_finsert_bid_int
 
 /* usage: 
@@ -859,8 +941,10 @@ action:
 	inserts omega for a given draft
 
 */
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_fomega_draft(draft_id int8) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_fomega_draft(draft_id int8) 
+	RETURNS int AS $$
 DECLARE
 	prev_commit	ob_tcommit%rowtype;
 	first_commit	ob_tcommit%rowtype;
@@ -871,7 +955,8 @@ DECLARE
 	err		int; 
 BEGIN
 	cnt := 0;
-	FOR _commot IN SELECT * FROM ob_tcommit WHERE did = draft_id  ORDER BY id ASC LOOP
+	FOR _commot IN SELECT * FROM ob_tcommit 
+		WHERE did = draft_id  ORDER BY id ASC LOOP
 		IF (cnt = 0) THEN
 			first_commit := _commot;
 		ELSE
@@ -896,9 +981,9 @@ BEGIN
 	RETURN cnt;
 END;
 $$ LANGUAGE plpgsql;
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_finsert_omega
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PRIVATE called by ob_fread_omega(_dnr,_dnf).
 
 /* usage: 
@@ -918,9 +1003,11 @@ action:
 	ob_tlomega[_dnf,_dnr] is inserted with flags = primary
 
 */
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION ob_finsert_omega(sid_src int8,sid_dst int8,flux_src int8,flux_dst int8,_dnr int8,_dnf int8) RETURNS int AS $$
+CREATE OR REPLACE FUNCTION 
+	ob_finsert_omega(sid_src int8,sid_dst int8,flux_src int8,flux_dst int8,_dnr int8,_dnf int8) 
+	RETURNS int AS $$
 DECLARE
 	_nr		int8;
 	_nf		int8;
@@ -933,12 +1020,14 @@ DECLARE
 BEGIN
 	IF (sid_src is NULL) THEN _nf = _dnf;
 	ELSE
-		SELECT nf INTO _nf FROM ob_tstock WHERE id=sid_src;
+		SELECT nf INTO _nf FROM ob_tstock 
+			WHERE id=sid_src;
 		IF NOT FOUND THEN
 			RAISE NOTICE '[-30409] stock % not found',sid_src;
 			RETURN -30409;
 		END IF;
 	END IF;
+	
 	IF (sid_dst is NULL) THEN _nr = _dnr;
 	ELSE
 		SELECT nf INTO _nr FROM ob_tstock WHERE id=sid_dst;
@@ -955,14 +1044,16 @@ BEGIN
 	ELSE 
 		_flags := 0;
 	END IF;
-	INSERT INTO ob_tlomega (nr,nf,qttr,qttf,flags) VALUES (_nr,_nf,flux_src,flux_dst,_flags);
+	
+	INSERT INTO ob_tlomega (nr,nf,qttr,qttf,flags) 
+		VALUES (_nr,_nf,flux_src,flux_dst,_flags);
 	RETURN 0;
 END; 
 $$ LANGUAGE plpgsql;
 
----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
 -- ob_vowned
----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
 /* List of values owned by users GROUP BY s.own,s.nf,q.name,o.name,q.own 
 	view
 		returns qtt owned for each (quality,own).
@@ -978,21 +1069,26 @@ $$ LANGUAGE plpgsql;
 		SELECT * FROM ob_vowned WHERE qown='banquedefrance'
 			total values of owners whose qualities are owned by the depositary 'banquedefrance'
 */
----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW ob_vowned AS SELECT 
 		q.own as qown,
 		q.name as qname,
 		o.name as owner,
 		sum(s.qtt) as qtt,
 		min(s.created) as created,
-		max(CASE WHEN s.updated IS NULL THEN s.created ELSE s.updated END) as updated
-    	FROM ob_tstock s INNER JOIN ob_towner o ON (s.own=o.id) INNER JOIN ob_tquality q on (s.nf=q.id) 
+		max(CASE WHEN s.updated IS NULL 
+			THEN s.created ELSE s.updated END) 
+			as updated
+    	FROM ob_tstock s 
+		INNER JOIN ob_towner o ON (s.own=o.id) 
+		INNER JOIN ob_tquality q on (s.nf=q.id) 
 	GROUP BY s.own,s.nf,q.name,o.name,q.own;
 	
 GRANT SELECT ON TABLE ob_vowned TO market,depositary;
-----------------------------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ob_vbalance 
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PUBLIC
 /* List of values owned by users GROUP BY q.name,q.own
 view
@@ -1010,21 +1106,23 @@ view
 		SELECT * FROM ob_vbalance WHERE qtt != 0 and qown='banquedefrance'
 			Is empty if accounting is correct for the depositary
 */
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW ob_vbalance AS SELECT 
 		q.own as qown,
     		q.name as qname,
 		sum(s.qtt) as qtt,
     		min(s.created) as created,
-    		max(CASE WHEN s.updated IS NULL THEN s.created ELSE s.updated END)  as updated
+    		max(CASE WHEN s.updated IS NULL 
+			THEN s.created ELSE s.updated END)  
+			as updated
     	FROM ob_tstock s INNER JOIN ob_tquality q on (s.nf=q.id)
 	GROUP BY q.name,q.own;
 	
 GRANT SELECT ON TABLE ob_vbalance TO depositary,market;
 
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_vdraft
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PUBLIC
 /* List of draft by owner
 view
@@ -1040,7 +1138,7 @@ view
 		SELECT * FROM ob_vdraft WHERE owner='toto'
 			list of drafts for the owner 'toto'
 */
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW ob_vdraft AS 
 		SELECT 	
 			dr.id as did,
@@ -1057,9 +1155,10 @@ CREATE OR REPLACE VIEW ob_vdraft AS
 		INNER JOIN ob_towner w ON w.id = co.wid;
 	
 GRANT SELECT ON TABLE ob_vdraft TO depositary,market;
-----------------------------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ob_vbid
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PUBLIC
 /* List of bids
 view
@@ -1078,7 +1177,7 @@ view
 		SELECT * FROM ob_vbid WHERE owner='toto'
 			list of bids of the owner 'toto'
 */
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW ob_vbid AS 
 	SELECT 	
 		n.id as id,
@@ -1099,9 +1198,10 @@ CREATE OR REPLACE VIEW ob_vbid AS
 	ORDER BY n.created DESC;
 	
 GRANT SELECT ON TABLE ob_vbid TO depositary,market;
-----------------------------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ob_vmvt R
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- view PUBLIC
 /* 
 		returns a list of movements related to the owner.
@@ -1115,7 +1215,7 @@ GRANT SELECT ON TABLE ob_vbid TO depositary,market;
 			created:	timestamp
 
 */
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW ob_vmvt AS 
 	SELECT 	m.id as id,
 		m.did as did,
@@ -1131,7 +1231,7 @@ CREATE OR REPLACE VIEW ob_vmvt AS
 	
 GRANT SELECT ON TABLE ob_vmvt TO depositary,market;
 
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_fadd_account 
 -- PUBLIC
 /* usage:
@@ -1149,8 +1249,10 @@ GRANT SELECT ON TABLE ob_vmvt TO depositary,market;
 			
 	returns 0 when done correctly
 */
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_fadd_account(_owner text,_quality text,_qtt int8) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_fadd_account(_owner text,_quality text,_qtt int8) 
+	RETURNS int AS $$
 DECLARE
 	_wid int8;
 	_nf int8;
@@ -1160,7 +1262,9 @@ DECLARE
 	acc ob_tstock%rowtype;
 	err	int :=0;
 BEGIN
-	SELECT id,qtt INTO _nf,_qtt_quality FROM ob_tquality WHERE name =  _quality;
+	-- TODO do not werify ownership of quality
+	SELECT id,qtt INTO _nf,_qtt_quality FROM ob_tquality 
+		WHERE name =  _quality;
 	IF NOT FOUND THEN 
 		err := -30405;
 		RAISE EXCEPTION '[-30405]The quality % does not exist or is not yours',_quality   USING ERRCODE='38000';
@@ -1169,31 +1273,41 @@ BEGIN
 		err := -30414;
 		RAISE EXCEPTION '[-30414] the quantity cannot be negative or null'   USING ERRCODE='38000';
 	END IF;
+	-- TODO What ?????
 	BEGIN
 		INSERT INTO ob_towner (name) VALUES ( _owner) RETURNING id INTO _wid;
 	EXCEPTION WHEN unique_violation THEN 
 	END;
 	SELECT id INTO _wid from ob_towner where name=_owner;
 
-	UPDATE ob_tquality SET qtt = qtt + _qtt where id= _nf RETURNING qtt INTO _new_qtt_quality;
+	UPDATE ob_tquality SET qtt = qtt + _qtt 
+		where id= _nf RETURNING qtt INTO _new_qtt_quality;
 	IF (_qtt_quality >= _new_qtt_quality ) THEN 
 		err := -30433;
 		RAISE EXCEPTION '[-30433] Quality % owerflows',_quality   USING ERRCODE='38000';
 	END IF;
 	
 	-- foreign keys of quality and owner protects form insertion of unknown keys
-	UPDATE ob_tstock SET qtt = qtt+_qtt  WHERE own=_wid AND nf=_nf AND type='A' RETURNING * INTO acc;
+	UPDATE ob_tstock SET qtt = qtt+_qtt  
+		WHERE own=_wid AND nf=_nf AND type='A' 
+		RETURNING * INTO acc;
 	IF NOT FOUND THEN
-		INSERT INTO ob_tstock (own,qtt,nf,type) VALUES (_wid,_qtt,_nf,'A') RETURNING * INTO acc;
+		INSERT INTO ob_tstock (own,qtt,nf,type) 
+		VALUES (_wid,_qtt,_nf,'A') 
+		RETURNING * INTO acc;
 	END IF;
 	INSERT INTO ob_tmvt (own_src,own_dst,qtt,nat) 
-		VALUES (1,acc.own, _qtt,acc.nf) RETURNING * INTO mvt;
+		VALUES (1,acc.own, _qtt,acc.nf) 
+		RETURNING * INTO mvt;
 	RETURN 0;
 END; 
 $$ LANGUAGE plpgsql;
 
-GRANT EXECUTE ON FUNCTION ob_fadd_account(_owner text,_quality text,_qtt int8) TO market,depositary;
-----------------------------------------------------------------------------------------------------------------
+GRANT EXECUTE ON FUNCTION 
+	ob_fadd_account(_owner text,_quality text,_qtt int8) 
+	TO market,depositary;
+	
+--------------------------------------------------------------------------------
 -- ob_fsub_account R
 -- PUBLIC
 /* usage:
@@ -1210,8 +1324,10 @@ GRANT EXECUTE ON FUNCTION ob_fadd_account(_owner text,_quality text,_qtt int8) T
 			
 	returns 0 when done correctly
 */
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_fsub_account(_owner text,_quality text,_qtt int8) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_fsub_account(_owner text,_quality text,_qtt int8) 
+	RETURNS int AS $$
 DECLARE
 	_wid int8;
 	_nf int8;
@@ -1220,11 +1336,13 @@ DECLARE
 	mar ob_tstock%rowtype;
 	mvt ob_tmvt%rowtype;
 BEGIN
-	SELECT id INTO _wid FROM ob_towner WHERE name=_owner;
+	SELECT id INTO _wid FROM ob_towner 
+		WHERE name=_owner;
 	IF (NOT FOUND) THEN 
 		RAISE EXCEPTION '[-30412] The owner % does not exist',owner;
 	END IF;
-	SELECT id INTO _nf FROM ob_tquality WHERE name= _quality;
+	SELECT id INTO _nf FROM ob_tquality 
+		WHERE name= _quality;
 	IF (NOT FOUND) THEN 
 		RAISE EXCEPTION '[-30413] The quality % does not exist or is not deposited by user',_quality   USING ERRCODE='38000';
 	END IF;
@@ -1233,17 +1351,20 @@ BEGIN
 	END IF;
 
 	-- foreign keys of quality and owner protects form insertion of unknown keys
-	SELECT s.* INTO acc FROM ob_tstock s WHERE s.own=_wid AND s.nf=_nf AND s.type='A' LIMIT 1;
+	SELECT s.* INTO acc FROM ob_tstock s 
+		WHERE s.own=_wid AND s.nf=_nf AND s.type='A' LIMIT 1;
 	IF NOT FOUND THEN
 		RAISE EXCEPTION '[-30404] the account is empty'  USING ERRCODE='38000';
 	END IF;
 
-	UPDATE ob_tstock SET qtt = qtt-_qtt WHERE id = acc.id RETURNING * INTO acc;
+	UPDATE ob_tstock SET qtt = qtt-_qtt 
+		WHERE id = acc.id RETURNING * INTO acc;
 	IF(acc.qtt < 0) THEN
 		RAISE EXCEPTION '[-30404] the account is not big enough'  USING ERRCODE='38000';	
 	END IF;	
 		
-	UPDATE ob_tquality SET qtt = qtt - _qtt where id=acc.nf RETURNING qtt INTO _qtt_quality;
+	UPDATE ob_tquality SET qtt = qtt - _qtt 
+		where id=acc.nf RETURNING qtt INTO _qtt_quality;
 	IF (_qtt_quality < 0) THEN
 		RAISE EXCEPTION '[-30434] the quality % underflows ',_quality  USING ERRCODE='38000';
 	END IF;	
@@ -1258,10 +1379,13 @@ BEGIN
 	RETURN 0;
 END;
 $$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION ob_fsub_account(_owner text,_quality text,_qtt int8) TO market,depositary;
-----------------------------------------------------------------------------------------------------------------
+GRANT EXECUTE ON FUNCTION 
+	ob_fsub_account(_owner text,_quality text,_qtt int8) 
+	TO market,depositary;
+	
+--------------------------------------------------------------------------------
 -- ob_fremove_das
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PRIVATE called by ob_fdelete_bid
 /* usage:
 	mvt ob_tlmvt = ob_fremove_das(id_src int8)
@@ -1278,8 +1402,10 @@ GRANT EXECUTE ON FUNCTION ob_fsub_account(_owner text,_quality text,_qtt int8) T
 	returns the movement with mvt.id=ret
 	ret <0 if error
 */
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_fremove_das(id_src int8) RETURNS ob_tlmvt AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_fremove_das(id_src int8) 
+	RETURNS ob_tlmvt AS $$
 DECLARE
 	id_dst int8;
 	stock ob_tstock%rowtype;
@@ -1287,17 +1413,22 @@ DECLARE
 	mvt ob_tlmvt%rowtype;
 BEGIN
 	mvt.id := 0;
-	SELECT s.* INTO stock FROM ob_tstock s WHERE s.id=id_src and s.type='S';
+	SELECT s.* INTO stock FROM ob_tstock s 
+		WHERE s.id=id_src and s.type='S';
 	IF NOT FOUND THEN 
 		RAISE NOTICE '[-30409] the stock % with type S was not found',id_src;
 		mvt.id = -30409;
 		RETURN mvt;
 	END IF;
-	SELECT id INTO id_dst FROM ob_tstock s WHERE s.own=stock.own AND s.nf=stock.nf AND s.type='A' LIMIT 1;
+	SELECT id INTO id_dst FROM ob_tstock s 
+		WHERE s.own=stock.own AND s.nf=stock.nf AND s.type='A' LIMIT 1;
 	IF NOT FOUND THEN
-		INSERT INTO ob_tstock (own,qtt,nf,type) VALUES (stock.own,stock.qtt,stock.nf,'A') RETURNING id INTO id_dst;
+		INSERT INTO ob_tstock (own,qtt,nf,type) 
+		VALUES (stock.own,stock.qtt,stock.nf,'A') 
+		RETURNING id INTO id_dst;
 	ELSE 
-		UPDATE ob_tstock SET qtt=qtt+stock.qtt WHERE id=id_dst;
+		UPDATE ob_tstock SET qtt=qtt+stock.qtt 
+			WHERE id=id_dst;
 	END IF;
 
 	mvt.src := id_src;mvt.own_src := stock.own;
@@ -1309,9 +1440,9 @@ BEGIN
 END; 
 $$ LANGUAGE plpgsql;
 
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_finsert_das
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PRIVATE
 --	used by ob_finsert_bid and ob_finsert_bid_int
 /* usage:
@@ -1334,8 +1465,10 @@ $$ LANGUAGE plpgsql;
 	returns the movement
 	or an exception
 */
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_finsert_das(stock ob_tstock,_qtt bigint,_type char) RETURNS ob_tlmvt AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_finsert_das(stock ob_tstock,_qtt bigint,_type char) 
+	RETURNS ob_tlmvt AS $$
 DECLARE
 	id_dst int8;
 	id_mvt int8;
@@ -1358,8 +1491,11 @@ BEGIN
 		mvt.id := -30408;
 		RETURN mvt;
 	END IF;	
-	--------------------------------------------------------------------------------------------------------
-	INSERT INTO ob_tstock (own,nf,qtt,type) VALUES (stock.own,stock.nf,_qtt,_type) RETURNING id INTO id_dst;
+	------------------------------------------------------------------------
+	
+	INSERT INTO ob_tstock (own,nf,qtt,type) 
+		VALUES (stock.own,stock.nf,_qtt,_type) 
+		RETURNING id INTO id_dst;
 	IF NOT FOUND THEN
 		RAISE LOG '[-30427] the stock could not be inserted'; 
 		mvt.id := -30427;
@@ -1375,9 +1511,9 @@ BEGIN
 	RETURN mvt;
 END; 
 $$ LANGUAGE plpgsql;
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_fdelete_bid
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PUBLIC 
 /* usage: 
 	err int = ob_fdelete_bid(bid_id int8)
@@ -1388,8 +1524,9 @@ $$ LANGUAGE plpgsql;
 	
 	A given stock is deleted by the ob_fdelete_bid of the last bid it references.
 */
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_fdelete_bid(bid_id int8) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_fdelete_bid(bid_id int8) RETURNS int AS $$
 DECLARE
 	ret		int;
 BEGIN
@@ -1400,9 +1537,11 @@ BEGIN
 	RETURN 0;
 END;
 $$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION  ob_fdelete_bid(bid_id int8) TO market;
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_fdelete_bid_int(bid_id int8) RETURNS int AS $$
+GRANT EXECUTE ON FUNCTION  
+	ob_fdelete_bid(bid_id int8) TO market;
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_fdelete_bid_int(bid_id int8) RETURNS int AS $$
 DECLARE
 	noeud		ob_tnoeud%rowtype;
 	_commot		ob_tcommit%rowtype;
@@ -1418,18 +1557,22 @@ BEGIN
 		RETURN -30403;
 	END IF;
 	-- verifies the user owns the quality offered
-	SELECT q.name INTO quality FROM ob_tstock s INNER JOIN ob_tquality q on (q.id=s.nf) 
+	SELECT q.name INTO quality FROM ob_tstock s 
+		INNER JOIN ob_tquality q on (q.id=s.nf) 
 		WHERE s.id=noeud.sid and q.own =user ;
 	IF NOT FOUND THEN 
 		RAISE INFO '[-30413] The quality % does not exist or is not owned by user',quality;
 		RETURN -30413;
 	END IF;
-
-	FOR draft_id IN SELECT c.did FROM ob_tcommit c INNER JOIN ob_tdraft d ON (d.id=c.did)
-		WHERE c.bid = bid_id and d.status='D' GROUP BY c.did LOOP
+	------------------------------------------------------------------------
+	FOR draft_id IN SELECT c.did FROM ob_tcommit c 
+		INNER JOIN ob_tdraft d ON (d.id=c.did)
+		WHERE c.bid = bid_id and d.status='D' 
+		GROUP BY c.did LOOP
 		
 		-- more than one commit can be found, but only one is enough to refuse the draft
-		SELECT c.* INTO _commot FROM ob_tcommit c WHERE c.did=draft_id LIMIT 1;
+		SELECT c.* INTO _commot FROM ob_tcommit c 
+			WHERE c.did=draft_id LIMIT 1;
 		ret := ob_frefuse_draft_int(_commot.did,_commot.wid);
 		IF (ret < 0 ) THEN
 			RAISE INFO '[%] Abort in ob_frefuse_draft_int(%,%)',ret,_commot.did,_commot.wid;
@@ -1441,7 +1584,8 @@ BEGIN
 	-- no draft reference this bid
 	DELETE FROM ob_tnoeud WHERE id=bid_id;
 	-- the stock S is deleted if no other bid reference it.
-	SELECT count(id) INTO cnt FROM ob_tnoeud WHERE sid=noeud.sid;
+	SELECT count(id) INTO cnt FROM ob_tnoeud 
+		WHERE sid=noeud.sid;
 	if(cnt =0) THEN 
 		mvt := ob_fremove_das(noeud.sid); -- the stock is removed and qtt goes back to the account
 		IF (mvt.id < 0) THEN 
@@ -1452,7 +1596,7 @@ BEGIN
 	RETURN 0;
 END;
 $$ LANGUAGE plpgsql;
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION ob_fdelete_draft(draft_id int8) RETURNS int AS $$
 DECLARE
 	_commot	ob_tcommit%rowtype;
@@ -1461,24 +1605,32 @@ DECLARE
 	_qtt int8;
 BEGIN
 	-- empty stocks sid_src and sid_dst are deleted
-	FOR _commot IN SELECT * from ob_tcommit WHERE did = draft_id LOOP
+	FOR _commot IN SELECT * from ob_tcommit 
+		WHERE did = draft_id LOOP
 		
-		SELECT qtt INTO _qtt FROM ob_tstock WHERE id = _commot.sid_dst AND TYPE='D';
+		SELECT qtt INTO _qtt FROM ob_tstock 
+			WHERE id = _commot.sid_dst AND TYPE='D';
 		IF(NOT FOUND OR (_qtt != 0)) THEN
 			RAISE INFO '[-30435] cannot delete the draft %',draft_id;
 			RETURN -30435;
 		END IF;
 		-- a stock sid_dst is always referenced by a single commit
-		UPDATE ob_tcommit SET sid_dst=NULL,bid=NULL where id=_commot.id;
+		UPDATE ob_tcommit SET sid_dst=NULL,bid=NULL 
+			where id=_commot.id;
 		DELETE FROM ob_tstock WHERE id=_commot.sid_dst;
 		-- this stock is D; it is not related to ob_tnoeud
 			
 		-- Several draft can refer to the same stockS, and the stockS can be non empty
-		SELECT count(c.did) INTO _cnt FROM ob_tcommit c INNER JOIN ob_tstock s ON (c.sid_src=s.id) 
+		SELECT count(c.did) INTO _cnt 
+			FROM ob_tcommit c 
+			INNER JOIN ob_tstock s ON (c.sid_src=s.id) 
 			WHERE s.qtt=0 AND _commot.sid_src=s.id; 
 		IF (_cnt=1) THEN
-			UPDATE ob_tcommit SET sid_src=NULL,bid=NULL where id=_commot.id;
-			DELETE FROM ob_tstock WHERE id=_commot.sid_src;
+			UPDATE ob_tcommit 
+				SET sid_src=NULL,bid=NULL 
+				where id=_commot.id;
+			DELETE FROM ob_tstock 
+				WHERE id=_commot.sid_src;
 			-- ob_tnoeud deleted by cascade
 		-- ELSE other draft refers to the same stock, we must keep it even if it is empty
 		END IF;
@@ -1489,9 +1641,10 @@ BEGIN
 	RETURN 0;
 END;
 $$ LANGUAGE plpgsql;
-----------------------------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ob_faccept_draft
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PUBLIC 
 /* usage: 
 	ret int = ob_faccept_draft(draft_id int8,owner text)
@@ -1505,9 +1658,10 @@ returns a char:
 		1 the draft is executed, NON, retourne 0!
 		< 0 error
 */
-----------------------------------------------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION ob_faccept_draft(draft_id int8,owner text) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_faccept_draft(draft_id int8,owner text) 
+	RETURNS int AS $$
 DECLARE
 	draft 		ob_tdraft%rowtype;
 	_commot	ob_tcommit%rowtype;
@@ -1519,11 +1673,13 @@ DECLARE
 	res 		int;
 	own_id		int8;
 BEGIN
-	SELECT d.* INTO draft FROM ob_tdraft d WHERE d.id=draft_id;
+	SELECT d.* INTO draft FROM ob_tdraft d 
+		WHERE d.id=draft_id;
 	IF NOT FOUND THEN
 		RAISE EXCEPTION '[-30420] the draft % was not found',draft_id USING ERRCODE='38000';
 	END IF;
-	SELECT id INTO own_id FROM ob_towner WHERE name=owner;
+	SELECT id INTO own_id FROM ob_towner 
+		WHERE name=owner;
 	IF NOT FOUND THEN
 		RAISE EXCEPTION '[-30421] The owner % does not exist',owner USING ERRCODE='38000';
 	END IF;
@@ -1536,19 +1692,20 @@ BEGIN
 		RAISE EXCEPTION '[-30422] The draft % has a status %, whith res=%',draft.id,draft.status,res USING ERRCODE='38000';
 	END IF;	
 
-	SELECT bit_and(flags&1),count(*) INTO accepted,_nbpartner FROM ob_tcommit WHERE did = draft_id AND wid!=own_id;
+	SELECT bit_and(flags&1),count(*) INTO accepted,_nbpartner 
+		FROM ob_tcommit WHERE did = draft_id AND wid!=own_id;
 	if(_nbpartner = 0) THEN -- only one partner for this draft
 		accepted := 1; 
 	END IF;
 	-- accepted=1 when is it accepted by others
 	
-	------------- update status of commits ------------	
+	------------- update status of commits ------------------------------	
 	res := ob_fupdate_status_commits(draft_id,own_id,1,3);
 	IF (res < 0 ) THEN -- the owner was not found, draft unmodified
 		RAISE EXCEPTION '[%] in ob_fupdate_status_commits',res USING ERRCODE='38000';
 	END IF;
 	
-	------------- execute ---------------------------
+	------------- execute -------------------------------------------------
 	--    RAISE INFO 'accepted by others %',accepted;
 	if(accepted = 1) THEN
 		res := ob_fexecute_draft(draft_id);
@@ -1564,11 +1721,12 @@ BEGIN
 	RETURN 0;
 END;
 $$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION ob_faccept_draft(draft_id int8,owner text) TO market;
+GRANT EXECUTE ON FUNCTION 
+	ob_faccept_draft(draft_id int8,owner text) TO market;
 
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_frefuse_draft
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PUBLIC 
 /* usage: 
 	ret int = ob_frefuse_draft(draft_id int8,owner text)
@@ -1580,14 +1738,16 @@ GRANT EXECUTE ON FUNCTION ob_faccept_draft(draft_id int8,owner text) TO market;
 		<0 error
 
 */
-----------------------------------------------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION ob_frefuse_draft(draft_id int8,owner text) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_frefuse_draft(draft_id int8,owner text) 
+	RETURNS int AS $$
 DECLARE
 	own_id	int8;
 	res	int;
 BEGIN
-	SELECT id INTO own_id FROM ob_towner WHERE name = owner;
+	SELECT id INTO own_id FROM ob_towner 
+		WHERE name = owner;
 	IF NOT FOUND THEN
 		RAISE EXCEPTION '[-30421] The owner % does not exist',owner USING ERRCODE='38000';
 	END IF;
@@ -1598,11 +1758,20 @@ BEGIN
 	RETURN res;
 END;
 $$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION ob_frefuse_draft(draft_id int8,owner text) TO market;
-
+GRANT EXECUTE ON FUNCTION 
+	ob_frefuse_draft(draft_id int8,owner text) TO market;
+	
+--------------------------------------------------------------------------------
+-- ob_frefuse_draft_int
+--------------------------------------------------------------------------------
 -- PRIVATE
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_frefuse_draft_int(draft_id int8,own_id int8) RETURNS int as $$
+/* usage: 
+	ret int = ob_frefuse_draft_int(draft_id int8,own_id int8) 
+*/
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_frefuse_draft_int(draft_id int8,own_id int8) 
+	RETURNS int as $$
 DECLARE
 	draft 		ob_tdraft%rowtype;
 	_commot	ob_tcommit%rowtype;
@@ -1611,13 +1780,13 @@ DECLARE
 	stock		ob_tstock%rowtype;
 
 BEGIN
+	------------- controls ------------------------------------------------
 	SELECT d.* INTO draft FROM ob_tdraft d WHERE d.id=draft_id;
 	IF NOT FOUND THEN
 		RAISE INFO '[-30420] the draft % was not found',draft_id ;
 		RETURN -30420;
-	END IF;
-
-	------------- controls --------------------------
+	END IF
+	
 	res := ob_fread_status_draft(draft);
 	IF(res < 0) THEN --draft status corrupted
 		RETURN res;
@@ -1633,28 +1802,31 @@ BEGIN
 		RETURN res;
 	END IF;
 	
-	------------- refuse  ---------------------------------
-	FOR _commot IN SELECT * FROM ob_tcommit WHERE did = draft_id LOOP
+	------------- refuse  --------------------------------------------------
+	FOR _commot IN SELECT * FROM ob_tcommit 
+		WHERE did = draft_id LOOP
 		-- commit.sid_src <- commit.sid_dst
-		SELECT qtt INTO _qtt FROM ob_tstock WHERE id=_commot.sid_dst; 
+		SELECT qtt INTO _qtt FROM ob_tstock 
+			WHERE id=_commot.sid_dst; 
 		IF (NOT FOUND) THEN 
 			RAISE INFO '[-30437] stockD % of draft % not found',_commot.sid_dst,draft_id;
 			RETURN -30437;
 		END IF;
-		UPDATE ob_tstock SET qtt = qtt-_qtt WHERE id=_commot.sid_dst; -- becomes empty
-		UPDATE ob_tstock SET qtt = qtt+_qtt WHERE id=_commot.sid_src;
-			
+		UPDATE ob_tstock SET qtt = qtt-_qtt 
+			WHERE id=_commot.sid_dst; -- becomes empty
+		UPDATE ob_tstock SET qtt = qtt+_qtt 
+			WHERE id=_commot.sid_src;
 	END LOOP;
-	------------- delete draft ---------------------------
+	------------- delete draft --------------------------------------------
 	res := ob_fdelete_draft(draft_id); -- stock_dst are empty
 	 
 	RETURN res;
 END;
 $$ LANGUAGE plpgsql;
 
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_finsert_bid_int
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PRIVATE used by ob_finsert_bid and ob_finsert_sbid
 /* usage: 
 	nb_draft int8 = ob_finsert_bid_int(_sid int8,_qttprovided int8,_qttrequired int8,_qualityrequired text)
@@ -1675,8 +1847,10 @@ $$ LANGUAGE plpgsql;
 		-30406 omega <=0
 		-30407 the pivot was not found or not deposited to user
 */
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_finsert_bid_int(_sid int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_finsert_bid_int(_sid int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
+	RETURNS int AS $$
 DECLARE
 	cnt int;
 	draft_id int8;
@@ -1701,14 +1875,16 @@ DECLARE
 	_delay  int8;
 	new_noeud_id int8;
 BEGIN
-	-- controls
-	SELECT q.id INTO _nr FROM ob_tquality q WHERE q.name = _qualityrequired;
+	------------- controls ------------------------------------------------
+	SELECT q.id INTO _nr FROM ob_tquality q 
+		WHERE q.name = _qualityrequired;
 	IF NOT FOUND THEN
 		RAISE NOTICE '[-30405] the quality % was not found',_qualityrequired;
 		RETURN -30405;
 	END IF;
 
-	SELECT s.* INTO pivot FROM ob_tstock s WHERE s.id = _sid and s.type='S';
+	SELECT s.* INTO pivot FROM ob_tstock s 
+		WHERE s.id = _sid and s.type='S';
 	IF NOT FOUND THEN
 		RAISE NOTICE '[-30407] the pivot % was not found',_sid;
 		RETURN -30407;
@@ -1736,14 +1912,14 @@ BEGIN
 	FOR r IN SELECT * FROM ob_getdraft_get(pivot.id,_omega,pivot.nf,_nr) LOOP
 		/* -- RAISE INFO 'err %',r.ret_algo;	*/
 		err := CAST(r.ret_algo as INT);
-		IF (err != 0) THEN
+		IF (err != 0) THEN /*
 			IF ( err = -30144 ) THEN -- arc forbidden
 				RAISE NOTICE '[-30144] Loop found for arc (Xoid,Yoid)=(%,%)',r.bid,r.sid;
 				_err := ob_fdelete_bid_int(r.bid);
 				IF(_err !=0) THEN
 					RAISE NOTICE '[%] Error in ob_finsert_bid_int()',_err;
 				END IF;
-			END IF;
+			END IF; */
 			RAISE NOTICE '[%] Error in ob_getdraft_get()',err;
 			RETURN err;
 		END IF;
@@ -1847,9 +2023,9 @@ BEGIN
 END; 
 $$ LANGUAGE plpgsql;
 
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_finsert_sbid
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PUBLIC
 /* usage: 
 	nb_draft int8 = ob_finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text)
@@ -1869,19 +2045,23 @@ $$ LANGUAGE plpgsql;
 		-30404, the quality of stock offered is not owned by user 
 		or error returned by ob_finsert_bid_int
 */
-----------------------------------------------------------------------------------------------------------------		
-CREATE OR REPLACE FUNCTION ob_finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) RETURNS int AS $$
+--------------------------------------------------------------------------------		
+CREATE OR REPLACE FUNCTION 
+	ob_finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
+	RETURNS int AS $$
 DECLARE
 	noeud	ob_tnoeud%rowtype;
 	cnt 		int;
 	stock 	ob_tstock%rowtype;
 BEGIN
-	SELECT n.* INTO noeud FROM ob_tnoeud n WHERE n.id = bid_id;
+	SELECT n.* INTO noeud FROM ob_tnoeud n 
+		WHERE n.id = bid_id;
 	IF NOT FOUND THEN
 		RAISE EXCEPTION '[-30403] the bid % was not found',bid_id USING ERRCODE='38000';
 	END IF;
 	-- controls
-	SELECT s.* INTO stock FROM ob_tstock s WHERE  s.id = noeud.sid ;
+	SELECT s.* INTO stock FROM ob_tstock s 
+		WHERE  s.id = noeud.sid ;
 	IF NOT FOUND THEN
 		RAISE EXCEPTION '[-30404] the stock % was not found',noeud.sid USING ERRCODE='38000';
 	END IF;
@@ -1894,10 +2074,13 @@ BEGIN
 END; 
 $$ LANGUAGE plpgsql;
 
-GRANT EXECUTE ON FUNCTION ob_finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) TO market;
-----------------------------------------------------------------------------------------------------------------
+GRANT EXECUTE ON FUNCTION 
+	ob_finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
+	TO market;
+	
+--------------------------------------------------------------------------------
 -- ob_finsert_bid
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PUBLIC
 /* usage: 
 	nb_draft int8 = ob_finsert_bid(_owner text,_qualityprovided text,qttprovided int8,_qttrequired int8,_qualityrequired text)
@@ -1916,8 +2099,11 @@ GRANT EXECUTE ON FUNCTION ob_finsert_sbid(bid_id int8,_qttprovided int8,_qttrequ
 		or error returned by ob_finsert_bid_int
 
 */
-----------------------------------------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION ob_finsert_bid(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_finsert_bid(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
+	RETURNS int AS $$
+	
 DECLARE
 	cnt int;
 	i	int8;
@@ -1925,7 +2111,9 @@ DECLARE
 	stock ob_tstock%rowtype;
 BEGIN
 	-- controls
-	SELECT s.* INTO stock FROM ob_tstock s INNER JOIN ob_towner w ON (w.id=s.own ) INNER JOIN ob_tquality q ON ( s.nf=q.id )
+	SELECT s.* INTO stock FROM ob_tstock s 
+		INNER JOIN ob_towner w ON (w.id=s.own ) 
+		INNER JOIN ob_tquality q ON ( s.nf=q.id )
 		WHERE s.type='A' and (s.qtt >=_qttprovided) AND q.name=_qualityprovided and w.name=_owner;
 	IF NOT FOUND THEN
 		RAISE EXCEPTION '[-30404] the account was not found or not big enough' USING ERRCODE='38000';
@@ -1945,11 +2133,13 @@ BEGIN
 END; 
 $$ LANGUAGE plpgsql;
 
-GRANT EXECUTE ON FUNCTION ob_finsert_bid(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
+GRANT EXECUTE ON FUNCTION 
+	ob_finsert_bid(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
 TO market;
-----------------------------------------------------------------------------------------------------------------
+
+--------------------------------------------------------------------------------
 -- ob_fread_omega
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PRIVATE used by ob_fbatch_omega(commit_src ob_tcommit,tmpc_dst ob_tcommit)
 /* usage: 
 	error int ob_fread_omega(nr int8,nf int8)
@@ -1958,9 +2148,10 @@ conditions:
 actions:
 
 */
-----------------------------------------------------------------------------------------------------------------
-
-CREATE OR REPLACE FUNCTION ob_fread_omega(_nr int8,_nf int8) RETURNS int AS $$
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	ob_fread_omega(_nr int8,_nf int8) 
+	RETURNS int AS $$
 DECLARE
 	prem_r ob_tldraft%rowtype;
 	der_r ob_tldraft%rowtype;
@@ -1973,12 +2164,14 @@ DECLARE
 	_nrn text;
 	_nfn text;
 BEGIN
-	SELECT q.name INTO _nrn FROM ob_tquality q WHERE q.id = _nr;
+	SELECT q.name INTO _nrn FROM ob_tquality q 
+		WHERE q.id = _nr;
 	IF NOT FOUND THEN
 		RAISE NOTICE '[-30402] the quality nr=% was not found',_nr;
 		RETURN -30402;
 	END IF;
-	SELECT q.name INTO _nfn FROM ob_tquality q WHERE q.id = _nf;
+	SELECT q.name INTO _nfn FROM ob_tquality q 
+		WHERE q.id = _nf;
 	IF NOT FOUND THEN
 		RAISE  NOTICE '[-30402] the quality nf=% was not found',_nf;
 		RETURN -30402;
@@ -2030,9 +2223,9 @@ BEGIN
 END; 
 $$ LANGUAGE plpgsql;
 
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- ob_fbatch_omega
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 -- PUBLIC 
 /* usage: ret int  = ob_fbatch_omega()
 
@@ -2043,9 +2236,11 @@ utility calling ob_fread_omega(nr,nf) for the couple (nr,nf) that needs refresh 
 	
 Should be called by a cron.
 */
-----------------------------------------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
 
-CREATE OR REPLACE FUNCTION ob_fbatch_omega() RETURNS int AS $$
+CREATE OR REPLACE FUNCTION 
+	ob_fbatch_omega() 
+	RETURNS int AS $$
 DECLARE
 	_nr	int8 :=0;
 	_nf	int8 :=0;
