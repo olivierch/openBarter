@@ -36,7 +36,8 @@ DROP TYPE IF EXISTS ob_tret_stats CASCADE;
 DROP FUNCTION IF EXISTS ob_fstats() CASCADE;
 
 DROP FUNCTION IF EXISTS ob_fdelete_draft(int8) CASCADE;
-DROP FUNCTION IF EXISTS ob_fcurrval(text) CASCADE;
+DROP FUNCTION IF EXISTS ob_fcurrval_tdraft() CASCADE;
+DROP FUNCTION IF EXISTS ob_fget_user() CASCADE;
 DROP FUNCTION IF EXISTS ob_fcreate_quality(text) CASCADE;
 
 DROP VIEW IF EXISTS ob_vowned,ob_vbalance,ob_vmvt,ob_vdraft,ob_vbid CASCADE;
