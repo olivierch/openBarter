@@ -148,11 +148,10 @@ create table ob_towner (
 );
 alter sequence ob_towner_id_seq owned by ob_towner.id;
 create index ob_towner_name_idx on ob_towner(name);
-insert into ob_towner (name) values ('market');
-
 CREATE TRIGGER trig_befa_ob_towner BEFORE INSERT 
 	OR UPDATE ON ob_towner FOR EACH ROW 
 	EXECUTE PROCEDURE ob_ftime_updated();
+insert into ob_towner (name) values ('market');
 
 --------------------------------------------------------------------------------
 -- OB_TSTOCK
@@ -246,7 +245,7 @@ create table ob_tdraft (
     delay int8, 
     created timestamp,
      CHECK (status in('A','C','D')),
-     CHECK (nbnoeud <= 8 ),
+     CHECK ((nbnoeud <= 8) and (nbnoeud >=2)),
     PRIMARY KEY(id)
 );
 -- alter sequence ob_tdraft_id_seq owned by ob_tdraft.id;
@@ -884,7 +883,7 @@ GRANT EXECUTE ON FUNCTION ob_fstats() TO market;
 		_qtt >=0
 		
 	actions:
-		owner is created is it does not exist
+		owner is created if it does not exist
 		moves qtt from 	market_account[nat]		->	owners_account[own,nat]
 		accounts are created when they do not exist
 		the movement is recorded.
@@ -985,6 +984,7 @@ BEGIN
 	IF (NOT FOUND) THEN 
 		RAISE EXCEPTION '[-30412] The owner % does not exist',owner;
 	END IF;
+	-- TODO do not werify ownership of quality
 	SELECT id INTO _nf FROM ob_tquality 
 		WHERE name= _quality;
 	IF (NOT FOUND) THEN 
@@ -2178,14 +2178,7 @@ BEGIN
 	FOR r IN SELECT * FROM ob_getdraft_get(pivot.id,_omega,pivot.nf,_nr) LOOP
 		/* -- RAISE INFO 'err %',r.ret_algo;	*/
 		err := CAST(r.ret_algo as INT);
-		IF (err != 0) THEN /*
-			IF ( err = -30144 ) THEN -- arc forbidden
-				RAISE NOTICE '[-30144] Loop found for arc (Xoid,Yoid)=(%,%)',r.bid,r.sid;
-				_err := ob_fdelete_bid_int(r.bid);
-				IF(_err !=0) THEN
-					RAISE NOTICE '[%] Error in ob_finsert_bid_int()',_err;
-				END IF;
-			END IF; */
+		IF (err != 0) THEN 
 			RAISE NOTICE '[%] Error in ob_getdraft_get()',err;
 			RETURN err;
 		END IF;
@@ -2377,3 +2370,109 @@ BEGIN
 	RETURN 0;
 END; 
 $$ LANGUAGE plpgsql;
+/*
+dnUser:
+	the name of a depository is the ssl_client_dn_field('commonName') 
+	of it's certificate
+dnquality:
+	for a quality nameQuality owned by dnUser, it is:
+		dnUser>nameQuality
+
+Rules:
+	A user can add or sub values only if he owns the quality of the value
+	A user can accept/refuse draft only if he is the owner of some quality exchanged 
+	A user can make a bid or sbid on values only if he owns the quality provided.
+
+Procedure:
+
+When a session is started, the role is "noright" and a single function is allowed: ob_finit()
+
+To subscribe
+	the user sends a certificate by email
+	admin executes ob_fcert_create(dnuser)
+	The user connects (status=0)
+		The access is denied, but a new record is inserted and other_certificate is stored
+	admin executes ob_fenableuser(dnuser,quotabid) 
+	status=1
+	
+When a certificate is updated
+	admin executes ob_fcert_renewal(dnuser) 
+	status=2
+	The user connects with the new certificate with the same 'commonName'
+		The access is denied, but other_certificate is stored
+	admin verifies that other_certificate is correct
+	admin executes ob_fcert_enable(dnuser,quotabid)
+	status=3
+	a batch status 3->1
+	
+table ob_tuser
+	status int default 0, 
+		0 before the first connexion
+		1 activated
+		2 renewal
+		3 verified
+			1,2,3 activated
+
+	certificate text default NULL, 
+		(ssl_issuer_dn() || ':' || CAST(ssl_client_serial() AS text) )
+	since timestamp,
+		time when cntbid was 0
+	cntbid int,
+		incremented when a bid or sbid is made
+	quotabib int default 0,
+		the maximum number of bid or sbid allowed per day
+	dnuser text UNIQUE,
+		ssl_client_dn_field('commonName') 
+	other_certificate text default NULL,
+	created timestamp,
+	updated timestamp,
+	PRIMARY KEY (dnuser),
+	
+function ob_fcert_init()
+	if a the dnuser on ssl_client_dn_field('commonName') 
+		if status = 0
+			the certificate is stored into other_certificate
+			deny access
+			
+		if the certificate matches 
+			if status=2, 
+				the certificate is stored into other_certificate
+				
+			if quotabid !=0,
+				a session variable is set to dnuser,
+				the role is set to depository
+			else 
+				deny access
+
+
+for role admin
+==========
+function ob_fcert_create(dnuser,email):
+	inserts a user with the dnuser, status<-0
+	created <- now()
+	send email
+
+function ob_fcert_enable(dnuser,quotabid):
+	if( status =0  or status=2) 
+		moves ob_tuser.other_certificate to ob_tuser.certificate
+		defines the quotabid
+		status<-3
+	else 
+		exception
+		
+function ob_fcert_renewal(dnuser):
+	if(status = 1)
+		status=2
+	else 
+		exception
+	
+a batch at midnight
+	if status=3 status<-1
+	send email
+	
+		
+> Is there a way to run a pl/pgsql automatically at server startup ?
+in your postgres startup script launch a session with `psql ... -c "some
+sql commands"` or `psql ... -f somescript.sql` ... 
+	
+*/
