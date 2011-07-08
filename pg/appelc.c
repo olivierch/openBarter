@@ -227,7 +227,7 @@ static ob_getdraft_ctx* ob_getdraft_getcommit_init(TupleDesc tuple_desc,PG_FUNCT
 		return _ob_exit_nicely(ctx->conn);
 	}
 	PQclear(res);
-	snprinft(sql,obCMAXBUF,"SELECT ob_fgetdraft_get(%lli,%f,%lli,%lli)",pivot->stocId,pivot->omega,pivot->nF,pivot->nR);
+	snprinft(sql,obCMAXBUF,"SELECT ob.fgetdraft_get(%lli,%f,%lli,%lli)",pivot->stocId,pivot->omega,pivot->nF,pivot->nR);
 	res = PQexec(ctx->conn, sql);
 	if (PQresultStatus(res) != PGRES_COMMAND_OK)
 	{

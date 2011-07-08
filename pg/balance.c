@@ -146,7 +146,7 @@ static ob_tConnectDescp* _ob_balance_getConnect(void)
 
 	//*ptabconnect = NULL;
 
-	const char *sql = "SELECT conn_datas,conninfo FROM ob_tconnectdesc where valid=true ";
+	const char *sql = "SELECT conn_datas,conninfo FROM ob.tconnectdesc where valid=true ";
 	ret = SPI_execute(sql,true,0);
 	if(ret != SPI_OK_SELECT) {
 		elog(ERROR, "SPI_execute failed %i for %s",ret,sql);

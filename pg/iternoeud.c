@@ -144,9 +144,9 @@ int ob_iternoeud_Init(void) {
 		goto err;
 	}
 	connected = true;
-	if(ob_iternoeud_getTupleDesc("ob_tquality",&ob->tupDescQuality)) goto err;
-	if(ob_iternoeud_getTupleDesc("ob_tstock",&ob->tupDescStock)) goto err;
-	if(ob_iternoeud_getTupleDesc("ob_tnoeud",&ob->tupDescNoeud)) goto err;
+	if(ob_iternoeud_getTupleDesc("ob.tquality",&ob->tupDescQuality)) goto err;
+	if(ob_iternoeud_getTupleDesc("ob.tstock",&ob->tupDescStock)) goto err;
+	if(ob_iternoeud_getTupleDesc("ob.tnoeud",&ob->tupDescNoeud)) goto err;
 	if(_ob_iternoeud_PrepareIterNoeuds2()) goto err;
 	if(_ob_iternoeud_PrepareGetStock()) goto err;
 	failed = 0;
@@ -169,7 +169,7 @@ err:
 	 * ret == -1 error
  ******************************************************************************/
 static int _ob_iternoeud_PrepareGetStock(void) { // called by _SPI_init->_ob_iternoeud_Init()
-	char cmde[] = "SELECT * FROM ob_tstock WHERE id=$1";
+	char cmde[] = "SELECT * FROM ob.tstock WHERE id=$1";
 	Oid oids[1];
 	ob_tGlob *ob = &openbarter_g;
 
@@ -281,7 +281,7 @@ fin:
 ******************************************************************************/
 
 static int _ob_iternoeud_PrepareIterNoeuds2(void) { // called by _SPI_init->_ob_iternoeud_Init()
-	char cmde[] = "SELECT NOX.id,NOX.sid,NOX.omega,NOX.nr,NOX.nf,NOX.own,S.qtt,S.version FROM ob_tnoeud NOX INNER JOIN ob_tstock S ON (NOX.sid =S.id) WHERE NOX.nf=$2 AND S.qtt!=0 and S.type='S' LIMIT $3";
+	char cmde[] = "SELECT NOX.id,NOX.sid,NOX.omega,NOX.nr,NOX.nf,NOX.own,S.qtt,S.version FROM ob.tnoeud NOX INNER JOIN ob.tstock S ON (NOX.sid =S.id) WHERE NOX.nf=$2 AND S.qtt!=0 and S.type='S' LIMIT $3";
 	Oid oids[3];
 	ob_tGlob *ob = &openbarter_g;
 	const char s_Yid[] = "id";

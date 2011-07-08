@@ -28,7 +28,7 @@ Datum ob_getdraft_get(PG_FUNCTION_ARGS);
 
 /***************************************************************************************
 usage:
-	SELECT ob_getdraft_get(1,1.,2,3);
+	SELECT ob.getdraft_get(1,1.,2,3);
 returns the list of drafts.
 
 PG_FUNCTION_ARGS = (stockId,omega,nF,nR)

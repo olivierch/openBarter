@@ -123,7 +123,7 @@ static ob_appel_ctx* ob_appel_from_master_init(TupleDesc tuple_desc,PG_FUNCTION_
 		goto abort;
 	}
 	PQclear(res);
-	snprintf(sql,obCMAXBUF,"DECLARE myportal CURSOR FOR SELECT * FROM ob_getdraft_get(%lli,%f,%lli,%lli)",
+	snprintf(sql,obCMAXBUF,"DECLARE myportal CURSOR FOR SELECT * FROM ob.getdraft_get(%lli,%f,%lli,%lli)",
 			PG_GETARG_INT64(0),PG_GETARG_FLOAT8(1),PG_GETARG_INT64(2),PG_GETARG_INT64(3));
 			//pivot->stockId,pivot->omega,pivot->nF,pivot->nR);
 	res = PQexec(ctx->conn, sql);
