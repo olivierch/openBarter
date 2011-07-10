@@ -2,6 +2,7 @@ SET client_min_messages = warning;
 \set ECHO none
 -- CREATE LANGUAGE PLPGSQL;
 \i openbarter.sql
+set search_path=market;
 \set ECHO all
 RESET client_min_messages;
 /*
