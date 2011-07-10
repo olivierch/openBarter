@@ -8,11 +8,10 @@ A database is created:
 	
 Before the model is settled, roles market and depositary should be created.
 	CREATE ROLE noright LOGIN;
-	CREATE ROLE market LOGIN;
+	CREATE ROLE market;
 	CREATE ROLE depositary;
-	
-
-
+	CREATE ROLE admin LOGIN;
+	GRANT depositary to market;
 
 --------------------------------------------------------------------------------
 TYPES
@@ -50,9 +49,13 @@ stocks are modified with version N, and when it is done, ob.tdraft_id_seq <- N+n
 */
 drop schema if exists public cascade;
 create schema ob;
+comment on schema ob is 
+'Internal state of market';
+create schema market;
+comment on schema market is
+'Public repesentation of market';
 set search_path = ob;
-/* revoke all on the schema */
-revoke all on schema ob from public;
+
 
 create sequence ob.tdraft_id_seq; 
 select setval('ob.tdraft_id_seq',1);
@@ -66,7 +69,7 @@ BEGIN
 	NEW.created := statement_timestamp();
 	RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
 -- ob.ftime_updated 
@@ -82,7 +85,7 @@ BEGIN
 	END IF;
 	RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
 -- ob.ins_version
@@ -93,7 +96,7 @@ BEGIN
 	SELECT last_value INTO NEW.version from ob.tdraft_id_seq;
 	RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
 -- ob.tdraft
@@ -106,25 +109,37 @@ BEGIN
 	SELECT last_value INTO res from ob.tdraft_id_seq;
 	RETURN res;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 
---------------------------------------------------------------------------------
--- ob.fget_user
---------------------------------------------------------------------------------
-CREATE FUNCTION ob.fget_user() 
-	RETURNS text AS $$
-BEGIN
-	if(!ssl_is_used()) THEN 
-		RETURN user; 
-	END IF;
-	if(!ssl_client_cert_present()) THEN
-		RAISE EXCEPTION '[-30439] Client certificate required';
-	END IF;
-	return (ssl_issuer_dn() || ':' || CAST(ssl_client_serial() AS text));
+/* functions of sslinfo */
+CREATE FUNCTION ob.ssl_client_serial() RETURNS numeric
+AS '$libdir/sslinfo', 'ssl_client_serial'
+LANGUAGE C STRICT;
 
-END;
-$$ LANGUAGE plpgsql;
+CREATE FUNCTION ob.ssl_is_used() RETURNS boolean
+AS '$libdir/sslinfo', 'ssl_is_used'
+LANGUAGE C STRICT;
+
+CREATE FUNCTION ob.ssl_client_cert_present() RETURNS boolean
+AS '$libdir/sslinfo', 'ssl_client_cert_present'
+LANGUAGE C STRICT;
+
+CREATE FUNCTION ob.ssl_client_dn_field(text) RETURNS text
+AS '$libdir/sslinfo', 'ssl_client_dn_field'
+LANGUAGE C STRICT;
+
+CREATE FUNCTION ob.ssl_issuer_field(text) RETURNS text
+AS '$libdir/sslinfo', 'ssl_issuer_field'
+LANGUAGE C STRICT;
+
+CREATE FUNCTION ob.ssl_client_dn() RETURNS text
+AS '$libdir/sslinfo', 'ssl_client_dn'
+LANGUAGE C STRICT;
+
+CREATE FUNCTION ob.ssl_issuer_dn() RETURNS text
+AS '$libdir/sslinfo', 'ssl_issuer_dn'
+LANGUAGE C STRICT;
 
 /*******************************************/
 -- TABLES
@@ -405,18 +420,16 @@ INSERT INTO ob.tconnectdesc (conninfo,valid)
 --------------------------------------------------------------------------------
  -- 
 --------------------------------------------------------------------------------
--- privileges granted to public
-GRANT SELECT ON TABLE 
+/*GRANT SELECT ON TABLE 
 	ob.tconnectdesc,ob.tquality,ob.towner,ob.tstock,
 	ob.tnoeud,ob.tdraft,
 	ob.tcommit,ob.tomega,ob.tlomega,ob.tmvt 
-	TO PUBLIC;
-	
+	TO depositary;	*/
 /*******************************************/
  -- VIEWS
 /*******************************************/
 --------------------------------------------------------------------------------
--- ob.vowned
+-- market.vowned
 --------------------------------------------------------------------------------
 /* List of values owned by users GROUP BY s.own,s.nf,q.name,o.name,q.own 
 	view
@@ -428,13 +441,13 @@ GRANT SELECT ON TABLE
 			created:	min(created)
 			updated:	max(updated?updated:created)
 	usage:
-		SELECT * FROM ob.vowned WHERE owner='toto'
+		SELECT * FROM market.vowned WHERE owner='toto'
 			total values owned by the owner 'toto'
-		SELECT * FROM ob.vowned WHERE qown='banquedefrance'
+		SELECT * FROM market.vowned WHERE qown='banquedefrance'
 			total values of owners whose qualities are owned by the depositary 'banquedefrance'
 */
 --------------------------------------------------------------------------------
-CREATE VIEW ob.vowned AS SELECT 
+CREATE VIEW market.vowned AS SELECT 
 		q.own as qown,
 		q.name as qname,
 		o.name as owner,
@@ -448,10 +461,10 @@ CREATE VIEW ob.vowned AS SELECT
 		INNER JOIN ob.tquality q on (s.nf=q.id) 
 	GROUP BY s.own,s.nf,q.name,o.name,q.own;
 	
-GRANT SELECT ON TABLE ob.vowned TO market,depositary;
+GRANT SELECT ON TABLE market.vowned TO depositary;
 
 --------------------------------------------------------------------------------
--- ob.vbalance 
+-- market.vbalance 
 --------------------------------------------------------------------------------
 -- PUBLIC
 /* List of values owned by users GROUP BY q.name,q.own
@@ -464,14 +477,14 @@ view
 			updated:	max(updated?updated:created)
 	usage:
 	
-		SELECT * FROM ob.vbalance WHERE qown='banquedefrance'
+		SELECT * FROM market.vbalance WHERE qown='banquedefrance'
 			total values owned by the depositary 'banquedefrance'
 			
-		SELECT * FROM ob.vbalance WHERE qtt != 0 and qown='banquedefrance'
+		SELECT * FROM market.vbalance WHERE qtt != 0 and qown='banquedefrance'
 			Is empty if accounting is correct for the depositary
 */
 --------------------------------------------------------------------------------
-CREATE VIEW ob.vbalance AS SELECT 
+CREATE VIEW market.vbalance AS SELECT 
 		q.own as qown,
     		q.name as qname,
 		sum(s.qtt) as qtt,
@@ -482,10 +495,10 @@ CREATE VIEW ob.vbalance AS SELECT
     	FROM ob.tstock s INNER JOIN ob.tquality q on (s.nf=q.id)
 	GROUP BY q.name,q.own;
 	
-GRANT SELECT ON TABLE ob.vbalance TO depositary,market;
+GRANT SELECT ON TABLE market.vbalance TO depositary,market;
 
 --------------------------------------------------------------------------------
--- ob.vdraft
+-- market.vdraft
 --------------------------------------------------------------------------------
 -- PUBLIC
 /* List of draft by owner
@@ -499,11 +512,11 @@ view
 					[1] set when refuse by owner
 			created:	timestamp
 	usage:
-		SELECT * FROM ob.vdraft WHERE owner='toto'
+		SELECT * FROM market.vdraft WHERE owner='toto'
 			list of drafts for the owner 'toto'
 */
 --------------------------------------------------------------------------------
-CREATE VIEW ob.vdraft AS 
+CREATE VIEW market.vdraft AS 
 		SELECT 	
 			dr.id as did,
 			dr.status as status,
@@ -518,10 +531,10 @@ CREATE VIEW ob.vdraft AS
 		INNER JOIN ob.tdraft dr ON co.did = dr.id
 		INNER JOIN ob.towner w ON w.id = co.wid;
 	
-GRANT SELECT ON TABLE ob.vdraft TO depositary,market;
+GRANT SELECT ON TABLE market.vdraft TO depositary;
 
 --------------------------------------------------------------------------------
--- ob.vbid
+-- market.vbid
 --------------------------------------------------------------------------------
 -- PUBLIC
 /* List of bids
@@ -538,11 +551,11 @@ view
 			qtt
 			created	
 	usage:
-		SELECT * FROM ob.vbid WHERE owner='toto'
+		SELECT * FROM market.vbid WHERE owner='toto'
 			list of bids of the owner 'toto'
 */
 --------------------------------------------------------------------------------
-CREATE VIEW ob.vbid AS 
+CREATE VIEW market.vbid AS 
 	SELECT 	
 		n.id as id,
 		w.name as owner,
@@ -561,16 +574,16 @@ CREATE VIEW ob.vbid AS
 	INNER JOIN ob.towner w on s.own = w.id
 	ORDER BY n.created DESC;
 	
-GRANT SELECT ON TABLE ob.vbid TO depositary,market;
+GRANT SELECT ON TABLE market.vbid TO depositary;
 
 --------------------------------------------------------------------------------
--- ob.vmvt R
+-- market.vmvt R
 --------------------------------------------------------------------------------
 -- view PUBLIC
 /* 
 		returns a list of movements related to the owner.
 			id		ob.tmvt.id
-			did:		NULL for a movement made by ob.fadd_account()
+			did:		NULL for a movement made by market.fadd_account()
 					not NULL for a draft executed, even if it has been deleted.
 			provider
 			nat:		quality.name moved
@@ -580,7 +593,7 @@ GRANT SELECT ON TABLE ob.vbid TO depositary,market;
 
 */
 --------------------------------------------------------------------------------
-CREATE VIEW ob.vmvt AS 
+CREATE VIEW market.vmvt AS 
 	SELECT 	m.id as id,
 		m.did as did,
 		w_src.name as provider,
@@ -593,7 +606,7 @@ CREATE VIEW ob.vmvt AS
 	INNER JOIN ob.towner w_dst ON (m.own_dst=w_dst.id) 
 	INNER JOIN ob.tquality q ON (m.nat = q.id);
 	
-GRANT SELECT ON TABLE ob.vmvt TO depositary,market;
+GRANT SELECT ON TABLE market.vmvt TO depositary;
 
 /*
 --------------------------------------------------------------------------------
@@ -603,23 +616,23 @@ T	ob.ins_version
 	ob.fcurrval_tdraft
 
 views
-	ob.vowned
-	ob.vbalance
-	ob.vdraft
-	ob.vbid
-	ob.vmvt
+	market.vowned
+	market.vbalance
+	market.vdraft
+	market.vbid
+	market.vmvt
 
 functions
-P	ob.fcreate_quality
-P	ob.fstats *
-P	ob.fadd_account
-P	ob.fsub_account
-P	ob.finsert_sbid
-P	ob.finsert_bid
-P	ob.faccept_draft	
-P	ob.frefuse_draft
-P	ob.fdelete_bid
-P	ob.fbatch_omega *
+P	market.fcreate_quality
+P	market.fstats *
+P	market.fadd_account
+P	market.fsub_account
+P	market.finsert_sbid
+P	market.finsert_bid
+P	market.faccept_draft	
+P	market.frefuse_draft
+P	market.fdelete_bid
+P	market.fbatch_omega *
 
 	ob.getdraft_get
 	ob.fupdate_status_commits
@@ -632,7 +645,7 @@ P	ob.fbatch_omega *
 	ob.finsert_omega
 	ob.fremove_das
 	ob.finsert_das
-	ob.fdelete_bid_int
+	market.fdelete_bid_int
 	ob.fdelete_draft
 	ob.frefuse_draft_int
 	ob.finsert_bid_int
@@ -640,48 +653,48 @@ P	ob.fbatch_omega *
 --------------------------------------------------------------------------------
 		Calling tree
 
-ob.fbatch_omega
+market.fbatch_omega
 	ob.fread_omega
 		ob.finsert_omega
 			ob.finsert_omega_int
-		ob.fdelete_bid_int	
+		market.fdelete_bid_int	
 			ob.frefuse_draft_int
 				ob.fread_status_draft
 				ob.fupdate_status_commits
 			ob.fremove_das
 
-ob.finsert_sbid
+market.finsert_sbid
 	ob.finsert_bid_int
 		ob.getdraft_get *
 		ob.finsert_das
 		ob.fomega_draft
 		
-ob.finsert_bid
+market.finsert_bid
 	ob.finsert_das
 	ob.finsert_bid_int
 		ob.getdraft_get *
 		ob.finsert_das
 		ob.fomega_draft
 
-ob.faccept_draft
+market.faccept_draft
 	ob.fread_status_draft
 	ob.fupdate_status_commits
 	ob.fexecute_draft
 		ob.fexecute_commit
 		
-ob.frefuse_draft
+market.frefuse_draft
 	ob.fread_status_draft
 	ob.fupdate_status_commits
 
 ob.fexecute_draft
 	ob.fexecute_commit
 
-ob.fstats
+market.fstats
 	ob.fread_status_draft
 
  the name of a depositary is a user name.
 the role rdepositary has read access on ob.tmvt,ob.tstock
-and can execute ob.fadd_account
+and can execute market.fadd_account
 
 error codes are 'OBxxxx' 
 ************************
@@ -736,22 +749,22 @@ error codes are 'OBxxxx'
 --------------------------------------------------------------------------------
 
 /* 
-ob.fstats and ob.fbatch_omega are granted to market
+market.fstats and market.fbatch_omega are granted to market
 
-ret int = ob.fcreate_quality(_name text)
-ob.fstats() RETURNS SETOF ob.tret_stats
+ret int = market.fcreate_quality(_name text)
+market.fstats() RETURNS SETOF market.tret_stats
 
-ret int = ob.fadd_account(owner text,quality text,_qtt int8)
-ret int = ob.fsub_account(owner text,quality text,_qtt int8)
+ret int = market.fadd_account(owner text,quality text,_qtt int8)
+ret int = market.fsub_account(owner text,quality text,_qtt int8)
 
-ret int = ob.finsert_sbid(bid_id int8,_qttrequired int8,_qualityrequired text)
-ret int = ob.finsert_bid(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text)
+ret int = market.finsert_sbid(bid_id int8,_qttrequired int8,_qualityrequired text)
+ret int = market.finsert_bid(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text)
 
-ret int = ob.faccept_draft(draft_id int8,owner text)
-ret int = ob.frefuse_draft(draft_id int8,owner text)
+ret int = market.faccept_draft(draft_id int8,owner text)
+ret int = market.frefuse_draft(draft_id int8,owner text)
 
-err int = ob.fdelete_bid(bid_id int8)
-ret int  = ob.fbatch_omega()
+err int = market.fdelete_bid(bid_id int8)
+ret int  = market.fbatch_omega()
 
 -- 
 */
@@ -764,40 +777,40 @@ ret int  = ob.fbatch_omega()
 		[-30432] The quality already exists
 */
 --------------------------------------------------------------------------------
-CREATE FUNCTION ob.fcreate_quality(_name text) 
+CREATE FUNCTION market.fcreate_quality(_name text) 
 	RETURNS int AS $$
 DECLARE 
 	_q 	ob.tquality%rowtype;
 	_n	text;
+	_user	text;
 BEGIN
-	_n := user || '>' || _name;
-	SELECT q.* INTO _q FROM ob.tquality q WHERE q.name=_n and q.own=user LIMIT 1;
+	_user = ob.fgetuser(1);
+	_n := _user || '>' || _name;
+	SELECT q.* INTO _q FROM ob.tquality q WHERE q.name=_n and q.own=_user LIMIT 1;
 	IF NOT FOUND THEN
 		INSERT INTO ob.tquality(name,own,qtt) 
-			VALUES (_n,user,0) RETURNING * INTO _q;
+			VALUES (_n,_user,0) RETURNING * INTO _q;
 	ELSE
 		RAISE NOTICE '[-30432] The quality % already exists',_n;
 		RETURN -30432;
 	END IF;
 	RETURN 0;
 END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION 
-	ob.fcreate_quality(_name text) TO depositary;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
--- ob.fstats
+-- market.fstats
 --------------------------------------------------------------------------------
 -- PUBLIC
 /* usage:
-	ret ob.fstats = ob.fstats()
+	ret market.fstats = market.fstats()
 
 
-	returns a list of ob.tret_stats
+	returns a list of market.tret_stats
 */
 --------------------------------------------------------------------------------
--- DROP TYPE IF EXISTS ob.tret_stats CASCADE;
-CREATE TYPE ob.tret_stats AS (
+-- DROP TYPE IF EXISTS market.tret_stats CASCADE;
+CREATE TYPE market.tret_stats AS (
 
 	mean_time_drafts int8, -- mean of delay for every drafts
 	
@@ -819,15 +832,17 @@ CREATE TYPE ob.tret_stats AS (
 	created timestamp
 );
 --------------------------------------------------------------------------------
-CREATE FUNCTION ob.fstats() RETURNS ob.tret_stats AS $$
+CREATE FUNCTION market.fstats() RETURNS market.tret_stats AS $$
 DECLARE
-	ret ob.tret_stats%rowtype;
+	ret market.tret_stats%rowtype;
 	delays int8;
 	cnt int8;
 	err int8;
 	_draft ob.tdraft%rowtype;
 	res int;
+	_user text;
 BEGIN
+	_user := ob.fgetuser(1);
 	ret.created := statement_timestamp();
 	
 	-- mean time of draft
@@ -886,14 +901,13 @@ BEGIN
 	ret.corrupted_stock_a := err;
 	RETURN ret;
 END; 
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION ob.fstats() TO market;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
--- ob.fadd_account 
+-- market.fadd_account 
 -- PUBLIC
 /* usage:
-	ret int = ob.fadd_account(owner text,quality text,_qtt int8)
+	ret int = market.fadd_account(owner text,quality text,_qtt int8)
 	
 	conditions:
 		quality  exist,
@@ -909,7 +923,7 @@ GRANT EXECUTE ON FUNCTION ob.fstats() TO market;
 */
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	ob.fadd_account(_owner text,_quality text,_qtt int8) 
+	market.fadd_account(_owner text,_quality text,_qtt int8) 
 	RETURNS int AS $$
 DECLARE
 	_wid int8;
@@ -919,10 +933,11 @@ DECLARE
 	mvt ob.tmvt%rowtype;
 	acc ob.tstock%rowtype;
 	err	int :=0;
+	_user text;
 BEGIN
-	-- TODO do not werify ownership of quality
+	_user := ob.fgetuser(1);
 	SELECT id,qtt INTO _nf,_qtt_quality FROM ob.tquality 
-		WHERE name =  _quality;
+		WHERE name =  _quality AND own = _user;
 	IF NOT FOUND THEN 
 		err := -30405;
 		RAISE EXCEPTION '[-30405]The quality % does not exist or is not yours',_quality   USING ERRCODE='38000';
@@ -960,17 +975,13 @@ BEGIN
 		RETURNING * INTO mvt;
 	RETURN 0;
 END; 
-$$ LANGUAGE plpgsql;
-
-GRANT EXECUTE ON FUNCTION 
-	ob.fadd_account(_owner text,_quality text,_qtt int8) 
-	TO depositary;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 	
 --------------------------------------------------------------------------------
--- ob.fsub_account R
+-- market.fsub_account R
 -- PUBLIC
 /* usage:
-	ret int = ob.fsub_account(_owner text,_quality text,_qtt int8)
+	ret int = market.fsub_account(_owner text,_quality text,_qtt int8)
 	
 	conditions:
 		owner and quality  exist,
@@ -986,7 +997,7 @@ GRANT EXECUTE ON FUNCTION
 */
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	ob.fsub_account(_owner text,_quality text,_qtt int8) 
+	market.fsub_account(_owner text,_quality text,_qtt int8) 
 	RETURNS int AS $$
 DECLARE
 	_wid int8;
@@ -995,15 +1006,17 @@ DECLARE
 	acc ob.tstock%rowtype;
 	mar ob.tstock%rowtype;
 	mvt ob.tmvt%rowtype;
+	_user text;
 BEGIN
+	_user := ob.fgetuser(1);
 	SELECT id INTO _wid FROM ob.towner 
 		WHERE name=_owner;
 	IF (NOT FOUND) THEN 
 		RAISE EXCEPTION '[-30412] The owner % does not exist',owner;
 	END IF;
-	-- TODO do not werify ownership of quality
+
 	SELECT id INTO _nf FROM ob.tquality 
-		WHERE name= _quality;
+		WHERE name= _quality AND own=_user;
 	IF (NOT FOUND) THEN 
 		RAISE EXCEPTION '[-30413] The quality % does not exist or is not deposited by user',_quality   USING ERRCODE='38000';
 	END IF;
@@ -1041,17 +1054,14 @@ BEGIN
 
 	RETURN 0;
 END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION 
-	ob.fsub_account(_owner text,_quality text,_qtt int8) 
-	TO depositary;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 	
 --------------------------------------------------------------------------------
--- ob.finsert_sbid
+-- market.finsert_sbid
 --------------------------------------------------------------------------------
 -- PUBLIC
 /* usage: 
-	nb_draft int8 = ob.finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text)
+	nb_draft int8 = market.finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text)
 	
 	conditions:
 		noeud.id=bid_id exists
@@ -1070,13 +1080,16 @@ GRANT EXECUTE ON FUNCTION
 */
 --------------------------------------------------------------------------------		
 CREATE FUNCTION 
-	ob.finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
+	market.finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
 	RETURNS int AS $$
 DECLARE
 	noeud	ob.tnoeud%rowtype;
 	cnt 		int;
 	stock 	ob.tstock%rowtype;
+	_user text;
 BEGIN
+	_user := ob.fgetuser(1);
+	cnt := ob.fbidallowed(_user);
 	SELECT n.* INTO noeud FROM ob.tnoeud n 
 		WHERE n.id = bid_id;
 	IF NOT FOUND THEN
@@ -1095,18 +1108,14 @@ BEGIN
 	END IF;
 	RETURN cnt;
 END; 
-$$ LANGUAGE plpgsql;
-
-GRANT EXECUTE ON FUNCTION 
-	ob.finsert_sbid(bid_id int8,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
-	TO depositary;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 	
 --------------------------------------------------------------------------------
--- ob.finsert_bid
+-- market.finsert_bid
 --------------------------------------------------------------------------------
 -- PUBLIC
 /* usage: 
-	nb_draft int8 = ob.finsert_bid(_owner text,_qualityprovided text,qttprovided int8,_qttrequired int8,_qualityrequired text)
+	nb_draft int8 = market.finsert_bid(_owner text,_qualityprovided text,qttprovided int8,_qttrequired int8,_qualityrequired text)
 
 	conditions:
 		stock.id=acc exists and stock.qtt >=qtt
@@ -1124,7 +1133,7 @@ GRANT EXECUTE ON FUNCTION
 */
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	ob.finsert_bid(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
+	market.finsert_bid(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
 	RETURNS int AS $$
 	
 DECLARE
@@ -1132,7 +1141,10 @@ DECLARE
 	i	int8;
 	mvt ob.tlmvt%rowtype;
 	stock ob.tstock%rowtype;
+	_user text;
 BEGIN
+	_user := ob.fgetuser(1);
+	cnt := ob.fbidallowed(_user);
 	-- controls
 	SELECT s.* INTO stock FROM ob.tstock s 
 		INNER JOIN ob.towner w ON (w.id=s.own ) 
@@ -1154,18 +1166,14 @@ BEGIN
 	END IF;
 	RETURN cnt;
 END; 
-$$ LANGUAGE plpgsql;
-
-GRANT EXECUTE ON FUNCTION 
-	ob.finsert_bid(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text) 
-TO depositary;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
--- ob.faccept_draft
+-- market.faccept_draft
 --------------------------------------------------------------------------------
 -- PUBLIC 
 /* usage: 
-	ret int = ob.faccept_draft(draft_id int8,owner text)
+	ret int = market.faccept_draft(draft_id int8,owner text)
 		own_id
 		draft_id
 conditions:
@@ -1178,7 +1186,7 @@ returns a char:
 */
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	ob.faccept_draft(draft_id int8,owner text) 
+	market.faccept_draft(draft_id int8,owner text) 
 	RETURNS int AS $$
 DECLARE
 	draft 		ob.tdraft%rowtype;
@@ -1190,7 +1198,9 @@ DECLARE
 	d_status	char;
 	res 		int;
 	own_id		int8;
+	_user text;
 BEGIN
+	_user := ob.fgetuser(1);
 	SELECT d.* INTO draft FROM ob.tdraft d 
 		WHERE d.id=draft_id;
 	IF NOT FOUND THEN
@@ -1238,16 +1248,14 @@ BEGIN
 	END IF;
 	RETURN 0;
 END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION 
-	ob.faccept_draft(draft_id int8,owner text) TO depositary;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
--- ob.frefuse_draft
+-- market.frefuse_draft
 --------------------------------------------------------------------------------
 -- PUBLIC 
 /* usage: 
-	ret int = ob.frefuse_draft(draft_id int8,owner text)
+	ret int = market.frefuse_draft(draft_id int8,owner text)
 		own_id
 		draft_id
 	quantities are stored back into the stock S
@@ -1258,12 +1266,14 @@ GRANT EXECUTE ON FUNCTION
 */
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	ob.frefuse_draft(draft_id int8,owner text) 
+	market.frefuse_draft(draft_id int8,owner text) 
 	RETURNS int AS $$
 DECLARE
 	own_id	int8;
 	res	int;
+	_user text;
 BEGIN
+	_user := ob.fgetuser(1);
 	SELECT id INTO own_id FROM ob.towner 
 		WHERE name = owner;
 	IF NOT FOUND THEN
@@ -1275,44 +1285,42 @@ BEGIN
 	END IF;
 	RETURN res;
 END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION 
-	ob.frefuse_draft(draft_id int8,owner text) TO depositary;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 	
 --------------------------------------------------------------------------------
--- ob.fdelete_bid
+-- market.fdelete_bid
 --------------------------------------------------------------------------------
 -- PUBLIC 
 /* usage: 
-	err int = ob.fdelete_bid(bid_id int8)
+	err int = market.fdelete_bid(bid_id int8)
 	
 	delete bid and related drafts
 	delete related stock if it is not related to an other bid
 		(in this case, the stock is not referenced by any draft). The quantity of this stock is moved back to the account.
 	
-	A given stock is deleted by the ob.fdelete_bid of the last bid it references.
+	A given stock is deleted by the market.fdelete_bid of the last bid it references.
 */
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	ob.fdelete_bid(bid_id int8) RETURNS int AS $$
+	market.fdelete_bid(bid_id int8) RETURNS int AS $$
 DECLARE
 	ret		int;
+	_user text;
 BEGIN
-	ret := ob.fdelete_bid_int(bid_id);
+	_user := ob.fgetuser(1);
+	ret := market.fdelete_bid_int(bid_id);
 	IF(ret <0) THEN 
 		RAISE EXCEPTION 'error % ' USING ERRCODE='38000'; 
 	END IF;
 	RETURN 0;
 END;
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION  
-	ob.fdelete_bid(bid_id int8) TO depositary;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 	
 --------------------------------------------------------------------------------
--- ob.fbatch_omega
+-- market.fbatch_omega
 --------------------------------------------------------------------------------
 -- PUBLIC 
-/* usage: ret int  = ob.fbatch_omega()
+/* usage: ret int  = market.fbatch_omega()
 
 utility calling ob.fread_omega(nr,nf) for the couple (nr,nf) that needs refresh the most:
 	-- a couple (nr,nf) such as ob.tomega[nr,nf] does not exist,
@@ -1323,7 +1331,7 @@ Should be called by a cron.
 */
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	ob.fbatch_omega() 
+	market.fbatch_omega() 
 	RETURNS int AS $$
 DECLARE
 	_nr	int8 :=0;
@@ -1369,9 +1377,8 @@ BEGIN
 	END IF;	
 	RETURN err;
 END; 
-$$ LANGUAGE plpgsql;
-GRANT EXECUTE ON FUNCTION  
-	ob.fbatch_omega()  TO market;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON  FUNCTION market.fbatch_omega() TO admin;
 
 /*******************************************/
  -- PRIVATE FUNCTIONS
@@ -1396,12 +1403,12 @@ create table ob.tldraft (
 create function ob.getdraft_get(int8,double precision,int8,int8) 
 	returns setof ob.tldraft
 	as '$libdir/openbarter','ob_getdraft_get' 
-	language C strict;
+	language C strict SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
 -- ob.fupdate_status_commits
 --------------------------------------------------------------------------------
--- PRIVATE called by ob.faccept_draft() and ob.frefuse_draft() to update flags of commits 
+-- PRIVATE called by market.faccept_draft() and market.frefuse_draft() to update flags of commits 
 /* usage: 
 	cnt_updated int = ob.fupdate_status_commits(draft_id int8,own_id int8,_flags int4,mask int4)
 	
@@ -1442,12 +1449,12 @@ BEGIN
 	END IF;
 	RETURN cnt;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- ob.fread_status_draft
 --------------------------------------------------------------------------------
--- PRIVATE  used by ob.faccept_draft,ob.frefuse_draft,ob.fstats
+-- PRIVATE  used by market.faccept_draft,market.frefuse_draft,market.fstats
 /* usage: 
 	ret int = ob.fread_status_draft(draft ob.tdraft)
 	
@@ -1503,7 +1510,7 @@ BEGIN	--
 	RAISE NOTICE '[-30419] the draft % has an illegal status %',draft.id,draft.status;
 	RETURN -30419;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- ob.fexecute_commit
@@ -1561,16 +1568,16 @@ BEGIN
 		VALUES (commit_src.wid,commit_dst.wid,stock_src.qtt,stock_src.nf) 
 		RETURNING id INTO id_mvt;
 	-- did is NOT set, it is at the end of the execute_draft to the first mvt_id for all commits of the draft	
-	-- delete stock is useless since the draft is deleted just after execution, in ob.faccept_draft() by ob.fdelete_draft()
+	-- delete stock is useless since the draft is deleted just after execution, in market.faccept_draft() by ob.fdelete_draft()
 	-- DELETE FROM ob.tstock WHERE id=stock_src.id;
 	RETURN id_mvt;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- ob.fexecute_draft
 --------------------------------------------------------------------------------
--- PRIVATE called by ob.faccept_draft() when the draft should be executed 
+-- PRIVATE called by market.faccept_draft() when the draft should be executed 
 /* usage: 
 	cnt_commit integer = ob.fexecute_draft(draft_id int8)
 action:
@@ -1613,7 +1620,7 @@ BEGIN
 	WHERE id>= first_mvt_id and id <= mvt_id;
 	RETURN cnt;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- 
@@ -1635,13 +1642,13 @@ BEGIN
 		INSERT INTO ob.tomega (nr,nf,name) 
 			VALUES (_nr,_nf,namer || '/' || namef);
 	ELSE
-		-- it will be at the last position for candidates for update in ob.fbatch_omega
+		-- it will be at the last position for candidates for update in market.fbatch_omega
 		UPDATE ob.tomega SET updated=statement_timestamp()  
 			WHERE nr = _nr and nf = _nf;
 	END IF;
 	RETURN 0;
 END; 
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- PRIVATE called by ob.fomega_draft() while inserting a new bid
@@ -1683,7 +1690,7 @@ BEGIN
 	RETURN 0;
 	
 END; 
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- ob.fomega_draft
@@ -1739,7 +1746,8 @@ BEGIN
 	END IF;
 	RETURN cnt;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
+
 --------------------------------------------------------------------------------
 -- ob.finsert_omega
 --------------------------------------------------------------------------------
@@ -1808,12 +1816,12 @@ BEGIN
 		VALUES (_nr,_nf,flux_src,flux_dst,_flags);
 	RETURN 0;
 END; 
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- ob.fremove_das
 --------------------------------------------------------------------------------
--- PRIVATE called by ob.fdelete_bid
+-- PRIVATE called by market.fdelete_bid
 /* usage:
 	mvt ob.tlmvt = ob.fremove_das(id_src int8)
 	
@@ -1865,13 +1873,13 @@ BEGIN
 	DELETE FROM ob.tstock WHERE id=id_src;	
 	RETURN mvt;
 END; 
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- ob.finsert_das
 --------------------------------------------------------------------------------
 -- PRIVATE
---	used by ob.finsert_bid and ob.finsert_bid_int
+--	used by market.finsert_bid and ob.finsert_bid_int
 /* usage:
 	mvt ob.tlmvt = ob.finsert_das(stock_src ob.tstock,_qtt bigint,_type char)
 		creates a stock of type=_type 
@@ -1937,14 +1945,14 @@ BEGIN
 	mvt.qtt := _qtt;  mvt.nat := stock.nf;
 	RETURN mvt;
 END; 
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
--- ob.fdelete_bid_int
+-- market.fdelete_bid_int
 -- PRIVATE 
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	ob.fdelete_bid_int(bid_id int8) RETURNS int AS $$
+	market.fdelete_bid_int(bid_id int8) RETURNS int AS $$
 DECLARE
 	noeud		ob.tnoeud%rowtype;
 	_commot		ob.tcommit%rowtype;
@@ -1998,7 +2006,8 @@ BEGIN
 	END IF;
 	RETURN 0;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
+
 --------------------------------------------------------------------------------
 CREATE FUNCTION ob.fdelete_draft(draft_id int8) RETURNS int AS $$
 DECLARE
@@ -2043,7 +2052,7 @@ BEGIN
 	-- ob.tcommit deleted by cascade
 	RETURN 0;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- ob.frefuse_draft_int
@@ -2106,12 +2115,12 @@ BEGIN
 	 
 	RETURN res;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- ob.finsert_bid_int
 --------------------------------------------------------------------------------
--- PRIVATE used by ob.finsert_bid and ob.finsert_sbid
+-- PRIVATE used by market.finsert_bid and market.finsert_sbid
 /* usage: 
 	nb_draft int8 = ob.finsert_bid_int(_sid int8,_qttprovided int8,_qttrequired int8,_qualityrequired text)
 
@@ -2300,12 +2309,12 @@ BEGIN
 	
 	RETURN cnt;
 END; 
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- ob.fread_omega
 --------------------------------------------------------------------------------
--- PRIVATE used by ob.fbatch_omega(commit_src ob.tcommit,tmpc_dst ob.tcommit)
+-- PRIVATE used by market.fbatch_omega(commit_src ob.tcommit,tmpc_dst ob.tcommit)
 /* usage: 
 	error int ob.fread_omega(nr int8,nf int8)
 conditions:
@@ -2349,7 +2358,7 @@ BEGIN
 		IF(ret <0 ) THEN
 			IF ( ret = -30144 ) THEN -- arc forbidden
 				RAISE NOTICE '[%] Loop found for arc (Xoid,Yoid)=(%,%)',ret,r.bid,r.sid;
-				_err := ob.fdelete_bid_int(r.bid);
+				_err := market.fdelete_bid_int(r.bid);
 				IF(_err !=0) THEN
 					RAISE NOTICE '[%] Error in ob.fread_omega()',_err;
 				END IF;
@@ -2386,7 +2395,7 @@ BEGIN
 	
 	RETURN 0;
 END; 
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE PLPGSQL;
 /*
 dnUser:
 	the name of a depository is the ssl_client_dn_field('commonName') 
@@ -2399,94 +2408,6 @@ Rules:
 	A user can add or sub values only if he owns the quality of the value
 	A user can accept/refuse draft only if he is the owner of some quality exchanged 
 	A user can make a bid or sbid on values only if he owns the quality provided.
-
-Procedure:
-
-When a session is started, the role is "noright" and a single function is allowed: ob.finit()
-
-To subscribe
-	the user sends a certificate by email
-	admin executes ob.fcert_create(dnuser)
-	The user connects (status=0)
-		The access is denied, but a new record is inserted and other_certificate is stored
-	admin executes ob.fenableuser(dnuser,quotabid) 
-	status=1
-	
-When a certificate is updated
-	admin executes ob.fcert_renewal(dnuser) 
-	status=2
-	The user connects with the new certificate with the same 'commonName'
-		The access is denied, but other_certificate is stored
-	admin verifies that other_certificate is correct
-	admin executes ob.fcert_enable(dnuser,quotabid)
-	status=3
-	a batch status 3->1
-	
-table ob.tuser
-	status int default 0, 
-		0 before the first connexion
-		1 activated
-		2 renewal
-		3 verified
-			1,2,3 activated
-
-	certificate text default NULL, 
-		(ssl_issuer_dn() || ':' || CAST(ssl_client_serial() AS text) )
-	since timestamp,
-		time when cntbid was 0
-	cntbid int,
-		incremented when a bid or sbid is made
-	quotabib int default 0,
-		the maximum number of bid or sbid allowed per day
-	dnuser text UNIQUE,
-		ssl_client_dn_field('commonName') 
-	other_certificate text default NULL,
-	created timestamp,
-	updated timestamp,
-	PRIMARY KEY (dnuser),
-	
-function ob.fcert_init()
-	if a the dnuser on ssl_client_dn_field('commonName') 
-		if status = 0
-			the certificate is stored into other_certificate
-			deny access
-			
-		if the certificate matches 
-			if status=2, 
-				the certificate is stored into other_certificate
-				
-			if quotabid !=0,
-				a session variable is set to dnuser,
-				the role is set to depository
-			else 
-				deny access
-
-
-for role admin
-==========
-function ob.fcert_create(dnuser,email):
-	inserts a user with the dnuser, status<-0
-	created <- now()
-	send email
-
-function ob.fcert_enable(dnuser,quotabid):
-	if( status =0  or status=2) 
-		moves ob.tuser.other_certificate to ob.tuser.certificate
-		defines the quotabid
-		status<-3
-	else 
-		exception
-		
-function ob.fcert_renewal(dnuser):
-	if(status = 1)
-		status=2
-	else 
-		exception
-	
-a batch at midnight
-	if status=3 status<-1
-	send email
-	
 		
 > Is there a way to run a pl/pgsql automatically at server startup ?
 in your postgres startup script launch a session with `psql ... -c "some
@@ -2510,8 +2431,263 @@ grant connect on database test to noright;
 Affiche les droits accordés aux relations
 select relname,relacl from pg_class where relname like 'ob.%';
 
+pour la fonction appelante
+SECURITY DEFINER
+grant to depositary;
 
+pour toutes les fct du schema:
+revoke execute on all functions in schema ob from public;
 
-
+une fct d'un schema peut appeler la fct d'un autre schema,
 	
 */
+--------------------------------------------------------------------------------
+-- SUBSCRIPTION, CERTIFICATE RENEWAL and USE'S QUOTAS
+--------------------------------------------------------------------------------
+CREATE TABLE ob.tuser (
+	status INT default 0,
+	crt_renewal text DEFAULT NULL,
+	crt text DEFAULT NULL,
+	dn text,
+	cntbid int default 0,
+	quotabid int,
+	startcnt timestamp,
+	created timestamp,
+	updated timestamp,
+	PRIMARY KEY (dn)
+	
+);
+CREATE TRIGGER trig_befa_tuser BEFORE INSERT 
+	OR UPDATE ON ob.tuser FOR EACH ROW 
+	EXECUTE PROCEDURE ob.ftime_updated();
+	
+GRANT SELECT,UPDATE ON ob.tuser TO depositary,admin;
+GRANT INSERT ON ob.tuser TO admin;
+/* subscription process
+admin runs:
+	SELECT ob.fadduser(dn,10000);
+the user connects.
+
+certificate renewal process
+the user find a new certificate
+whi the old one, runs:
+	SELECT market.fcrt_start_renewal();
+with the new runs:
+	SELECT ob.fgetuser(2);
+with the old runs:
+	SELECT market.fcrt_read_renewal();
+obtains a value dnIssuer:serialNumer of the new certificate, and verify it
+	SELECT market.fcrt_accept_renewal(dnIssuer:serialNumer)
+
+At any time between start and accept, 
+	SELECT market.fcrt_accept_renewal();
+abort the renewal process.
+*/
+--------------------------------------------------------------------------------
+-- depositaries have dn without "." 
+--------------------------------------------------------------------------------
+CREATE FUNCTION ob.fadduser(_dn text,_quotabid int) RETURNS text AS $$
+DECLARE
+	_crt text;
+	_status int;
+BEGIN
+	SELECT crt,status INTO _crt,_status FROM ob.tuser WHERE dn=_dn;
+	IF FOUND THEN
+		RAISE NOTICE 'Not inserted: The common name % is already used,with status %',_dn,_status;
+		RETURN -1;
+	END IF;
+	IF (NOT _dn LIKE '%.%') THEN
+		INSERT INTO ob.tuser (dn,quotabid,startcnt) VALUES (_dn,_quotabid,now());
+		RAISE NOTICE 'The common name % is inserted',_dn;
+		RETURN 0;
+	ELSE
+		RAISE NOTICE 'Not inserted: The common name % should not contain "."',_dn;
+		RETURN -1;	
+	END IF;
+
+END;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION ob.fadduser(_dn text,_quotabid int)  TO admin;
+
+--------------------------------------------------------------------------------
+-- 
+--------------------------------------------------------------------------------
+CREATE FUNCTION market.fcrt_start_renewal() RETURNS INT AS $$
+DECLARE
+	_user text;
+BEGIN
+	
+	_user := ob.fgetuser(1);
+	UPDATE ob.tuser SET status=2 FROM ob.tuser WHERE dn=_user;
+	RAISE NOTICE 'The certificate renewal procedure is now started';
+	RAISE NOTICE 'You need to do the following:';
+	RAISE NOTICE 'A) disconnect and reconnect with your new certificate and run:';
+	RAISE NOTICE '	SELECT fgetuser(2);';
+	RAISE NOTICE 'B) disconnect and reconnect with your old certificate';
+	RAISE NOTICE '	and accept or refuse the new certificate';
+	RAISE NOTICE 'D) disconnect and reconnect with your new certificate';
+	RAISE NOTICE 'At any time you can abort the procedure by running with your old certificate:';
+	RAISE NOTICE '	SELECT fcrt_abort_renewal();';
+	RETURN 0;
+	
+END;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON  FUNCTION market.fcrt_start_renewal() TO depositary;
+
+--------------------------------------------------------------------------------
+-- 
+--------------------------------------------------------------------------------
+CREATE FUNCTION market.fcrt_read_renewal() RETURNS INT AS $$
+DECLARE
+	_crt_renewal text;
+	_user text;
+BEGIN
+	
+	_user := ob.fgetuser(2);
+	SELECT crt_renewal INTO _crt_renewal FROM ob.tuser WHERE dn=_user;
+	RAISE NOTICE 'The certificate renewal procedure is at step B)';
+	RAISE NOTICE 'This function gave you the dnIssuer:serialNumber of a certificate that someone recorded';
+	RAISE NOTICE 'Compare it carefully the dn of the issuer and the serial number of your new certificate';
+	RAISE NOTICE 'If it is NOT your new certificate, run:';
+	RAISE NOTICE '	SELECT fct_refuse_renewal()';
+	RAISE NOTICE 'If you are absolutely shure it is yours, copy and paste the result of this function';
+	RAISE NOTICE 'as parameter _dnIssuer:serialNumber_ surrounded by single quotes of: ';
+	RAISE NOTICE '	SELECT fcrt_accept_renewal(_dnIssuer:serialNumber_)';
+	RAISE NOTICE 'disconnect and reconnect with your new certificate';
+	RETURN _crt_renewal;
+	
+END;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+
+--------------------------------------------------------------------------------
+-- 
+--------------------------------------------------------------------------------
+CREATE FUNCTION market.fcrt_accept_renewal(_crt_renewal1 text) RETURNS INT AS $$
+DECLARE
+	_user text;
+	_crt_renewal text;
+	_res int;
+BEGIN
+	
+	_user := ob.fgetuser(2);
+	SELECT crt_renewal INTO _crt_renewal FROM ob.tuser WHERE dn=_user;
+	IF(_crt_renewal != _crt_renewal1) THEN
+		_res := market.fct_abort_renewal();
+		RAISE NOTICE 'The certificate you entered "%"',_crt_renewal;
+		RAISE NOTICE 'Is different from "%"',crt_renewal;
+		RAISE NOTICE 'Someone else perhaps tried to take your identity';
+		RETURN -1;
+	END IF; 
+	
+	UPDATE ob.tuser SET crt=_crt_renewal WHERE dn=_user;
+	UPDATE ob.tuser SET status=1,crt_renewal=NULL WHERE dn=_user;
+	RAISE NOTICE 'Your new certificate is now confirmed';
+	RAISE NOTICE 'Your can reconnect with your new certificate';
+	RAISE NOTICE 'Your old certificate is now desabled';
+	RETURN 0;
+	
+END;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+
+--------------------------------------------------------------------------------
+-- 
+--------------------------------------------------------------------------------
+CREATE FUNCTION market.fct_abort_renewal() RETURNS INT AS $$
+DECLARE
+	_user text;
+	_crt text;
+BEGIN
+	
+	_user := ob.fgetuser(2);
+	UPDATE ob.tuser SET status=1,crt_renewal=NULL WHERE dn=_user;
+	RAISE NOTICE 'The certificate renewal procedure has been cancelled!';
+	RETURN 0;
+	
+END;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+
+--------------------------------------------------------------------------------
+-- 
+--------------------------------------------------------------------------------
+CREATE FUNCTION ob.fgetuser(_status_required int) RETURNS text AS $$
+DECLARE
+	_dn text;
+	_crt text;
+	_crt1 text;
+	_status int;
+BEGIN
+	if (user='olivier') THEN return user;
+	END IF;
+	if(NOT (ob.ssl_is_used() AND ob.ssl_client_cert_present())) THEN
+		RAISE EXCEPTION '[-30439] Client certificate required';
+	END IF;
+	
+	_dn = ob.ssl_client_dn_field('commonName');
+	_crt1 = ob.ssl_issuer_dn() || ':' || CAST(ob.ssl_client_serial() AS text);
+
+	SELECT crt,status INTO _crt,_status FROM ob.tuser WHERE dn=_dn;
+	IF NOT FOUND THEN
+		RAISE EXCEPTION '[-30439] Client certificate required';
+	END IF;
+	
+	IF (_status=0) THEN			
+		UPDATE ob.tuser SET crt=_crt1,status=1 WHERE dn=_dn;
+		RETURN _dn;
+	END IF;
+	
+	IF(_status != _status_required) THEN
+		RAISE EXCEPTION '[-30439] Client certificate required';
+	END IF;
+	
+	IF (_status=2) THEN
+		UPDATE ob.tuser SET crt_renewal=_crt1 WHERE dn=_dn;
+		RAISE NOTICE 'Please disconnect and connect with your old certificate';
+		RETURN '';
+	END IF;
+	
+	IF (NOT _crt=_crt1) THEN
+		RAISE EXCEPTION '[-30439] Client certificate required';
+	END IF;
+	RETURN _dn;	
+END;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+
+--------------------------------------------------------------------------------
+-- 
+--------------------------------------------------------------------------------
+CREATE FUNCTION ob.fbidallowed(_dn text) RETURNS int AS $$
+DECLARE
+	_user ob.tuser%rowtype;
+BEGIN
+	if (user='olivier') THEN return 0; END IF;
+	SELECT * INTO _user FROM ob.tuser WHERE dn=_dn;
+	IF NOT FOUND THEN
+		RAISE EXCEPTION 'internal error';
+	END IF;
+	IF(now() -__user.startcnt > cast('1 day' as interval)) THEN
+		UPDATE ob.tuser SET startcnt = now(),cntbid=0 
+			WHERE dn=_dn RETURNING * INTO _user;
+	END IF;
+	IF(_user.cntbid > _user.quotabid) THEN
+		RAISE EXCEPTION 'Your quota is exhausted';
+	END IF;
+	UPDATE ob.tuser SET cntbid=cntbid+1 WHERE dn=_dn;
+	RETURN 0;
+END;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+
+
+
+revoke all on schema ob from public cascade;
+grant usage on schema ob to market;
+revoke execute on all functions in schema ob from public;
+grant execute on all functions in schema ob to market;
+grant select,update,insert,delete on all tables in schema ob to market;
+
+revoke all on schema market from public cascade;
+revoke execute on all functions in schema market from public;
+grant usage on schema market to depositary;
+grant execute on all functions in schema ob to depositary;
+grant select on all tables in schema ob to depositary; -- includes views
+
+
