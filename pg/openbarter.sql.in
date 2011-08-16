@@ -2421,8 +2421,8 @@ REVOKE ALL ON FUNCTION check_password(uname TEXT, pass TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION check_password(uname TEXT, pass TEXT) TO admins;
 COMMIT;
 
-GRANT 1297
-REVOKE 1331
+GRANT page 1297
+REVOKE page 1331
 
 revoke all privileges on database test from public;
 revoke all on datable test from noright;
@@ -2469,14 +2469,15 @@ admin runs:
 the user connects.
 
 certificate renewal process
-the user find a new certificate
-whi the old one, runs:
+When the certificate is too old, the user looks for a new certificate
+whith the old certificate, runs:
 	SELECT market.fcrt_start_renewal();
-with the new runs:
+with the new certificate runs:
 	SELECT ob.fgetuser(2);
-with the old runs:
+with the old certificate runs:
 	SELECT market.fcrt_read_renewal();
-obtains a value dnIssuer:serialNumer of the new certificate, and verify it
+obtains a value dnIssuer:serialNumer of the new certificate, and compare this 
+value to that of the new certificate. If the value is correct, runs:
 	SELECT market.fcrt_accept_renewal(dnIssuer:serialNumer)
 
 At any time between start and accept, 
