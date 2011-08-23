@@ -1,3 +1,44 @@
+A FAIRE:
+modifs sur openbarter.sql.in
+********************
+
+puisqu'on a set search_path = ob; ligne 57,
+on peut supprimer tous les préfixes ob.
+
+pourquoi market.fdelete_bid_int est dans le schema market
+si c'est une fct private?
+
+la fct ob.fgetuser() est appelée par un client, elle est dans
+le scema ob et devrait être dans le schema market
+
+pourquoi les valeurs %.% sont rejetées comme nom de user?
+
+ligne 2526, le schéma n'est pas précisé.
+
+ajouter les fonctions suivantes à la liste:
+
+ob.fadduser(_dn text,_quotabid int)
+market.fcrt_start_renewal()
+market.fcrt_read_renewal()
+market.fcrt_accept_renewal(_crt_renewal1 text)
+market.fct_abort_renewal()
+ob.fgetuser(_status_required int)
+ob.fbidallowed(_dn text)
+
+script de démarrage d'un client à définir:
+
+set search_path = market;
+
+*********************************************
+PC 
+processeur Intel Core i3 2100 (3.1 GHz) - Dual Core Socket 1155 Cache L3 3 Mo Intel HD 
+bench http://www.cpubenchmark.net/cpu_lookup.php?cpu=Intel+Core+i3-2100+%40+3.10GHz
+100€ LDLC
+
+Asus Vintage V7-P7H55E 
+119€ MONTGALLET
+
+*********************************************
 VALIDATION:
 \i getdrafttest2.sql
 /* test with SELECT ob_getdraft_get(3,2.1,3,2);  ob_getdraft(stockId,omega,nF,nR)
