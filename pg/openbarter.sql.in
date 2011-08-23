@@ -645,7 +645,7 @@ P	market.fbatch_omega *
 	ob.finsert_omega
 	ob.fremove_das
 	ob.finsert_das
-	market.fdelete_bid_int
+	ob.fdelete_bid_int
 	ob.fdelete_draft
 	ob.frefuse_draft_int
 	ob.finsert_bid_int
@@ -657,7 +657,7 @@ market.fbatch_omega
 	ob.fread_omega
 		ob.finsert_omega
 			ob.finsert_omega_int
-		market.fdelete_bid_int	
+		ob.fdelete_bid_int	
 			ob.frefuse_draft_int
 				ob.fread_status_draft
 				ob.fupdate_status_commits
@@ -784,7 +784,7 @@ DECLARE
 	_n	text;
 	_user	text;
 BEGIN
-	_user = ob.fgetuser(1);
+	_user = market.fcrt_getuser(1);
 	_n := _user || '>' || _name;
 	SELECT q.* INTO _q FROM ob.tquality q WHERE q.name=_n and q.own=_user LIMIT 1;
 	IF NOT FOUND THEN
@@ -842,7 +842,7 @@ DECLARE
 	res int;
 	_user text;
 BEGIN
-	_user := ob.fgetuser(1);
+	_user := market.fcrt_getuser(1);
 	ret.created := statement_timestamp();
 	
 	-- mean time of draft
@@ -935,7 +935,7 @@ DECLARE
 	err	int :=0;
 	_user text;
 BEGIN
-	_user := ob.fgetuser(1);
+	_user := market.fcrt_getuser(1);
 	SELECT id,qtt INTO _nf,_qtt_quality FROM ob.tquality 
 		WHERE name =  _quality AND own = _user;
 	IF NOT FOUND THEN 
@@ -1008,7 +1008,7 @@ DECLARE
 	mvt ob.tmvt%rowtype;
 	_user text;
 BEGIN
-	_user := ob.fgetuser(1);
+	_user := market.fcrt_getuser(1);
 	SELECT id INTO _wid FROM ob.towner 
 		WHERE name=_owner;
 	IF (NOT FOUND) THEN 
@@ -1088,7 +1088,7 @@ DECLARE
 	stock 	ob.tstock%rowtype;
 	_user text;
 BEGIN
-	_user := ob.fgetuser(1);
+	_user := market.fcrt_getuser(1);
 	cnt := ob.fbidallowed(_user);
 	SELECT n.* INTO noeud FROM ob.tnoeud n 
 		WHERE n.id = bid_id;
@@ -1143,7 +1143,7 @@ DECLARE
 	stock ob.tstock%rowtype;
 	_user text;
 BEGIN
-	_user := ob.fgetuser(1);
+	_user := market.fcrt_getuser(1);
 	cnt := ob.fbidallowed(_user);
 	-- controls
 	SELECT s.* INTO stock FROM ob.tstock s 
@@ -1200,7 +1200,7 @@ DECLARE
 	own_id		int8;
 	_user text;
 BEGIN
-	_user := ob.fgetuser(1);
+	_user := market.fcrt_getuser(1);
 	SELECT d.* INTO draft FROM ob.tdraft d 
 		WHERE d.id=draft_id;
 	IF NOT FOUND THEN
@@ -1273,7 +1273,7 @@ DECLARE
 	res	int;
 	_user text;
 BEGIN
-	_user := ob.fgetuser(1);
+	_user := market.fcrt_getuser(1);
 	SELECT id INTO own_id FROM ob.towner 
 		WHERE name = owner;
 	IF NOT FOUND THEN
@@ -1307,8 +1307,8 @@ DECLARE
 	ret		int;
 	_user text;
 BEGIN
-	_user := ob.fgetuser(1);
-	ret := market.fdelete_bid_int(bid_id);
+	_user := market.fcrt_getuser(1);
+	ret := ob.fdelete_bid_int(bid_id);
 	IF(ret <0) THEN 
 		RAISE EXCEPTION 'error % ' USING ERRCODE='38000'; 
 	END IF;
@@ -1948,11 +1948,11 @@ END;
 $$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
--- market.fdelete_bid_int
+-- ob.fdelete_bid_int
 -- PRIVATE 
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	market.fdelete_bid_int(bid_id int8) RETURNS int AS $$
+	ob.fdelete_bid_int(bid_id int8) RETURNS int AS $$
 DECLARE
 	noeud		ob.tnoeud%rowtype;
 	_commot		ob.tcommit%rowtype;
@@ -2358,7 +2358,7 @@ BEGIN
 		IF(ret <0 ) THEN
 			IF ( ret = -30144 ) THEN -- arc forbidden
 				RAISE NOTICE '[%] Loop found for arc (Xoid,Yoid)=(%,%)',ret,r.bid,r.sid;
-				_err := market.fdelete_bid_int(r.bid);
+				_err := ob.fdelete_bid_int(r.bid);
 				IF(_err !=0) THEN
 					RAISE NOTICE '[%] Error in ob.fread_omega()',_err;
 				END IF;
@@ -2473,7 +2473,7 @@ When the certificate is too old, the user looks for a new certificate
 whith the old certificate, runs:
 	SELECT market.fcrt_start_renewal();
 with the new certificate runs:
-	SELECT ob.fgetuser(2);
+	SELECT market.fcrt_getuser(2);
 with the old certificate runs:
 	SELECT market.fcrt_read_renewal();
 obtains a value dnIssuer:serialNumer of the new certificate, and compare this 
@@ -2518,12 +2518,12 @@ DECLARE
 	_user text;
 BEGIN
 	
-	_user := ob.fgetuser(1);
+	_user := market.fcrt_getuser(1);
 	UPDATE ob.tuser SET status=2 FROM ob.tuser WHERE dn=_user;
 	RAISE NOTICE 'The certificate renewal procedure is now started';
 	RAISE NOTICE 'You need to do the following:';
 	RAISE NOTICE 'A) disconnect and reconnect with your new certificate and run:';
-	RAISE NOTICE '	SELECT fgetuser(2);';
+	RAISE NOTICE '	SELECT market.fcrt_getuser(2);';
 	RAISE NOTICE 'B) disconnect and reconnect with your old certificate';
 	RAISE NOTICE '	and accept or refuse the new certificate';
 	RAISE NOTICE 'D) disconnect and reconnect with your new certificate';
@@ -2544,7 +2544,7 @@ DECLARE
 	_user text;
 BEGIN
 	
-	_user := ob.fgetuser(2);
+	_user := market.fcrt_getuser(2);
 	SELECT crt_renewal INTO _crt_renewal FROM ob.tuser WHERE dn=_user;
 	RAISE NOTICE 'The certificate renewal procedure is at step B)';
 	RAISE NOTICE 'This function gave you the dnIssuer:serialNumber of a certificate that someone recorded';
@@ -2570,10 +2570,10 @@ DECLARE
 	_res int;
 BEGIN
 	
-	_user := ob.fgetuser(2);
+	_user := market.fcrt_getuser(2);
 	SELECT crt_renewal INTO _crt_renewal FROM ob.tuser WHERE dn=_user;
 	IF(_crt_renewal != _crt_renewal1) THEN
-		_res := market.fct_abort_renewal();
+		_res := market.fcrt_abort_renewal();
 		RAISE NOTICE 'The certificate you entered "%"',_crt_renewal;
 		RAISE NOTICE 'Is different from "%"',crt_renewal;
 		RAISE NOTICE 'Someone else perhaps tried to take your identity';
@@ -2599,7 +2599,7 @@ DECLARE
 	_crt text;
 BEGIN
 	
-	_user := ob.fgetuser(2);
+	_user := market.fcrt_getuser(2);
 	UPDATE ob.tuser SET status=1,crt_renewal=NULL WHERE dn=_user;
 	RAISE NOTICE 'The certificate renewal procedure has been cancelled!';
 	RETURN 0;
@@ -2610,7 +2610,7 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 --------------------------------------------------------------------------------
 -- 
 --------------------------------------------------------------------------------
-CREATE FUNCTION ob.fgetuser(_status_required int) RETURNS text AS $$
+CREATE FUNCTION market.fcrt_getuser(_status_required int) RETURNS text AS $$
 DECLARE
 	_dn text;
 	_crt text;
