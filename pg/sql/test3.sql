@@ -10,11 +10,11 @@ select setval('ob.tdraft_id_seq',100);
 select market.fcreate_quality('q1');
 select market.fcreate_quality('q2');
 
-select market.fadd_account('o1','olivier>q1',1000);
-select market.fadd_account('o2','olivier>q2',1000);
+select market.fadd_account('o1','postgres>q1',1000);
+select market.fadd_account('o2','postgres>q2',1000);
 
-select market.finsert_bid('o1','olivier>q1',100,50,'olivier>q2');
-select market.finsert_bid('o2','olivier>q2',100,50,'olivier>q1');
+select market.finsert_bid('o1','postgres>q1',100,50,'postgres>q2');
+select market.finsert_bid('o2','postgres>q2',100,50,'postgres>q1');
 -- executes getdraft_get(6,2,3,2)
 
 -- should be 0

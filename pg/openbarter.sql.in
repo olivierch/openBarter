@@ -415,7 +415,7 @@ create table ob.tconnectdesc (
     PRIMARY KEY (conninfo)
 );
 INSERT INTO ob.tconnectdesc (conninfo,valid) 
-	VALUES ('dbname = ob user=olivier',true);
+	VALUES ('dbname = ob user=postgres',true);
 
 --------------------------------------------------------------------------------
  -- 
@@ -2617,7 +2617,7 @@ DECLARE
 	_crt1 text;
 	_status int;
 BEGIN
-	if (user='olivier') THEN return user;
+	if (user='postgres') THEN return user;
 	END IF;
 	if(NOT (ob.ssl_is_used() AND ob.ssl_client_cert_present())) THEN
 		RAISE EXCEPTION '[-30439] Client certificate required' USING ERRCODE='38000';
@@ -2660,7 +2660,7 @@ CREATE FUNCTION ob.fbidallowed(_dn text) RETURNS int AS $$
 DECLARE
 	_user ob.tuser%rowtype;
 BEGIN
-	if (user='olivier') THEN return 0; END IF;
+	if (user='postgres') THEN return 0; END IF;
 	SELECT * INTO _user FROM ob.tuser WHERE dn=_dn;
 	IF NOT FOUND THEN
 		RAISE EXCEPTION 'internal error';

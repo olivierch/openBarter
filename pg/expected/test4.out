@@ -48,37 +48,37 @@ select market.fcreate_quality('q6');
                0
 (1 row)
 
-select market.fadd_account('o1','olivier>q1',1000);
+select market.fadd_account('o1','postgres>q1',1000);
  fadd_account 
 --------------
             0
 (1 row)
 
-select market.fadd_account('o2','olivier>q2',1000);
+select market.fadd_account('o2','postgres>q2',1000);
  fadd_account 
 --------------
             0
 (1 row)
 
-select market.fadd_account('o3','olivier>q3',1000);
+select market.fadd_account('o3','postgres>q3',1000);
  fadd_account 
 --------------
             0
 (1 row)
 
-select market.finsert_bid('o1','olivier>q1',100,50,'olivier>q3');
+select market.finsert_bid('o1','postgres>q1',100,50,'postgres>q3');
  finsert_bid 
 -------------
            0
 (1 row)
 
-select market.finsert_bid('o2','olivier>q2',100,50,'olivier>q1');
+select market.finsert_bid('o2','postgres>q2',100,50,'postgres>q1');
  finsert_bid 
 -------------
            0
 (1 row)
 
-select market.finsert_bid('o3','olivier>q3',100,50,'olivier>q2');
+select market.finsert_bid('o3','postgres>q3',100,50,'postgres>q2');
  finsert_bid 
 -------------
            1
@@ -118,32 +118,32 @@ SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft 
 (1 row)
 
 select qown,qname,owner,qtt from market.vowned;
-  qown   |   qname    | owner | qtt 
----------+------------+-------+-----
- olivier | olivier>q3 | o3    | 900
- olivier | olivier>q2 | o2    | 900
- olivier | olivier>q3 | o1    | 100
- olivier | olivier>q1 | o1    | 900
- olivier | olivier>q1 | o2    | 100
- olivier | olivier>q2 | o3    | 100
+   qown   |    qname    | owner | qtt 
+----------+-------------+-------+-----
+ postgres | postgres>q2 | o2    | 900
+ postgres | postgres>q2 | o3    | 100
+ postgres | postgres>q3 | o3    | 900
+ postgres | postgres>q1 | o2    | 100
+ postgres | postgres>q3 | o1    | 100
+ postgres | postgres>q1 | o1    | 900
 (6 rows)
 
 select qown,qname,qtt from market.vbalance;
-  qown   |   qname    | qtt  
----------+------------+------
- olivier | olivier>q3 | 1000
- olivier | olivier>q2 | 1000
- olivier | olivier>q1 | 1000
+   qown   |    qname    | qtt  
+----------+-------------+------
+ postgres | postgres>q3 | 1000
+ postgres | postgres>q2 | 1000
+ postgres | postgres>q1 | 1000
 (3 rows)
 
 select id,did,provider,nat,qtt,receiver from market.vmvt;
- id | did | provider |    nat     | qtt  | receiver 
-----+-----+----------+------------+------+----------
-  1 |     | market   | olivier>q1 | 1000 | o1
-  2 |     | market   | olivier>q2 | 1000 | o2
-  3 |     | market   | olivier>q3 | 1000 | o3
-  4 |   4 | o1       | olivier>q1 |  100 | o2
-  5 |   4 | o2       | olivier>q2 |  100 | o3
-  6 |   4 | o3       | olivier>q3 |  100 | o1
+ id | did | provider |     nat     | qtt  | receiver 
+----+-----+----------+-------------+------+----------
+  1 |     | market   | postgres>q1 | 1000 | o1
+  2 |     | market   | postgres>q2 | 1000 | o2
+  3 |     | market   | postgres>q3 | 1000 | o3
+  4 |   4 | o1       | postgres>q1 |  100 | o2
+  5 |   4 | o2       | postgres>q2 |  100 | o3
+  6 |   4 | o3       | postgres>q3 |  100 | o1
 (6 rows)
 

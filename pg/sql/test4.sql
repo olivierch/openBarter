@@ -13,13 +13,13 @@ select market.fcreate_quality('q4');
 select market.fcreate_quality('q5');
 select market.fcreate_quality('q6');
 
-select market.fadd_account('o1','olivier>q1',1000);
-select market.fadd_account('o2','olivier>q2',1000);
-select market.fadd_account('o3','olivier>q3',1000);
+select market.fadd_account('o1','postgres>q1',1000);
+select market.fadd_account('o2','postgres>q2',1000);
+select market.fadd_account('o3','postgres>q3',1000);
 
-select market.finsert_bid('o1','olivier>q1',100,50,'olivier>q3');
-select market.finsert_bid('o2','olivier>q2',100,50,'olivier>q1');
-select market.finsert_bid('o3','olivier>q3',100,50,'olivier>q2');
+select market.finsert_bid('o1','postgres>q1',100,50,'postgres>q3');
+select market.finsert_bid('o2','postgres>q2',100,50,'postgres>q1');
+select market.finsert_bid('o3','postgres>q3',100,50,'postgres>q2');
 -- executes getdraft_get(6,2,3,2)
 
 -- should be 0

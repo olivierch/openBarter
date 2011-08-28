@@ -14,20 +14,20 @@ select market.fcreate_quality('q3');
 select market.fcreate_quality('q4');
 select market.fcreate_quality('q5');
 
-select market.fadd_account('o1','olivier>q1',1000);
-select market.fadd_account('o2','olivier>q2',1000);
-select market.fadd_account('o3','olivier>q3',1000);
-select market.fadd_account('o4','olivier>q4',1000);
-select market.fadd_account('o5','olivier>q5',1000);
-select market.fadd_account('o6','olivier>q2',1000);
+select market.fadd_account('o1','postgres>q1',1000);
+select market.fadd_account('o2','postgres>q2',1000);
+select market.fadd_account('o3','postgres>q3',1000);
+select market.fadd_account('o4','postgres>q4',1000);
+select market.fadd_account('o5','postgres>q5',1000);
+select market.fadd_account('o6','postgres>q2',1000);
 
-select market.finsert_bid('o1','olivier>q1',100,50,'olivier>q3'); /* ->q3 S1 q1-> */
-select market.finsert_bid('o2','olivier>q2',100,50,'olivier>q1'); /* ->q1 S2 q2-> */
-select market.finsert_bid('o4','olivier>q4',50 ,50,'olivier>q3'); /* ->q3 S4 q4-> */
-select market.finsert_bid('o5','olivier>q5',50 ,50,'olivier>q4'); /* ->q4 S5 q5-> */
-select market.finsert_bid('o6','olivier>q2',50 ,50,'olivier>q5'); /* ->q5 S6 q2-> */
+select market.finsert_bid('o1','postgres>q1',100,50,'postgres>q3'); /* ->q3 S1 q1-> */
+select market.finsert_bid('o2','postgres>q2',100,50,'postgres>q1'); /* ->q1 S2 q2-> */
+select market.finsert_bid('o4','postgres>q4',50 ,50,'postgres>q3'); /* ->q3 S4 q4-> */
+select market.finsert_bid('o5','postgres>q5',50 ,50,'postgres>q4'); /* ->q4 S5 q5-> */
+select market.finsert_bid('o6','postgres>q2',50 ,50,'postgres>q5'); /* ->q5 S6 q2-> */
 
-select market.finsert_bid('o3','olivier>q3',200,100,'olivier>q2'); /* ->q2 S3 q3-> */
+select market.finsert_bid('o3','postgres>q3',200,100,'postgres>q2'); /* ->q2 S3 q3-> */
 /* expected 2 draft with 3 and 4 partners */
 select did,status,owner,cntcommit,flags from market.vdraft order by did,owner;
 select id,status,versionsg,nbsource,nbnoeud,cflags from ob.tdraft;

@@ -15,12 +15,12 @@ select market.fcreate_quality('q5');
 select market.fcreate_quality('q6');
 
 -- owners are created
-SELECT market.fadd_account('o1','olivier>q1',1000); 
-SELECT market.fadd_account('o1','olivier>q2',1000); 
-SELECT market.fadd_account('o1','olivier>q3',1000); 
-SELECT market.fsub_account('o1','olivier>q1',1000); 
-SELECT market.fsub_account('o1','olivier>q2',1000); 
-SELECT market.fsub_account('o1','olivier>q3',500); 
+SELECT market.fadd_account('o1','postgres>q1',1000); 
+SELECT market.fadd_account('o1','postgres>q2',1000); 
+SELECT market.fadd_account('o1','postgres>q3',1000); 
+SELECT market.fsub_account('o1','postgres>q1',1000); 
+SELECT market.fsub_account('o1','postgres>q2',1000); 
+SELECT market.fsub_account('o1','postgres>q3',500); 
 
 -- should be 0
 SELECT corrupted_stock_a+corrupted_stock_s+unbananced_qualities+corrupted_draft as errors from market.fstats();
