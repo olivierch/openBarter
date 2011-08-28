@@ -11,3 +11,5 @@ pg/tbdb_test
 pg/bdb/
 logs/
 media/
+tests/
+*/.*

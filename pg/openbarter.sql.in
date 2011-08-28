@@ -2465,7 +2465,7 @@ GRANT SELECT,UPDATE ON ob.tuser TO depositary,admin;
 GRANT INSERT ON ob.tuser TO admin;
 /* subscription process
 admin runs:
-	SELECT ob.fadduser(dn,10000);
+	SELECT ob.fcrt_adduser(dn,10000);
 the user connects.
 
 certificate renewal process
@@ -2487,7 +2487,7 @@ abort the renewal process.
 --------------------------------------------------------------------------------
 -- depositaries have dn without "." 
 --------------------------------------------------------------------------------
-CREATE FUNCTION ob.fadduser(_dn text,_quotabid int) RETURNS text AS $$
+CREATE FUNCTION ob.fcrt_adduser(_dn text,_quotabid int) RETURNS text AS $$
 DECLARE
 	_crt text;
 	_status int;
@@ -2508,7 +2508,7 @@ BEGIN
 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION ob.fadduser(_dn text,_quotabid int)  TO admin;
+GRANT EXECUTE ON FUNCTION ob.fcrt_adduser(_dn text,_quotabid int)  TO admin;
 
 --------------------------------------------------------------------------------
 -- 
@@ -2620,7 +2620,7 @@ BEGIN
 	if (user='olivier') THEN return user;
 	END IF;
 	if(NOT (ob.ssl_is_used() AND ob.ssl_client_cert_present())) THEN
-		RAISE EXCEPTION '[-30439] Client certificate required';
+		RAISE EXCEPTION '[-30439] Client certificate required' USING ERRCODE='38000';
 	END IF;
 	
 	_dn = ob.ssl_client_dn_field('commonName');
@@ -2628,7 +2628,7 @@ BEGIN
 
 	SELECT crt,status INTO _crt,_status FROM ob.tuser WHERE dn=_dn;
 	IF NOT FOUND THEN
-		RAISE EXCEPTION '[-30439] Client certificate required';
+		RAISE EXCEPTION '[-30439] Client certificate required' USING ERRCODE='38000';
 	END IF;
 	
 	IF (_status=0) THEN			
@@ -2637,7 +2637,7 @@ BEGIN
 	END IF;
 	
 	IF(_status != _status_required) THEN
-		RAISE EXCEPTION '[-30439] Client certificate required';
+		RAISE EXCEPTION '[-30439] Client certificate required' USING ERRCODE='38000';
 	END IF;
 	
 	IF (_status=2) THEN
@@ -2647,7 +2647,7 @@ BEGIN
 	END IF;
 	
 	IF (NOT _crt=_crt1) THEN
-		RAISE EXCEPTION '[-30439] Client certificate required';
+		RAISE EXCEPTION '[-30439] Client certificate required' USING ERRCODE='38000';
 	END IF;
 	RETURN _dn;	
 END;

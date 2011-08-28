@@ -147,7 +147,10 @@ static int _getLimit(int layer,int nbTrait,int* nbNoeudLayer) {
 
 	limit = openbarter_g.maxArrow - nbTrait;
 	*nbNoeudLayer = 0;
-	if(limit <=0) return 0;
+	if(limit <=0) {
+		elog(ERROR,"limit should not be more than openbarter.maxArrow");
+		return 0;
+	}
 	return limit;
 }
 /*******************************************************************************/

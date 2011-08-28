@@ -71,8 +71,8 @@ custom_variable_classes = 'openbarter'
 #------------------------------------------------------------------------------
 # OPENBARTER
 #------------------------------------------------------------------------------
-openbarter.cachesize = 16MB	# more than 1MB
-openbarter.maxarrow = 32768		# 32*1024
+openbarter.cachesize = 4MB	# more than 1MB
+openbarter.maxarrow = 1580		# 4*395
 openbarter.maxcommit = 8
 
  ******************************************************************************/
@@ -83,7 +83,7 @@ static void _obinit_guc(void) {
 		 "Sets the cache size of berkeley database.",
 						 "Sets the cache size of berkeley database.",
 							&openbarter_g.cacheSizeKb,
-							16*1024,
+							4*1024,
 							1024, INT_MAX,
 							PGC_SUSET,
 							GUC_UNIT_KB,
@@ -94,7 +94,7 @@ static void _obinit_guc(void) {
 		 "Sets the maximum number of arrow.",
 						 "Sets the maximum number of arrow of the graph of bids.",
 							&openbarter_g.maxArrow,
-							32*1024,
+							1580,
 							128, INT_MAX,
 							PGC_SUSET,
 							0,
