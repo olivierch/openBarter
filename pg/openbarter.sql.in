@@ -1423,11 +1423,13 @@ DECLARE
 	_commot ob.tcommit%rowtype;
 	cnt		int := 0;
 	own_name	text;
+	_user		text;
 BEGIN
+	_user := market.fcrt_getuser(1);
 	SELECT count(c.id) INTO cnt FROM ob.tcommit c
 		INNER JOIN ob.tstock s on (c.sid_src=s.id)
 	 	INNER JOIN ob.tquality q ON (q.id=s.nf)
-	WHERE c.did=draft_id AND q.own = user;
+	WHERE c.did=draft_id AND q.own = _user;
 	IF cnt=0 THEN
 		RAISE NOTICE '[-30416] No stock of the draft % is both owned by % and of a quality owned by user',draft_id,own_id;
 		RETURN -30416;
@@ -1961,7 +1963,9 @@ DECLARE
 	cnt		int;
 	ret		int;
 	draft_id	int8;
+	_user		text;
 BEGIN
+	_user := market.fcrt_getuser(1);
 	SELECT n.* INTO noeud FROM ob.tnoeud n WHERE n.id=bid_id;
 	IF NOT FOUND THEN
 		RAISE NOTICE '[-30403]the noeud % was not found',bid_id ;
@@ -1970,7 +1974,7 @@ BEGIN
 	-- verifies the user owns the quality offered
 	SELECT q.name INTO quality FROM ob.tstock s 
 		INNER JOIN ob.tquality q on (q.id=s.nf) 
-		WHERE s.id=noeud.sid and q.own =user ;
+		WHERE s.id=noeud.sid and q.own =_user ;
 	IF NOT FOUND THEN 
 		RAISE INFO '[-30413] The quality % does not exist or is not owned by user',quality;
 		RETURN -30413;
@@ -2617,7 +2621,7 @@ DECLARE
 	_crt1 text;
 	_status int;
 BEGIN
-	if (user='postgres') THEN return user;
+	if (current_database()='contrib_regression') THEN return 'postgres';
 	END IF;
 	if(NOT (ob.ssl_is_used() AND ob.ssl_client_cert_present())) THEN
 		RAISE EXCEPTION '[-30439] Client certificate required' USING ERRCODE='38000';
@@ -2660,7 +2664,7 @@ CREATE FUNCTION ob.fbidallowed(_dn text) RETURNS int AS $$
 DECLARE
 	_user ob.tuser%rowtype;
 BEGIN
-	if (user='postgres') THEN return 0; END IF;
+	if (current_database()='contrib_regression') THEN return 0; END IF;
 	SELECT * INTO _user FROM ob.tuser WHERE dn=_dn;
 	IF NOT FOUND THEN
 		RAISE EXCEPTION 'internal error';
@@ -2670,7 +2674,7 @@ BEGIN
 			WHERE dn=_dn RETURNING * INTO _user;
 	END IF;
 	IF(_user.cntbid > _user.quotabid) THEN
-		RAISE EXCEPTION 'Your quota is exhausted';
+		RAISE EXCEPTION 'Your quota is exhausted' USING ERRCODE='38000';
 	END IF;
 	UPDATE ob.tuser SET cntbid=cntbid+1 WHERE dn=_dn;
 	RETURN 0;
