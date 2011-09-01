@@ -2,16 +2,10 @@
 A database is created:
 	createdb market
 	psql -dmarket
-	
-	revoke all on database from public;
 	\q
 	
-Before the model is settled, roles market and depositary should be created.
-	CREATE ROLE noright LOGIN;
-	CREATE ROLE market;
-	CREATE ROLE depositary;
+Before the model is settled, role admin should be created.
 	CREATE ROLE admin LOGIN;
-	GRANT depositary to market;
 
 --------------------------------------------------------------------------------
 TYPES
@@ -70,6 +64,8 @@ BEGIN
 	RETURN NEW;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
+comment FUNCTION ob.ftime_created is 
+'trigger updating .created';
 
 --------------------------------------------------------------------------------
 -- ob.ftime_updated 
@@ -86,6 +82,8 @@ BEGIN
 	RETURN NEW;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
+comment on FUNCTION ob.ftime_updated is 
+'trigger updating .created and .updated';
 
 --------------------------------------------------------------------------------
 -- ob.ins_version
@@ -97,7 +95,8 @@ BEGIN
 	RETURN NEW;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-
+comment on FUNCTION ob.ins_version is 
+'trigger updating .version';
 --------------------------------------------------------------------------------
 -- ob.tdraft
 --------------------------------------------------------------------------------
@@ -110,9 +109,12 @@ BEGIN
 	RETURN res;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
+comment on FUNCTION ob.fcurrval_tdraft is 
+'int8 = ob.fcurrval_tdraft() returns ob.tdraft_id_seq';
 
-
-/* functions of sslinfo */
+--------------------------------------------------------------------------------
+-- functions of contrib ssl_info
+--------------------------------------------------------------------------------
 CREATE FUNCTION ob.ssl_client_serial() RETURNS numeric
 AS '$libdir/sslinfo', 'ssl_client_serial'
 LANGUAGE C STRICT;
@@ -150,7 +152,7 @@ LANGUAGE C STRICT;
 -- create sequence ob.tquality_id_seq;
 create table ob.tquality (
     id bigserial UNIQUE not NULL,
-    name text,
+    name text not NULL,
     own name not NULL, 
     qtt bigint default 0,
     created timestamp,
@@ -158,6 +160,8 @@ create table ob.tquality (
     PRIMARY KEY (id),
     UNIQUE(name,own)
 );
+comment on table ob.tquality is 
+'description of qualities';
 alter sequence ob.tquality_id_seq owned by ob.tquality.id;
 create index tquality_name_idx on ob.tquality(name);
 create index tquality_own_idx on ob.tquality(own);
@@ -172,12 +176,14 @@ CREATE TRIGGER trig_befa_tquality BEFORE INSERT
 create table ob.towner (
     -- id int8 UNIQUE not NULL default nextval('ob.towner_id_seq'),
     id bigserial UNIQUE not NULL,
-    name text,
+    name text not NULL,
     created timestamp,
     updated timestamp,
     PRIMARY KEY (id),
     UNIQUE(name)
 );
+comment on table ob.towner is 
+'description of owners of values';
 alter sequence ob.towner_id_seq owned by ob.towner.id;
 create index towner_name_idx on ob.towner(name);
 CREATE TRIGGER trig_befa_towner BEFORE INSERT 
@@ -196,7 +202,7 @@ create table ob.tstock (
     own int8 references ob.towner(id) on update cascade 
 	on delete restrict not NULL,
 		-- owner can be deleted only if he has not stock
-    qtt bigint not null, -- 64 bits
+    qtt bigint not NULL, -- 64 bits
     nf int8 references ob.tquality(id) on update cascade 
 	on delete restrict not NULL,
     version int8, 
@@ -214,6 +220,14 @@ create table ob.tstock (
     	-- owners have only stock.qtt >=0
     	or ((type='S' or type='D') and (qtt > 0 or qtt = 0)))
 );
+comment on table ob.tstock is 
+'description of values';
+comment on column ob.tstock.own is 'refers to the owner';
+comment on column ob.tstock.qtt is 'quantity of the value';
+comment on column ob.tstock.nf is 'refers to the quality of the value';
+comment on column ob.tstock.version is 'version of database of the last update';
+comment on column ob.tstock.type is 'A: account, S: stock, D: draft';
+
 alter sequence ob.tstock_id_seq owned by ob.tstock.id;
 create index tstock_own_idx on ob.tstock(own);
 create index tstock_nf_idx on ob.tstock(nf,type);
@@ -233,7 +247,7 @@ CREATE TRIGGER trig_befb_tstock BEFORE INSERT
 create table ob.tnoeud ( -- bid
     id bigserial UNIQUE not NULL,
     sid int8 references ob.tstock(id) on update cascade 
-	on delete cascade not NULL , -- refers to a stock
+	on delete cascade not NULL , 
     omega double precision check(omega > 0),
     nr int8 references ob.tquality(id) on update cascade 
 	on delete cascade not NULL ,
@@ -243,10 +257,23 @@ create table ob.tnoeud ( -- bid
 	on delete cascade not NULL ,
     provided_quantity int8,
     required_quantity int8, 
-	-- omega = provided_quantity/required_quantity
     created timestamp,
     PRIMARY KEY (id)
 );
+
+comment on table ob.tnoeud is 'description of bids';
+comment on column ob.tnoeud.sid is 'refers to the stock offered';
+comment on column ob.tnoeud.omega is 
+'ratio omega = provided_quantity/required_quantity';
+comment on column ob.tnoeud.nr is 'refers to quality required';
+comment on column ob.tnoeud.nf is 'refers to quality provided';
+comment on column ob.tnoeud.own is 
+'author of this bid, and owner of the stock[sid]';
+comment on column ob.tnoeud.provided_quantity is 
+'used to express omega, but not the quantity offered';
+comment on column ob.tnoeud.required_quantity is 
+'used to express omega';
+
 alter sequence ob.tnoeud_id_seq owned by ob.tnoeud.id;
 create index tnoeud_sid_idx on ob.tnoeud(sid);
 create index tnoeud_nr_idx on ob.tnoeud(nr);
@@ -280,6 +307,17 @@ create table ob.tdraft (
      CHECK ((nbnoeud <= 8) and (nbnoeud >=2)),
     PRIMARY KEY(id)
 );
+comment on table ob.tdraft is 
+'description of draft agreements';
+comment on column ob.tdraft.status is 
+'DRAFT=D, ACCEPTED=A, CANCELLED=C';
+comment on column ob.tdraft.versionsg is 
+'version of the subgraph that produced the draft';
+comment on column ob.tdraft.version_decision is 
+'version of the graph when the draft was accepted';
+comment on column ob.tdraft.cflags is 
+'flags provided by ob.getdraft_get()';
+
 -- alter sequence ob.tdraft_id_seq owned by ob.tdraft.id;
 CREATE TRIGGER trig_befa_tdraft BEFORE INSERT 
 	ON ob.tdraft  FOR EACH ROW 
@@ -300,7 +338,6 @@ create table ob.tcommit (
 		on update cascade,
 	sid_dst int8 references ob.tstock(id) 
 		on update cascade,
-	--qid	int8 references ob.tquality(id) on update cascade,
 	wid	int8 references ob.towner(id) 
 		on update cascade,
 	flags int4, 	-- [0] draft did accepted by owner wid,
@@ -308,6 +345,16 @@ create table ob.tcommit (
 			-- [2] exhausted: stock.qtt=fluxarrondi for sid
 	PRIMARY KEY(id)
 );
+comment on table ob.tcommit is 
+'description of an element of the draft agreement refered by ob.tcommit.did';
+comment on column ob.tcommit.did is 'refers to the draft containing this commit';
+comment on column ob.tcommit.bid is 'refers to the bid used to create this commit';
+comment on column ob.tcommit.wid is 'refers to the author of the bid';
+comment on column ob.tcommit.sid_src is 'stock[sid_src] refers to the value offered by the bid';
+comment on column ob.tcommit.sid_dst is 'stock[sid_dst] is the value provided';
+comment on column ob.tcommit.flags is 
+'flags[0] is set when accepted, flags[1] is set when refused,flags[2] is set when stock.qtt=fluxarrondi for stock[sid]';
+
 alter sequence ob.tcommit_id_seq owned by ob.tcommit.id;
 create index tcommit_did_idx on ob.tcommit(did);
 create index tcommit_sid_src_idx on ob.tcommit(sid_src);
@@ -330,6 +377,17 @@ create table ob.tomega (
 	updated timestamp,
 	PRIMARY KEY(nr,nf) 
 );
+comment on table ob.tomega is 
+'description of a couple (quality provided,quality required)';
+comment on column ob.tomega.nr is 
+	'refers to the quality required';
+comment on column ob.tomega.nf is 
+	'refers to the quality provided';
+comment on column ob.tomega.name is 
+	'name of this couple';
+comment on column ob.tomega.scale is 
+	'format for printing the ratio of quantities';
+
 create index tomega_name_idx on ob.tomega(name);
 
 CREATE TRIGGER trig_befa_tomega BEFORE INSERT 
@@ -353,6 +411,19 @@ create table ob.tlomega ( -- prices
 		[1] when inserted while a bid is inserted */
 	created timestamp
 );
+comment on table ob.tlomega is 
+'description of a price';
+comment on column ob.tlomega.qttr is 
+	'quantity required';
+comment on column ob.tlomega.qttf is 
+	'quantity provided';
+comment on column ob.tlomega.nf is 
+	'quality provided';
+comment on column ob.tlomega.nr is 
+	'quality required';
+comment on column ob.tlomega.flags is 
+	'flags[0] set when the read_omega(dnr,dnf) that inserted it was such as (dnr,dnf)=(nr,nf),flags[1] set when inserted while a bid is inserted';
+
 create index tlomega_nr_idx on ob.tlomega(nr);
 create index tlomega_nf_idx on ob.tlomega(nf);
 CREATE TRIGGER trig_befa_tlomega BEFORE 
@@ -381,6 +452,19 @@ create table ob.tmvt (
 		on update cascade on delete cascade not null,
 	created timestamp
 );
+comment on table ob.tmvt is 
+'records a change of ownership';
+comment on column ob.tmvt.did is 
+	'refers to the draft whose execution created this movement';
+comment on column ob.tmvt.own_src is 
+	'old owner';
+comment on column ob.tmvt.own_dst is 
+	'new owner';
+comment on column ob.tmvt.qtt is 
+	'quantity of the value';
+comment on column ob.tmvt.nat is 
+	'quality of the value';
+
 create index tmvt_did_idx on ob.tmvt(did);
 -- create index tmvt_src_idx on ob.tmvt(src);
 -- create index tmvt_dst_idx on ob.tmvt(dst);
@@ -436,7 +520,7 @@ INSERT INTO ob.tconnectdesc (conninfo,valid)
 		returns qtt owned for each (quality,own).
 			qown		quality.own
 			qname:		quality.name
-			owner: 		owner.name
+			owner: 	owner.name
 			qtt:		sum(qtt) for this (quality,own)
 			created:	min(created)
 			updated:	max(updated?updated:created)
@@ -460,8 +544,7 @@ CREATE VIEW market.vowned AS SELECT
 		INNER JOIN ob.towner o ON (s.own=o.id) 
 		INNER JOIN ob.tquality q on (s.nf=q.id) 
 	GROUP BY s.own,s.nf,q.name,o.name,q.own;
-	
-GRANT SELECT ON TABLE market.vowned TO depositary;
+
 
 --------------------------------------------------------------------------------
 -- market.vbalance 
@@ -494,8 +577,7 @@ CREATE VIEW market.vbalance AS SELECT
 			as updated
     	FROM ob.tstock s INNER JOIN ob.tquality q on (s.nf=q.id)
 	GROUP BY q.name,q.own;
-	
-GRANT SELECT ON TABLE market.vbalance TO depositary,market;
+
 
 --------------------------------------------------------------------------------
 -- market.vdraft
@@ -530,8 +612,7 @@ CREATE VIEW market.vdraft AS
 				) AS co 
 		INNER JOIN ob.tdraft dr ON co.did = dr.id
 		INNER JOIN ob.towner w ON w.id = co.wid;
-	
-GRANT SELECT ON TABLE market.vdraft TO depositary;
+
 
 --------------------------------------------------------------------------------
 -- market.vbid
@@ -573,8 +654,7 @@ CREATE VIEW market.vbid AS
 	INNER JOIN ob.tquality qf ON s.nf =qf.id
 	INNER JOIN ob.towner w on s.own = w.id
 	ORDER BY n.created DESC;
-	
-GRANT SELECT ON TABLE market.vbid TO depositary;
+
 
 --------------------------------------------------------------------------------
 -- market.vmvt R
@@ -605,8 +685,7 @@ CREATE VIEW market.vmvt AS
 	INNER JOIN ob.towner w_src ON (m.own_src=w_src.id)
 	INNER JOIN ob.towner w_dst ON (m.own_dst=w_dst.id) 
 	INNER JOIN ob.tquality q ON (m.nat = q.id);
-	
-GRANT SELECT ON TABLE market.vmvt TO depositary;
+
 
 /*
 --------------------------------------------------------------------------------
@@ -940,13 +1019,13 @@ BEGIN
 		WHERE name =  _quality AND own = _user;
 	IF NOT FOUND THEN 
 		err := -30405;
-		RAISE EXCEPTION '[-30405]The quality % does not exist or is not yours',_quality   USING ERRCODE='38000';
+		RAISE EXCEPTION '[%]The quality % does not exist or is not yours',err,_quality   USING ERRCODE='38000';
 	END IF;
 	IF (_qtt <= 0) THEN
 		err := -30414;
-		RAISE EXCEPTION '[-30414] the quantity cannot be negative or null'   USING ERRCODE='38000';
+		RAISE EXCEPTION '[%] the quantity cannot be negative or null',err   USING ERRCODE='38000';
 	END IF;
-	-- TODO What ?????
+	
 	BEGIN
 		INSERT INTO ob.towner (name) VALUES ( _owner) 
 			RETURNING id INTO _wid;
@@ -1378,7 +1457,7 @@ BEGIN
 	RETURN err;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON  FUNCTION market.fbatch_omega() TO admin;
+
 
 /*******************************************/
  -- PRIVATE FUNCTIONS
@@ -2417,32 +2496,7 @@ Rules:
 in your postgres startup script launch a session with `psql ... -c "some
 sql commands"` or `psql ... -f somescript.sql` ... 
 
-A role having USAGE granted for a LANGUAGE can create a FUNCTION.
-By default, a function execution is granted to public:
-BEGIN;
-CREATE FUNCTION check_password(uname TEXT, pass TEXT) ... SECURITY DEFINER;
-REVOKE ALL ON FUNCTION check_password(uname TEXT, pass TEXT) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION check_password(uname TEXT, pass TEXT) TO admins;
-COMMIT;
 
-GRANT page 1297
-REVOKE page 1331
-
-revoke all privileges on database test from public;
-revoke all on datable test from noright;
-grant connect on database test to noright;
-
-Affiche les droits accordés aux relations
-select relname,relacl from pg_class where relname like 'ob.%';
-
-pour la fonction appelante
-SECURITY DEFINER
-grant to depositary;
-
-pour toutes les fct du schema:
-revoke execute on all functions in schema ob from public;
-
-une fct d'un schema peut appeler la fct d'un autre schema,
 	
 */
 --------------------------------------------------------------------------------
@@ -2464,12 +2518,10 @@ CREATE TABLE ob.tuser (
 CREATE TRIGGER trig_befa_tuser BEFORE INSERT 
 	OR UPDATE ON ob.tuser FOR EACH ROW 
 	EXECUTE PROCEDURE ob.ftime_updated();
-	
-GRANT SELECT,UPDATE ON ob.tuser TO depositary,admin;
-GRANT INSERT ON ob.tuser TO admin;
+
 /* subscription process
 admin runs:
-	SELECT ob.fcrt_adduser(dn,10000);
+	SELECT ob.fcrt_adduser(dn,0);
 the user connects.
 
 certificate renewal process
@@ -2489,30 +2541,41 @@ At any time between start and accept,
 abort the renewal process.
 */
 --------------------------------------------------------------------------------
--- depositaries have dn without "." 
+-- 
 --------------------------------------------------------------------------------
 CREATE FUNCTION ob.fcrt_adduser(_dn text,_quotabid int) RETURNS text AS $$
 DECLARE
 	_crt text;
 	_status int;
+	_quota int;
 BEGIN
+	IF (_dn='postgres') THEN
+		RAISE NOTICE 'Not inserted: The user name % is already used';
+		RETURN -1;
+	END IF;
 	SELECT crt,status INTO _crt,_status FROM ob.tuser WHERE dn=_dn;
 	IF FOUND THEN
 		RAISE NOTICE 'Not inserted: The common name % is already used,with status %',_dn,_status;
-		RETURN -1;
+		RETURN -2;
 	END IF;
-	IF (NOT _dn LIKE '%.%') THEN
-		INSERT INTO ob.tuser (dn,quotabid,startcnt) VALUES (_dn,_quotabid,now());
-		RAISE NOTICE 'The common name % is inserted',_dn;
-		RETURN 0;
-	ELSE
+	_quota := _quotabid;
+	IF (_quotabid = 0) THEN
+		_quota := 10000;
+	END IF;	
+	/* _dn with '.' allowed
+	IF (_dn LIKE '%.%') THEN
 		RAISE NOTICE 'Not inserted: The common name % should not contain "."',_dn;
 		RETURN -1;	
 	END IF;
+	*/
+	INSERT INTO ob.tuser (dn,quotabid,startcnt,status) VALUES (_dn,_quota,now(),0);
+	RAISE NOTICE 'The common name % is inserted',_dn;
+	RETURN 0;
+
 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION ob.fcrt_adduser(_dn text,_quotabid int)  TO admin;
+
 
 --------------------------------------------------------------------------------
 -- 
@@ -2537,7 +2600,7 @@ BEGIN
 	
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON  FUNCTION market.fcrt_start_renewal() TO depositary;
+
 
 --------------------------------------------------------------------------------
 -- 
@@ -2612,7 +2675,29 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
--- 
+/*
+clients:
+https with certificate
+	A special certificate with commonName 'admin' 
+	created and registered at start up
+	
+users:
+	postgres is a superuser that creates the database
+	admin is a user
+	all other users have the role depositary
+
+Any client needs an https certificate except postgres
+	
+roles:
+	admin
+	public
+	
+pg_hba.conf:
+localhost	postgres	ob	allow
+localhost	all		ob	deny
+https		postgres	ob	deny
+https		all		ob	allow
+*/
 --------------------------------------------------------------------------------
 CREATE FUNCTION market.fcrt_getuser(_status_required int) RETURNS text AS $$
 DECLARE
@@ -2621,10 +2706,16 @@ DECLARE
 	_crt1 text;
 	_status int;
 BEGIN
-	if (current_database()='contrib_regression') THEN return 'postgres';
+	
+	if (current_database()='contrib_regression') THEN 
+		return 'postgres';
 	END IF;
+	if (user='postgres') THEN 
+		RAISE EXCEPTION '[-30439] Client certificate required [0]' USING ERRCODE='38000';
+	END IF;
+	
 	if(NOT (ob.ssl_is_used() AND ob.ssl_client_cert_present())) THEN
-		RAISE EXCEPTION '[-30439] Client certificate required' USING ERRCODE='38000';
+		RAISE EXCEPTION '[-30439] Client certificate required [1]: ssl client cert not present' USING ERRCODE='38000';
 	END IF;
 	
 	_dn = ob.ssl_client_dn_field('commonName');
@@ -2632,67 +2723,117 @@ BEGIN
 
 	SELECT crt,status INTO _crt,_status FROM ob.tuser WHERE dn=_dn;
 	IF NOT FOUND THEN
-		RAISE EXCEPTION '[-30439] Client certificate required' USING ERRCODE='38000';
+		RAISE EXCEPTION '[-30439] Client certificate required [2]: user % unregistered',_dn USING ERRCODE='38000';
 	END IF;
 	
 	IF (_status=0) THEN			
 		UPDATE ob.tuser SET crt=_crt1,status=1 WHERE dn=_dn;
+		RAISE NOTICE 'the ssl client cert is registered for %',_dn;
 		RETURN _dn;
 	END IF;
 	
 	IF(_status != _status_required) THEN
-		RAISE EXCEPTION '[-30439] Client certificate required' USING ERRCODE='38000';
+		RAISE EXCEPTION '[-30439] Client certificate required [3]: status should be %',_status_required USING ERRCODE='38000';
 	END IF;
 	
 	IF (_status=2) THEN
 		UPDATE ob.tuser SET crt_renewal=_crt1 WHERE dn=_dn;
-		RAISE NOTICE 'Please disconnect and connect with your old certificate';
+		RAISE NOTICE 'Please disconnect and reconnect with your old certificate';
 		RETURN '';
 	END IF;
 	
 	IF (NOT _crt=_crt1) THEN
-		RAISE EXCEPTION '[-30439] Client certificate required' USING ERRCODE='38000';
+		RAISE EXCEPTION '[-30439] Client certificate required [4]: unexpected ssl certificate' USING ERRCODE='38000';
 	END IF;
 	RETURN _dn;	
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
--- 
+-- manages quotas
 --------------------------------------------------------------------------------
 CREATE FUNCTION ob.fbidallowed(_dn text) RETURNS int AS $$
 DECLARE
 	_user ob.tuser%rowtype;
 BEGIN
-	if (current_database()='contrib_regression') THEN return 0; END IF;
-	SELECT * INTO _user FROM ob.tuser WHERE dn=_dn;
-	IF NOT FOUND THEN
-		RAISE EXCEPTION 'internal error';
+	if (current_database()='contrib_regression') THEN 
+		return 0; 
 	END IF;
-	IF(now() -__user.startcnt > cast('1 day' as interval)) THEN
+	
+	SELECT * INTO STRICT _user FROM ob.tuser WHERE dn=_dn;
+	-- raises NO_DATA_FOUND or TOO_MANY_ROWS
+
+	-- quota management
+	IF(now() - _user.startcnt > cast('1 day' as interval)) THEN
 		UPDATE ob.tuser SET startcnt = now(),cntbid=0 
 			WHERE dn=_dn RETURNING * INTO _user;
 	END IF;
 	IF(_user.cntbid > _user.quotabid) THEN
-		RAISE EXCEPTION 'Your quota is exhausted' USING ERRCODE='38000';
+		RAISE EXCEPTION 'The quota of % is exhausted',_dn USING ERRCODE='38000';
 	END IF;
 	UPDATE ob.tuser SET cntbid=cntbid+1 WHERE dn=_dn;
+	
 	RETURN 0;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 
+--------------------------------------------------------------------------------
+-- PRIVILEGES
+--------------------------------------------------------------------------------
+/*
+A role having USAGE granted for a LANGUAGE can create a FUNCTION.
+By default, a function execution is granted to public:
+BEGIN;
+CREATE FUNCTION check_password(uname TEXT, pass TEXT) ... SECURITY DEFINER;
+REVOKE ALL ON FUNCTION check_password(uname TEXT, pass TEXT) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION check_password(uname TEXT, pass TEXT) TO admins;
+COMMIT;
 
+GRANT page 1297
+REVOKE page 1331
 
-revoke all on schema ob from public cascade;
-grant usage on schema ob to market;
+revoke all privileges on database test from public;
+revoke all on datable test from noright;
+grant connect on database test to noright;
+
+Affiche les droits accordés aux relations
+select relname,relacl from pg_class where relname like 'ob.%';
+
+pour la fonction appelante
+SECURITY DEFINER
+grant to depositary;
+
+pour toutes les fct du schema:
 revoke execute on all functions in schema ob from public;
-grant execute on all functions in schema ob to market;
-grant select,update,insert,delete on all tables in schema ob to market;
 
-revoke all on schema market from public cascade;
-revoke execute on all functions in schema market from public;
-grant usage on schema market to depositary;
-grant execute on all functions in schema ob to depositary;
-grant select on all tables in schema ob to depositary; -- includes views
+une fct d'un schema peut appeler la fct d'un autre schema,
+*/
 
-
+--------------------------------------------------------------------------------
+-- Connect
+--------------------------------------------------------------------------------
+/* any user can connect. it can be:
+	- the superuser postgres that created the database,
+	- a user with a ssl certificate: admin or any other user
+roles are:
+	admin or public
+*/
+grant connect on database  current_database() to public;
+--------------------------------------------------------------------------------
+-- On schema ob
+--------------------------------------------------------------------------------
+-- objects can be seen by public
+grant usage on schema ob to public;
+-- ob.fcrt_adduser can be executed by admin
+grant execute on function  ob.fcrt_adduser(_dn text,_quotabid int)  to admin;
+-- tables and views can be viewed by public
+grant select on all tables in schema ob to public;
+--------------------------------------------------------------------------------
+-- On schema market
+--------------------------------------------------------------------------------
+-- objects can be seen by public
+grant usage on schema ob to public;
+-- all functions market.* can be executed by public
+grant execute on all functions in schema market to public;
+-- tables and views can be viewed by public
+grant select on all tables in schema market to public; 
