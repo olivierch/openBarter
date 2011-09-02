@@ -64,8 +64,8 @@ BEGIN
 	RETURN NEW;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-comment FUNCTION ob.ftime_created is 
-'trigger updating .created';
+comment on FUNCTION ob.ftime_created() is 
+'trigger updating field created';
 
 --------------------------------------------------------------------------------
 -- ob.ftime_updated 
@@ -82,8 +82,8 @@ BEGIN
 	RETURN NEW;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-comment on FUNCTION ob.ftime_updated is 
-'trigger updating .created and .updated';
+comment on FUNCTION ob.ftime_updated() is 
+'trigger updating fields created and updated';
 
 --------------------------------------------------------------------------------
 -- ob.ins_version
@@ -95,8 +95,8 @@ BEGIN
 	RETURN NEW;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-comment on FUNCTION ob.ins_version is 
-'trigger updating .version';
+comment on FUNCTION ob.ins_version() is 
+'trigger updating field version';
 --------------------------------------------------------------------------------
 -- ob.tdraft
 --------------------------------------------------------------------------------
@@ -109,8 +109,8 @@ BEGIN
 	RETURN res;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-comment on FUNCTION ob.fcurrval_tdraft is 
-'int8 = ob.fcurrval_tdraft() returns ob.tdraft_id_seq';
+comment on FUNCTION ob.fcurrval_tdraft() is 
+'int8 = ob_fcurrval_tdraft() returns ob_tdraft_id_seq';
 
 --------------------------------------------------------------------------------
 -- functions of contrib ssl_info
@@ -1481,7 +1481,7 @@ create table ob.tldraft (
 
 create function ob.getdraft_get(int8,double precision,int8,int8) 
 	returns setof ob.tldraft
-	as '$libdir/openbarter','ob_getdraft_get' 
+	as 'MODULE_PATHNAME','ob_getdraft_get' 
 	language C strict SECURITY DEFINER;
 
 --------------------------------------------------------------------------------
@@ -2818,7 +2818,8 @@ une fct d'un schema peut appeler la fct d'un autre schema,
 roles are:
 	admin or public
 */
-grant connect on database  current_database() to public;
+-- the following command should be run manually:
+-- grant connect on database  current_database() to public;
 --------------------------------------------------------------------------------
 -- On schema ob
 --------------------------------------------------------------------------------
