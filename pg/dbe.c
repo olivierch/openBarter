@@ -127,12 +127,7 @@ int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 
 
 	ob_tPrivateTemp *privt;
-	char *pathEnv;
 
-	ret = ob_makeEnvDir(&openbarter_g);
-	// elog(INFO,"Create envtemp in %s",openbarter_g.pathEnv);
-	if(ret) return(ob_dbe_CerDirErr);
-	pathEnv = openbarter_g.pathEnv;
 	ret = db_env_create(&envt, 0);
 	if (ret) {
 		obMTRACE(ret);
@@ -189,7 +184,7 @@ int ob_dbe_openEnvTemp(DB_ENV **penvt) {
 	 *	are expected to access the environment, the DB_PRIVATE flag should not be specified.
 	 */
 	_flagsenv = DB_CREATE | DB_INIT_MPOOL | DB_PRIVATE;
-	ret = envt->open(envt, pathEnv, _flagsenv, 0);
+	ret = envt->open(envt, NULL, _flagsenv, 0);
 	if (ret) {
 		obMTRACE(ret);
 		goto abort;
@@ -243,7 +238,7 @@ int ob_dbe_closeEnvTemp(DB_ENV *envt) {
 		ret = ret_t;
 	// elog( ERROR,"Appel de ob_rmPath avec %s",openbarter_g.pathEnv );
 
-	ob_rmPath(openbarter_g.pathEnv,true);
+	// ob_rmPath(openbarter_g.pathEnv,true);
 
 	return ret;
 }
@@ -301,10 +296,25 @@ static int open_db(DB_ENV *env, bool is_secondary, DB *db, char *name,
 	 * Whether other threads of control can access this database is driven entirely by whether the database parameter is set to NULL.
 	 *
 	 */
-	ret = db->open(db, NULL, pname, NULL,  DB_BTREE, _flags, 0644);
+	ret = db->open(db, NULL, NULL, pname, DB_BTREE, _flags, 0);
 	if (ret) {
 		obMTRACE(ret);
 		goto err;
+	}
+	
+	{	
+		DB_MPOOLFILE *mpf = NULL;
+		/* Configure the cache file */
+		mpf = db->get_mpf(db);
+		ret = mpf->set_flags(mpf, DB_MPOOL_NOFILE, 1);
+
+		if (ret != 0) {
+			/*env->err(env, ret,
+			"Attempt failed to configure for no backing of temp files.");
+			*/
+			obMTRACE(ret);
+			goto err;
+		}
 	}
 
 	return 0;

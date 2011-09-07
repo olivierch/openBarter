@@ -18,3 +18,6 @@ git rm --cached README
 $ git ls-files -z | xargs -0 rm
 $ git checkout .
 
+# creates a brach
+$git checkout -b experimental master
+
