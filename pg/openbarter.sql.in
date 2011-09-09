@@ -1,7 +1,7 @@
 /*
 A database is created:
-	createdb market
-	psql -dmarket
+	createdb marketdb
+	psql -dmarketdb
 	\q
 	
 Before the model is settled, role admin should be created.
@@ -2796,7 +2796,7 @@ revoke all privileges on database test from public;
 revoke all on datable test from noright;
 grant connect on database test to noright;
 
-Affiche les droits accordÃ©s aux relations
+Affiche les droits accordés aux relations
 select relname,relacl from pg_class where relname like 'ob.%';
 
 pour la fonction appelante
