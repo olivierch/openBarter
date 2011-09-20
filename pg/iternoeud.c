@@ -88,7 +88,7 @@ static void _obinit_guc(void) {
 							PGC_SUSET,
 							GUC_UNIT_KB,
 							NULL,
-							NULL);
+							NULL,NULL);
 
 	DefineCustomIntVariable("openbarter.maxarrow",
 		 "Sets the maximum number of arrow.",
@@ -99,7 +99,7 @@ static void _obinit_guc(void) {
 							PGC_SUSET,
 							0,
 							NULL,
-							NULL);
+							NULL,NULL);
 
 	DefineCustomIntVariable("openbarter.maxcommit",
 		 "Sets the maximum number of commits in agreement.",
@@ -110,7 +110,7 @@ static void _obinit_guc(void) {
 							PGC_SUSET,
 							0,
 							NULL,
-							NULL);
+							NULL,NULL);
 
 	EmitWarningsOnPlaceholders("openbarter");
 
