@@ -1,0 +1,19 @@
+PROGRAMME DE SIMULATION
+
+permet de vérifier la tenue en charge du serveur.
+Il lance des taches qui simulent le comportement d'un propriétaire
+Sur réception d'un signal, Il s'arrête et produit des statistiques sur l'exécution.
+
+parametres en entrée:
+nombre de propriétaires agissant simultanéement
+
+comportement d'un propriétaire:
+toujours:
+	si des accords sont présents:
+		accepte l'accord,
+		retire les valeurs obtenues,
+	dépose une valeur,
+	dépose une offre sur cette valeur.
+
+les statistiques sont:
+

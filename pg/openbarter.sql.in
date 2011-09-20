@@ -2706,15 +2706,25 @@ DECLARE
 	_crt1 text;
 	_status int;
 BEGIN
-	
-	if (current_database()='contrib_regression') THEN 
-		return 'postgres';
+
+/* access without ssl allowed only for tests on databases contrib_regression and test_charge
+*/
+	if(NOT ob.ssl_is_used()) THEN
+		-- for tests unit
+		if (current_database()='contrib_regression') THEN 
+			return 'postgres';
+		END IF;
+		if (current_database()='test_charge') THEN
+			return user;
+		END IF;
+		RAISE EXCEPTION 'database not correctly configured' USING ERRCODE='38000';
 	END IF;
+	-- user postgres forbidden
 	if (user='postgres') THEN 
 		RAISE EXCEPTION '[-30439] Client certificate required [0]' USING ERRCODE='38000';
 	END IF;
 	
-	if(NOT (ob.ssl_is_used() AND ob.ssl_client_cert_present())) THEN
+	if(NOT ob.ssl_client_cert_present()) THEN
 		RAISE EXCEPTION '[-30439] Client certificate required [1]: ssl client cert not present' USING ERRCODE='38000';
 	END IF;
 	
@@ -2756,7 +2766,7 @@ CREATE FUNCTION ob.fbidallowed(_dn text) RETURNS int AS $$
 DECLARE
 	_user ob.tuser%rowtype;
 BEGIN
-	if (current_database()='contrib_regression') THEN 
+	if ((current_database()='contrib_regression') OR (current_database()='test_charge')) THEN 
 		return 0; 
 	END IF;
 	
