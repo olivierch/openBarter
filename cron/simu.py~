@@ -1,11 +1,11 @@
 #!/usr/bin/python
 # -*- coding: utf8 -*-
 
-# import logger
+import daemon
+import logger
 from write_load_path import write_path
 import settings
-# import db
-from utils import db
+import db
 import random	# random.randint(a,b) gives N such as a<=N<=b
 from contextlib import closing
 import os,sys
@@ -43,14 +43,13 @@ def getDebugLevel(cursor,log):
 	if(len(res)):
 		log.info("show client_min_message= %s" % (res[0],))
 	return res
-	
-def clear_base(conn,log,file_name):
-	
+def clear_base(conn,log):
+	file_name = os.path.join(settings.PGSQLOBDIR,'getdrafttest1.sql')
 	with open(file_name, 'r') as f:
 		sql_init = f.read()
 		f.close()
 	# with closing(conn.cursor()) as cursor:
-	with db.Cursor(conn) as cursor:
+	with db.Cursor(conn,log) as cursor:
 		cursor.executemany(sql_init,((),))
 		getDebugLevel(cursor,log)
 	log.debug('most tables truncated')
@@ -58,14 +57,14 @@ def clear_base(conn,log,file_name):
 
 def add_qualities(conn,log):
 	# with closing(conn.cursor()) as cursor:
-	with db.Cursor(conn) as cursor:
+	with db.Cursor(conn,log) as cursor:
 		for i in range(settings.NBQUALITY):
 			cursor.callproc("ob_fcreate_quality",(getQualitySufName(i),))
 	log.debug("%i qualities added" % settings.NBQUALITY)
 
 def add_owners(conn,log):
 	""" We allocate to each owner a quantity 1000 of a random quality"""
-	with db.Cursor(conn) as cursor:
+	with db.Cursor(conn,log) as cursor:
 		for i in range(settings.NBOWNER):
 			qlt = getQualityName(random.randint(0,settings.NBQUALITY-1))
 			qtt = 1000
@@ -78,23 +77,21 @@ def add_owners(conn,log):
 	log.debug("%i owners added" % settings.NBOWNER)
 
 def statMarket(conn,log):
-	nullsKeys = ('unbalanced_qualities','corrupted_draft','corrupted_stock_s','corrupted_stock_a')
 	sql = 'SELECT * from ob_fstats()'
-	with db.Cursor(conn) as cursor:
+	with closing(conn.cursor()) as cursor:
 		cursor.execute(sql)
-		while True:
-			res= cursor.fetchone():
-			if not res: break
-			for k in nullsKeys:
-				if res[k]!=0:
-					exitError(log,'ob_fstats().%s = %i'%(k,res[k]))
+		for d in db.getDictsFromCursor(cursor):
+			for k,v in d.iteritems():
+				if k in ('unbalanced_qualities','corrupted_draft','corrupted_stock_s','corrupted_stock_a'):
+					if v!=0:
+						exitError(log,'ob_fstats().%s = %i'%(k,v))
 	# log.info('statMarket Ok')
 	
 def lirePrix(conn,log,natr,natf):
 	# natr,natf are quality id
 	# omegaLu,fluxLu = lirePrix(conn,log,natr,natf)
 	prices = []
-	with db.Cursor(conn) as cursor:
+	with db.Cursor(conn,log) as cursor:
 		args = [0,1.0,natr,natf]
 		# log.info('ob_getdraft_get(%s)' % str(args))
 		cursor.callproc('ob_getdraft_get',args)
@@ -125,7 +122,7 @@ def insertBid(conn,log,owner,natf,qttf,qttr,natr):
 	
 
 	
-	with db.Cursor(conn) as cursor:
+	with db.Cursor(conn,log) as cursor:
 		# nb_draft int8 = ob_finsert_bid(_owner text,_qualityprovided text,qttprovided int8,_qttrequired int8,_qualityrequired text)
 		# omega = qttf/qttr => qttr = qttf/omega
 		
@@ -150,7 +147,7 @@ def insertBid(conn,log,owner,natf,qttf,qttr,natr):
 def insertSbib(conn,log,owner,bidId,qttf,qttr,natr):
 	""" inserts a bid with ob_finsert_bid
 	"""
-	with db.Cursor(conn) as cursor:
+	with db.Cursor(conn,log) as cursor:
 		# nb_draft int8 = ob_finsert_sbid(bid_id int8,_qttrequired int8,_qualityrequired text)
 		# omega = qttf/qttr => qttr = qttf/omega
 		sql,pars = 'ob_finsert_sbid',[bidId,qttf,qttr,natr]
@@ -166,8 +163,9 @@ def insertSbib(conn,log,owner,bidId,qttf,qttr,natr):
 def getRanBidId(conn,log,owner):
 	""" returns id,natfId,natf for a random noeud of owner
 	"""
-	l = 0	
-	with db.Cursor(conn) as cursor:
+	l = 0
+	
+	with closing(conn.cursor()) as cursor:
 		cursor.execute("""SELECT n.id,q.id,q.name,q.qtt from ob_tnoeud n
 						inner join ob_towner o on (o.id=n.own) 
 						inner join ob_tquality q on (q.id=n.nf)
@@ -182,20 +180,20 @@ def getRanBidId(conn,log,owner):
 def getLastBid(conn,log):
 	""" get last bid id
 	"""
-	with db.Cursor(conn) as cursor:
+	with closing(conn.cursor()) as cursor:
 		cursor.execute(" select max(id) from ob_tnoeud ",[])
 		res = cursor.fetchone()
 		nbids = res[0]
 		cursor.execute(" SELECT last_value from ob_tdraft_id_seq ",[])
 		res = cursor.fetchone()
 		version = res[0]
-		print "nid=%i version=%i" %(nbids,version)
+		print "nid=%i verion=%i" %(nbids,version)
 	return	nbids,version
 	
 def verifLoops(conn,log,sql):
 	"""
 	"""
-	with db.Cursor(conn) as cursor:
+	with closing(conn.cursor()) as cursor:
 		cursor.execute(sql,[])
 		res = cursor.fetchall()
 		if(len(res) == 0):
@@ -223,7 +221,7 @@ def keepReserve(conn,log,owner):
 	""" the oldest bid is removed, if too much bids are made, 
 	so that quantities remain available for new bids
 	"""
-	with db.Cursor(conn) as cursor:
+	with closing(conn.cursor()) as cursor:
 		sql = """SELECT 
 			sum(CASE WHEN s.type='A' THEN s.qtt ELSE 0 END) as sA,
 			sum(CASE WHEN s.type!='A' THEN s.qtt ELSE 0 END) as sDS
@@ -378,8 +376,7 @@ def simu():
 	random.seed(0) #for reproductibility of playings
 	try:
 		with db.Connection(log) as conn:
-			file_name = os.path.join(settings.PGSQLOBDIR,'getdrafttest1.sql')
-			clear_base(conn,log,file_name)
+			clear_base(conn,log)
 			add_qualities(conn,log)
 			add_owners(conn,log)
 			loopSimu(conn,log)
