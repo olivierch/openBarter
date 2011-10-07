@@ -44,8 +44,8 @@ def getDebugLevel(cursor,log):
 		log.info("show client_min_message= %s" % (res[0],))
 	return res
 	
-def clear_base(conn,log):
-	file_name = os.path.join(settings.PGSQLOBDIR,'getdrafttest1.sql')
+def clear_base(conn,log,file_name):
+	
 	with open(file_name, 'r') as f:
 		sql_init = f.read()
 		f.close()
@@ -378,7 +378,8 @@ def simu():
 	random.seed(0) #for reproductibility of playings
 	try:
 		with db.Connection(log) as conn:
-			clear_base(conn,log)
+			file_name = os.path.join(settings.PGSQLOBDIR,'getdrafttest1.sql')
+			clear_base(conn,log,file_name)
 			add_qualities(conn,log)
 			add_owners(conn,log)
 			loopSimu(conn,log)
