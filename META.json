@@ -14,20 +14,20 @@
          "requires": {
             "plpgsql": 0,
             "sslinfo": 0,
-            "PostgreSQL": "9.0.4",
-         },
+            "PostgreSQL": "9.0.4"
+         }
       },
       "build": {
          "requires": {
             "berkeleydb": "4.8.30"
-         },
-      },
+         }
+      }
    },
    "provides": {
      "openbarter": {
        "file": "pg/openbarter.sql.in",
        "docfile": "doc/doc-ob.pdf",
-       "version": "0.1.2",
+       "version": "0.1.6",
        "abstract": "Multilateral agreement production engine."
      }
    },
@@ -53,9 +53,9 @@
    ],
    "no_index": {
   "file":      [ "incl.txt" ],
-  "directory": [ "cron" ],
+  "directory": [ "cron" ]
   },
-  "release_status": "unstable",
+  "release_status": "unstable"
 
 }
 
