@@ -2806,7 +2806,7 @@ revoke all privileges on database test from public;
 revoke all on datable test from noright;
 grant connect on database test to noright;
 
-Affiche les droits accordés aux relations
+Affiche les droits accordes aux relations
 select relname,relacl from pg_class where relname like 'ob.%';
 
 pour la fonction appelante
