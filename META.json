@@ -6,9 +6,8 @@
    "maintainer": [
       "Olivier Chaussavoine <olivier.chaussavoine@gmail.com>"
    ],
-   "license": {
-      "PostgreSQL": "gpl_3"
-   },
+   "license": "gpl_3",
+
    "prereqs": {
       "runtime": {
          "requires": {
