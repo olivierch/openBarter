@@ -1,0 +1,37 @@
+set search_path = ob;
+select ob_fadd_account('own1','q1',100);
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+select ob_fadd_account('own1','q1',200);
+ ob_fadd_account 
+-----------------
+               0
+(1 row)
+
+select ob_fsub_account('own1','q1',300);
+ ob_fsub_account 
+-----------------
+               0
+(1 row)
+
+select ob_fget_errs();
+ ob_fget_errs 
+--------------
+            0
+(1 row)
+
+select count(*) from ob_tstock; -- no stock remains
+ count 
+-------
+     0
+(1 row)
+
+truncate ob_tquality cascade;
+NOTICE:  truncate cascades to table "ob_tstock"
+NOTICE:  truncate cascades to table "ob_tnoeud"
+NOTICE:  truncate cascades to table "ob_tmvt"
+NOTICE:  truncate cascades to table "ob_trefused"
+NOTICE:  truncate cascades to table "ob_tcommit"

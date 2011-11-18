@@ -1,0 +1,5 @@
+# flow extension
+comment = 'data type for cycle of bids'
+default_version = '1.0'
+module_pathname = '$libdir/flow'
+relocatable = true

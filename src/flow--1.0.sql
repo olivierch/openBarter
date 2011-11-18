@@ -1,0 +1,73 @@
+/* contrib/flow/flow--1.0.sql */
+
+CREATE FUNCTION flow_in(cstring)
+RETURNS flow
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION flow_out(flow)
+RETURNS cstring
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+
+CREATE FUNCTION flow_status(flow)
+RETURNS cstring
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION flow_omega(flow)
+RETURNS float8
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION flow_omegax(flow,int8,int8)
+RETURNS float8
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION flow_proj(flow,int)
+RETURNS int8[]
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION flow_provides(flow)
+RETURNS int8
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION flow_get_fim1_fi(flow,int)
+RETURNS int8[]
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION flow_dim(flow)
+RETURNS int4
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE TYPE flow (
+	INTERNALLENGTH = variable,
+	INPUT = flow_in,
+	OUTPUT = flow_out,
+	ALIGNMENT = double
+);
+
+COMMENT ON TYPE flow IS 'flow ''[(id,nr,qtt_prov,qtt_requ,sid,own,qtt,np), ...]''';
+
+-- (flow,id,nr,qtt_prov,qtt_requ,sid,own,qtt,np)
+CREATE FUNCTION flow_cat(flow,int8,int8,int8,int8,int8,int8,int8,int8)
+RETURNS flow
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION flow_last_replace(flow,int8,int8,int8,int8,int8,int8,int8,int8)
+RETURNS flow
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION flow_to_matrix(flow)
+RETURNS int8[]
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+

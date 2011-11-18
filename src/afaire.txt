@@ -1,0 +1,16 @@
+A FAIRE
+dans flowc.c,
+	if(box->x[(box->dim)-1].id == 0) cflags |= ob_flux_CLastIgnore;
+	else cflags &= ~(ob_flux_CLastIgnore);
+	remplacer .id par .sid
+	
+Les modifications de stocks doivent tjrs se faire dans le même ordre 
+pour éviter un deadlock. Difficile à faire.
+
+STRATEGIE DE TEST
+
+ob_fadd_account(_owner text,_quality text,_qtt int8)
+ob_fsub_account(_owner text,_quality text,_qtt int8)
+
+
+
