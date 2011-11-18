@@ -9,9 +9,10 @@
 <h1>openBarter</h1>
 
 <p>openBarter is a postgres database extension defining a barter market. It implements the economic mechanisms of a regular market and allows cyclic exchange between more than two partners (buyer and seller) in a single transaction. Even if competition is performed between offers, it does not require any central monetary standard to quantify the value exchanged and express prices to be compared. It provides a liquidity equivalent to that of a regular market place.</p>
+<p>Low liquidity of barter explains why money is prefered to barter. Mainstream economists present barter as the archaic ancestor of money. However it has always been the result of a disfonctionning financial system. By allowing exchanges with more than two partners the barter market becomes nearly as liquid as a regular market using money. The competition between groups of more than two partners fosters cooperation inside groups, as well as economic performance.</p>
+<p> The database finds possible relations between bids (exchange proposals) and creates draft agreements for approval by owners. When agreements are accepted by partners, the property of related values is exchanged between partners.</p>
 
 <h2>Content</h2>
-
 <ul>
 <li>/doc documentation. </li>
 <li>/src contains sources files, and the Makefile. make should be run into this directory.</li>
@@ -19,5 +20,36 @@
 <li>openbarter.control and META.json files required by PGXN manager. </li>
 <li>other files are python tools kept here for history purposes.</li>
 </ul>
+<h2>Licence</h2>
+  <p>openbarter - The maximum wealth for the minimum collective effort
+    Copyright (C) 2008->2011 olivier Chaussavoine</p>
+
+   <p> This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.</p>
+
+    <p>This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+    GNU General Public License for more details.</p>
+
+   <p> You should have received a copy of the GNU General Public License
+    along with this program. If not, see <a href="http://www.gnu.org/licenses/">gnu licences</a>.<p>
+
+    <p>olivier dot chaussavoine at gmail.com</p>
+<h2>Releases</h2>
+<h3>release 0.2.0</h3>
+<p><a href="https://github.com/downloads/olivierch/openBarter/openbarter-0.2.0.tar.gz">source</a><br><a href="https://github.com/downloads/olivierch/openBarter/openbarter-doc-0.2.0.pdf">documentation</a></p>
+<p>openbarter does not require berkeleydb anymore. All graph traversal are implemented using the <b>with</b> clause, and calculations related to a given draft agreement are implemented in <b>c</b> language using a special type <b>flow</b> in postgreSQL.</p>
+<h3>release 0.1.2</h3>
+<p><a href="https://github.com/downloads/olivierch/openBarter/openbarter-0.1.2.tar.gz">source</a><br><a href="https://github.com/downloads/olivierch/openBarter/openbarter-doc-0.1.2.pdf">documentation</a></p>
+<h3>release 0.1.1</h3>
+<p><a href="https://github.com/downloads/olivierch/openBarter/openbarter-0.1.1.tar.gz">source</a><br><a href="https://github.com/downloads/olivierch/openBarter/openbarter-doc-0.1.1.pdf">documentation</a></p>
 </body>
 </html>
+
+
+
+
+
