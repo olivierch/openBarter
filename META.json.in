@@ -26,11 +26,11 @@
    },
    "resources": {
       "bugtracker": {
-         "web": "https://github.com/olivierch/openBarter/issues"
+         "web": "http://github.com/olivierch/openBarter/issues"
       },
       "repository": {
         "url":  "git://github.com/olivierch/openBarter.git",
-        "web":  "https://github.com/olivierch/openBarter/wiki/openBarter",
+        "web":  "http://olivierch.github.com/openBarter",
         "type": "git"
       }
    },
