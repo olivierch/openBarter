@@ -1,4 +1,3 @@
-/* contrib/flow/flow--1.0.sql */
 
 CREATE FUNCTION flow_in(cstring)
 RETURNS flow
@@ -9,7 +8,6 @@ CREATE FUNCTION flow_out(flow)
 RETURNS cstring
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
-
 
 CREATE FUNCTION flow_status(flow)
 RETURNS cstring
