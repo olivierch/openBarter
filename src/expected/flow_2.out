@@ -406,8 +406,6 @@ SELECT _reference_time('ob_tmvt');
 	usage:
 		SELECT * FROM ob_vowned WHERE owner='toto'
 			total values owned by the owner 'toto'
-		SELECT * FROM ob_vowned WHERE qown='banquedefrance'
-			total values of owners whose qualities are owned by the depositary 'banquedefrance'
 */
 --------------------------------------------------------------------------------
 CREATE VIEW ob_vowned AS SELECT 
@@ -955,7 +953,7 @@ conditions:
 
 returns a char:
 		0 the draft is not yet accepted, 
-		1 the draft is executed, NON, retourne 0!
+		1 the draft is executed, 
 		< 0 error
 */
 --------------------------------------------------------------------------------
@@ -1160,7 +1158,7 @@ $$ LANGUAGE PLPGSQL;
 		draft_id
 	quantities are stored back into the stock S
 	A ret is returned.
-		1 the draft is cancelled
+		0 the draft is cancelled
 		<0 error
 
 */
