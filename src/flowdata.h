@@ -16,17 +16,17 @@ typedef struct ob_tNo {
 } ob_tNo;
 
 
-typedef enum STATUSNDBOX {
+typedef enum STATUSNDFLOW {
 	empty,noloop,loop,draft,undefined
-} STATUSNDBOX;
+} STATUSNDFLOW;
 
-typedef struct NDBOX
+typedef struct NDFLOW
 {
 	int32		vl_len_; /* varlena header (do not touch directly!) */
 	unsigned int dim;
-	STATUSNDBOX	status;
+	STATUSNDFLOW	status;
 	BID	x[1];
-} NDBOX;
+} NDFLOW;
 
 #define ob_flux_CLastIgnore 	(32<<0)
 #define ob_flux_CVerify 	(32<<1)
@@ -36,7 +36,7 @@ typedef struct ob_tChemin {
 	int		nbOwn,nbStock;
 	int *		occOwn,*occStock;
 	double	gain,prodOmega;
-	NDBOX *	box;
+	NDFLOW *	box;
 	double *	omegaCorrige,*fluxExact,*piom,*spiom;
 	ob_tNo	no[];
 	
@@ -48,13 +48,13 @@ typedef struct ob_tGlobales {
 } ob_tGlobales;
 extern ob_tGlobales globales; //defined in flow.c
 
-#define DatumGetNDBOX(x)	((NDBOX*)DatumGetPointer(x))
-#define PG_GETARG_NDBOX(x)	DatumGetNDBOX( PG_DETOAST_DATUM(PG_GETARG_DATUM(x)) )
-#define PG_RETURN_NDBOX(x)	PG_RETURN_POINTER(x)
-#define SIZE_NDBOX(dim)		(offsetof(NDBOX, x[0])+(dim)*sizeof(BID))
+#define DatumGetNDFLOW(x)	((NDFLOW*)DatumGetPointer(x))
+#define PG_GETARG_NDFLOW(x)	DatumGetNDFLOW( PG_DETOAST_DATUM(PG_GETARG_DATUM(x)) )
+#define PG_RETURN_NDFLOW(x)	PG_RETURN_POINTER(x)
+#define SIZE_NDFLOW(dim)		(offsetof(NDFLOW, x[0])+(dim)*sizeof(BID))
 
-extern void 	flowc_maximum(NDBOX *box,bool verify);
-extern double 	flowc_getProdOmega(NDBOX *box);
-extern char *flow_ndboxToStr(NDBOX *flow,bool internal);
+extern void 	flowc_maximum(NDFLOW *box,bool verify);
+extern double 	flowc_getProdOmega(NDFLOW *box);
+extern char *flow_ndboxToStr(NDFLOW *flow,bool internal);
 extern char * flowc_cheminToStr(ob_tChemin *pchemin);
-extern bool flowc_idInBox(NDBOX *box,int64 id);
+extern bool flowc_idInBox(NDFLOW *box,int64 id);

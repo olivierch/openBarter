@@ -110,8 +110,8 @@ static int	scanbuflen;
 void 	flow_yyerror(const char *message);
 int 	flow_yyparse(void *result);
 
-static NDBOX * add_bid(NDBOX *result, int64 *vals);
-extern NDBOX * Ndbox_enlarge(NDBOX *box);
+static NDFLOW * add_bid(NDFLOW *result, int64 *vals);
+extern NDFLOW * Ndbox_enlarge(NDFLOW *box);
 
 
 
@@ -167,7 +167,7 @@ typedef union YYSTYPE
     int64 vals[9];
     int dim;
   } bnd;
-  STATUSNDBOX status;
+  STATUSNDFLOW status;
   char * text;
 
 
@@ -1382,8 +1382,8 @@ yyreduce:
 /* Line 1455 of yacc.c  */
 #line 70 "flowparse.y"
     {
-          	//((NDBOX * )result)->status = $2;
-          	//flow_compute((NDBOX * )result);
+          	//((NDFLOW * )result)->status = $2;
+          	//flow_compute((NDFLOW * )result);
           ;}
     break;
 
@@ -1401,7 +1401,7 @@ yyreduce:
 /* Line 1455 of yacc.c  */
 #line 81 "flowparse.y"
     {
-	    if (((NDBOX * )result)->dim > FLOW_MAX_DIM) {
+	    if (((NDFLOW * )result)->dim > FLOW_MAX_DIM) {
               ereport(ERROR,
                       (errcode(ERRCODE_SYNTAX_ERROR),
                        errmsg("bad flow representation"),
@@ -1676,10 +1676,10 @@ yyreturn:
 #line 126 "flowparse.y"
 
 
-static NDBOX * add_bid(NDBOX *box, int64 *vals) {
+static NDFLOW * add_bid(NDFLOW *box, int64 *vals) {
 	int i;
 	BID *s;
-	NDBOX *newbox = box;
+	NDFLOW *newbox = box;
 	
 	// newbox = Ndbox_enlarge(box);
 	s = &newbox->x[box->dim];

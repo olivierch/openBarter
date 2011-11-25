@@ -19,8 +19,8 @@
 static void _calGains(ob_tChemin *pchemin,double omegaCorrige[]);
 static int _fluxMaximum(const ob_tChemin *pchemin, double *fluxExact) ;
 static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int _iStockExhausted);
-static ob_tChemin * _createChemin(NDBOX *box, int cflags );
-static bool _isCycle(NDBOX *box);
+static ob_tChemin * _createChemin(NDFLOW *box, int cflags );
+static bool _isCycle(NDFLOW *box);
 
 /******************************************************************************
  * gives the maximum flow of box
@@ -34,7 +34,7 @@ static bool _isCycle(NDBOX *box);
 	
  *****************************************************************************/
 
-void flowc_maximum(NDBOX *box,bool verify) {
+void flowc_maximum(NDFLOW *box,bool verify) {
 	int _dim = box->dim;
 	ob_tChemin *pchemin;
 	int _iStockExhausted;
@@ -105,7 +105,7 @@ void flowc_maximum(NDBOX *box,bool verify) {
 	return;
 }
 
-bool flowc_idInBox(NDBOX *box,int64 id) {
+bool flowc_idInBox(NDFLOW *box,int64 id) {
 	int _dim = box->dim;
 	int _n;
 	
@@ -117,7 +117,7 @@ bool flowc_idInBox(NDBOX *box,int64 id) {
 	
 }
 
-static ob_tChemin * _createChemin(NDBOX *box, int cflags ) {
+static ob_tChemin * _createChemin(NDFLOW *box, int cflags ) {
 	
 	ob_tChemin *pchemin;
 	int *occOwn,*occStock;
@@ -357,7 +357,7 @@ static void _calGains(ob_tChemin *pchemin,double omegaCorrige[]) {
 	return;
 }
 
-static bool _isCycle(NDBOX *box) {
+static bool _isCycle(NDFLOW *box) {
 	int _dim = box->dim;	
 	return box->x[0].nr == box->x[_dim-1].np;
 }
@@ -418,7 +418,7 @@ static int _fluxMaximum(const ob_tChemin *pchemin, double *fluxExact) {
 	double _min, _cour;
 	int	_iStockExhausted;	
 	double *omegaCorrige = pchemin->omegaCorrige;
-	NDBOX *box = pchemin->box;
+	NDFLOW *box = pchemin->box;
 	int _dim = box->dim;
 		
 	// piom are obtained on each node, 
@@ -506,7 +506,7 @@ static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int iStockExhausted
 	bool _found;
 	int64 * _flowNodes,* _flowStocks, *_floor;
 	double _newdist, _maxdist;
-	NDBOX *box = pchemin->box;
+	NDFLOW *box = pchemin->box;
 	int _dim = box->dim;
 	size_t _s;
 	
@@ -618,7 +618,7 @@ static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int iStockExhausted
 	return _found; 
 }
 
-double flowc_getProdOmega(NDBOX *box) {
+double flowc_getProdOmega(NDFLOW *box) {
 	int _dim = box->dim;
 	int _n;
 	double p = 1.,_omega;

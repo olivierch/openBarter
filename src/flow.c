@@ -1,6 +1,4 @@
 /******************************************************************************
-  contrib/flow/flow.c
-
   This file contains routines that can be bound to a Postgres backend and
   called by the backend in the process of processing queries.  The calling
   format for these routines is dictated by Postgres architecture.
@@ -51,25 +49,24 @@ PG_FUNCTION_INFO_V1(flow_last_omega);
 PG_FUNCTION_INFO_V1(flow_last_replace);
 PG_FUNCTION_INFO_V1(flow_dim);
 PG_FUNCTION_INFO_V1(flow_get_fim1_fi);
+PG_FUNCTION_INFO_V1(flow_to_matrix);
 
-Datum		flow_in(PG_FUNCTION_ARGS);
-Datum		flow_out(PG_FUNCTION_ARGS);
-Datum		flow_proj(PG_FUNCTION_ARGS);
-Datum 		flow_status(PG_FUNCTION_ARGS);
-Datum 		flow_omega(PG_FUNCTION_ARGS);
-Datum 		flow_omegax(PG_FUNCTION_ARGS);
-Datum 		flow_provides(PG_FUNCTION_ARGS);
+Datum flow_in(PG_FUNCTION_ARGS);
+Datum flow_out(PG_FUNCTION_ARGS);
+Datum flow_proj(PG_FUNCTION_ARGS);
+Datum flow_status(PG_FUNCTION_ARGS);
+Datum flow_omega(PG_FUNCTION_ARGS);
+Datum flow_omegax(PG_FUNCTION_ARGS);
+Datum flow_provides(PG_FUNCTION_ARGS);
 Datum flow_last_omega(PG_FUNCTION_ARGS);
 Datum flow_last_replace(PG_FUNCTION_ARGS);
 Datum flow_dim(PG_FUNCTION_ARGS);
 Datum flow_get_fim1_fi(PG_FUNCTION_ARGS);
+Datum flow_to_matrix(PG_FUNCTION_ARGS);
 
 
 PG_FUNCTION_INFO_V1(flow_cat);
 Datum flow_cat(PG_FUNCTION_ARGS);
-
-PG_FUNCTION_INFO_V1(flow_to_matrix);
-Datum flow_to_matrix(PG_FUNCTION_ARGS);
 
 PG_FUNCTION_INFO_V1(flow_recv);
 Datum flow_recv(PG_FUNCTION_ARGS);
@@ -78,12 +75,12 @@ PG_FUNCTION_INFO_V1(flow_send);
 Datum flow_send(PG_FUNCTION_ARGS);
 
 // for internal use
-char * flow_statusBoxToStr (NDBOX *box);
+char * flow_statusBoxToStr (NDFLOW *box);
 
-// memory allocation of NDBOX
+// memory allocation of NDFLOW
 
-NDBOX * Ndbox_enlarge(NDBOX *box);
-static NDBOX * Ndbox_init(int dim);
+NDFLOW * Ndbox_enlarge(NDFLOW *box);
+static NDFLOW * Ndbox_init(int dim);
 
 void		_PG_init(void);
 void		_PG_fini(void);
@@ -109,7 +106,7 @@ flow_in(PG_FUNCTION_ARGS)
 {
 	char	   *str = PG_GETARG_CSTRING(0);
 
-	NDBOX 	*result;
+	NDFLOW 	*result;
 	
 	result = Ndbox_init(FLOW_MAX_DIM);
 
@@ -122,9 +119,9 @@ flow_in(PG_FUNCTION_ARGS)
 	
 	flowc_maximum(result,globales.verify);
 
-	PG_RETURN_NDBOX(result);
+	PG_RETURN_NDFLOW(result);
 }
-char *flow_ndboxToStr(NDBOX *flow,bool internal) {
+char *flow_ndboxToStr(NDFLOW *flow,bool internal) {
 	StringInfoData 	buf;
 	int			dim = flow->dim;
 	int			i;
@@ -164,14 +161,14 @@ char *flow_ndboxToStr(NDBOX *flow,bool internal) {
 Datum
 flow_out(PG_FUNCTION_ARGS)
 {
-	NDBOX	   *flow;
+	NDFLOW	   *flow;
 	char *	_res;
 	
 	if(PG_ARGISNULL(0) )
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_out: with flow=NULL")));
-	flow = PG_GETARG_NDBOX(0);					
+	flow = PG_GETARG_NDFLOW(0);					
 	_res = flow_ndboxToStr(flow,false);
 
 	PG_FREE_IF_COPY(flow, 0);
@@ -182,7 +179,7 @@ Datum
 flow_recv(PG_FUNCTION_ARGS)
 {
 	StringInfo	buf = (StringInfo) PG_GETARG_POINTER(0);
-	NDBOX	   *flow;
+	NDFLOW	   *flow;
 	int 	_i;
 
 	flow = Ndbox_init(FLOW_MAX_DIM);
@@ -206,7 +203,7 @@ flow_recv(PG_FUNCTION_ARGS)
 Datum
 flow_send(PG_FUNCTION_ARGS)
 {
-	NDBOX *flow = PG_GETARG_NDBOX(0);
+	NDFLOW *flow = PG_GETARG_NDFLOW(0);
 	StringInfoData buf;
 	int _i;
 
@@ -239,8 +236,8 @@ LANGUAGE C IMMUTABLE STRICT;
 */
 Datum flow_cat(PG_FUNCTION_ARGS)
 {
-	NDBOX	*c;
-	NDBOX	*result;
+	NDFLOW	*c;
+	NDFLOW	*result;
 	BID		*bid;
 	int 		dim;
 	int64	id;
@@ -249,7 +246,7 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_cat: with flow=NULL")));
-	c = PG_GETARG_NDBOX(0);
+	c = PG_GETARG_NDFLOW(0);
 
 	id = PG_GETARG_INT64(1);		
 
@@ -267,7 +264,7 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 	    		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("attempt to extend a flow out of range")));	
-		memcpy(result,c,SIZE_NDBOX(dim));
+		memcpy(result,c,SIZE_NDFLOW(dim));
 		result->dim = dim;
 
 		bid = &result->x[dim-1];
@@ -284,13 +281,13 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 	// elog(WARNING,"flow_cat: bid(id=%lli,nr=%lli,np=%lli,sid=%lli) added to flow",bid->id,bid->nr,bid->np,bid->sid);
 	flowc_maximum(result,globales.verify);
 	PG_FREE_IF_COPY(c, 0);
-	PG_RETURN_NDBOX(result);
+	PG_RETURN_NDFLOW(result);
 }
 
 Datum flow_last_replace(PG_FUNCTION_ARGS)
 {
-	NDBOX	*c;
-	NDBOX	*result;
+	NDFLOW	*c;
+	NDFLOW	*result;
 	BID		*bid;
 	int 		dim;
 	
@@ -298,11 +295,11 @@ Datum flow_last_replace(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_last_replace: with flow=NULL")));
-	c = PG_GETARG_NDBOX(0);
+	c = PG_GETARG_NDFLOW(0);
 	dim = c->dim;		 
 	
 	result = Ndbox_init(FLOW_MAX_DIM);
-	memcpy(result,c,SIZE_NDBOX(dim));
+	memcpy(result,c,SIZE_NDFLOW(dim));
 	result->dim = dim;
 
 	bid = &result->x[dim-1];
@@ -319,7 +316,7 @@ Datum flow_last_replace(PG_FUNCTION_ARGS)
 	flowc_maximum(result,globales.verify);
 	
 	PG_FREE_IF_COPY(c, 0);
-	PG_RETURN_NDBOX(result);
+	PG_RETURN_NDFLOW(result);
 }
 /*
 CREATE FUNCTION flow_proj(flow,int)
@@ -333,7 +330,7 @@ returns an array of box->dim elements int64
 Datum
 flow_proj(PG_FUNCTION_ARGS)
 {
-	NDBOX	*box;
+	NDFLOW	*box;
 	int32	arg1;
 
 	int 		_dim,_i;
@@ -353,7 +350,7 @@ flow_proj(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_proj: with flow=NULL or arg1=NULL")));
-	box = PG_GETARG_NDBOX(0);
+	box = PG_GETARG_NDFLOW(0);
 	arg1 = PG_GETARG_INT32(1);
 	_dim = box->dim;
 	
@@ -410,14 +407,14 @@ LANGUAGE C IMMUTABLE STRICT;
 */
 Datum flow_status(PG_FUNCTION_ARGS)
 {
-	NDBOX	*c;
+	NDFLOW	*c;
 	char 	*_strStatus;
 	
 	if(PG_ARGISNULL(0))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_status: with flow=NULL")));	
-	c = PG_GETARG_NDBOX(0);
+	c = PG_GETARG_NDFLOW(0);
 	_strStatus = flow_statusBoxToStr(c);
 	PG_RETURN_CSTRING(_strStatus);
 }
@@ -430,21 +427,21 @@ LANGUAGE C IMMUTABLE STRICT;
 */
 Datum flow_omega(PG_FUNCTION_ARGS)
 {
-	NDBOX	*c;
+	NDFLOW	*c;
 	double 	_omega;
 
 	if(PG_ARGISNULL(0))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_omega: with flow=NULL")));	
-	c = PG_GETARG_NDBOX(0);
+	c = PG_GETARG_NDFLOW(0);
 	_omega = flowc_getProdOmega(c);
 	PG_RETURN_FLOAT8(_omega);
 }
 // flow_omegax(flox,qtt_prov,qtt_recu)
 Datum flow_omegax(PG_FUNCTION_ARGS)
 {
-	NDBOX	*c;
+	NDFLOW	*c;
 	int64	qtt_prov;
 	int64	qtt_requ;
 	double 	_omega;
@@ -453,7 +450,7 @@ Datum flow_omegax(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_omegax: with at least one argument NULL")));		
-	c = PG_GETARG_NDBOX(0);
+	c = PG_GETARG_NDFLOW(0);
 	qtt_prov = PG_GETARG_INT64(1);
 	qtt_requ = PG_GETARG_INT64(2);
 		
@@ -464,14 +461,14 @@ Datum flow_omegax(PG_FUNCTION_ARGS)
 
 Datum flow_provides(PG_FUNCTION_ARGS)
 {
-	NDBOX	*c;
+	NDFLOW	*c;
 	int64 	_np;
 
 	if(PG_ARGISNULL(0))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_provides: with at least one argument NULL")));		
-	c = PG_GETARG_NDBOX(0);	
+	c = PG_GETARG_NDFLOW(0);	
 	if(c->dim == 0)
 		_np = 0;
 	else
@@ -482,14 +479,14 @@ Datum flow_provides(PG_FUNCTION_ARGS)
 
 Datum flow_dim(PG_FUNCTION_ARGS)
 {
-	NDBOX	*c;
+	NDFLOW	*c;
 	int32 	_dim;
 	
 	if(PG_ARGISNULL(0))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_dim: with at least one argument NULL")));		
-	c = PG_GETARG_NDBOX(0);
+	c = PG_GETARG_NDFLOW(0);
 	
 	_dim = ((int32)(c->dim));
 	PG_RETURN_INT32(_dim);
@@ -497,7 +494,7 @@ Datum flow_dim(PG_FUNCTION_ARGS)
 /* returns ARRAY(x[i-1].flowr,x[i].flowr) */
 Datum flow_get_fim1_fi(PG_FUNCTION_ARGS)
 {
-	NDBOX	   *box;
+	NDFLOW	   *box;
 	ArrayType	*result;
 
 	int16       typlen;
@@ -515,7 +512,7 @@ Datum flow_get_fim1_fi(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_get_fim1_fi: with at least one argument NULL")));		
-	box = PG_GETARG_NDBOX(0);
+	box = PG_GETARG_NDFLOW(0);
 	_i = PG_GETARG_INT32(1);
 	_dim = box->dim;
 	
@@ -543,7 +540,7 @@ Datum flow_to_matrix(PG_FUNCTION_ARGS)
 {
 #define DIMELTRESULT 9
 
-	NDBOX	   *box;
+	NDFLOW	   *box;
 	ArrayType	*result;
 
 	int16       typlen;
@@ -561,7 +558,7 @@ Datum flow_to_matrix(PG_FUNCTION_ARGS)
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_to_matrix: with at least one argument NULL")));		
-	box = PG_GETARG_NDBOX(0);	
+	box = PG_GETARG_NDFLOW(0);	
 
 	_dim = box->dim;
 
@@ -609,24 +606,24 @@ Datum flow_to_matrix(PG_FUNCTION_ARGS)
 
 
 /*****************************************************************/
-// memory allocation of NDBOX
+// memory allocation of NDFLOW
 /*****************************************************************/
-static NDBOX * Ndbox_init(int dim) {
-	NDBOX 	*box;
+static NDFLOW * Ndbox_init(int dim) {
+	NDFLOW 	*box;
 	int 	size;
 
-	size = SIZE_NDBOX(dim);
+	size = SIZE_NDFLOW(dim);
 	box = palloc(size);
 	box->dim = 0;
 	SET_VARSIZE(box,size);
 	return box;
 }
 
-NDBOX * Ndbox_enlarge(NDBOX *box) {
+NDFLOW * Ndbox_enlarge(NDFLOW *box) {
 	int 	size;
-	NDBOX	*newbox;
+	NDFLOW	*newbox;
 
-	size = SIZE_NDBOX(box->dim+1);
+	size = SIZE_NDFLOW(box->dim+1);
 	newbox = repalloc(box,size);
 	newbox->dim = box->dim+1;
 	SET_VARSIZE(newbox,size);
@@ -634,7 +631,7 @@ NDBOX * Ndbox_enlarge(NDBOX *box) {
 }
 
 /*****************************************************************/
-char * flow_statusBoxToStr (NDBOX *box){
+char * flow_statusBoxToStr (NDFLOW *box){
 	switch(box->status) {
 	case empty: return "empty";
 	case noloop: return "noloop";
