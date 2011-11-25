@@ -14,7 +14,7 @@
             "plpgsql": 0,
             "PostgreSQL": "9.1.1"
          }
-      },
+      }
    },
    "provides": {
      "openbarter": {
