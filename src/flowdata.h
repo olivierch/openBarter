@@ -17,11 +17,10 @@ typedef struct ob_tNo {
 
 
 typedef enum STATUSNDFLOW {
-	empty,noloop,loop,draft,undefined
+	empty,noloop,loop,draft,undefined,tobedefined
 } STATUSNDFLOW;
 
-typedef struct NDFLOW
-{
+typedef struct NDFLOW {
 	int32		vl_len_; /* varlena header (do not touch directly!) */
 	unsigned int dim;
 	STATUSNDFLOW	status;
@@ -51,7 +50,7 @@ extern ob_tGlobales globales; //defined in flow.c
 #define DatumGetNDFLOW(x)	((NDFLOW*)DatumGetPointer(x))
 #define PG_GETARG_NDFLOW(x)	DatumGetNDFLOW( PG_DETOAST_DATUM(PG_GETARG_DATUM(x)) )
 #define PG_RETURN_NDFLOW(x)	PG_RETURN_POINTER(x)
-#define SIZE_NDFLOW(dim)		(offsetof(NDFLOW, x[0])+(dim)*sizeof(BID))
+#define SIZE_NDFLOW(dim)	(offsetof(NDFLOW, x[0])+(dim)*sizeof(BID))
 
 extern void 	flowc_maximum(NDFLOW *box,bool verify);
 extern double 	flowc_getProdOmega(NDFLOW *box);

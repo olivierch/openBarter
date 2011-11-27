@@ -31,8 +31,7 @@ static int	scanbuflen;
 void 	flow_yyerror(const char *message);
 int 	flow_yyparse(void *result);
 
-static NDBOX * add_bid(NDBOX *result, int64 *vals);
-extern NDBOX * Ndbox_enlarge(NDBOX *box);
+static NDFLOW * add_bid(NDFLOW *result, int64 *vals);
 
 
 %}
@@ -43,10 +42,10 @@ extern NDBOX * Ndbox_enlarge(NDBOX *box);
 
 %union {
   struct BND {
-    int64 vals[9];
+    int64 vals[BID_DIM];
     int dim;
   } bnd;
-  STATUSNDBOX status;
+  STATUSNDFLOW status;
   char * text;
 }
 %token <text> O_PAREN
@@ -63,29 +62,29 @@ extern NDBOX * Ndbox_enlarge(NDBOX *box);
 %%
 
 box:
-	O_BRACKET C_BRACKET {
+	     O_BRACKET C_BRACKET {
           	//empty
-          }
-          |
-          O_BRACKET bid_list C_BRACKET {
-          	//((NDBOX * )result)->status = $2;
-          	//flow_compute((NDBOX * )result);
-          }
+             }
+        |
+             O_BRACKET bid_list C_BRACKET {
+          	//((NDFLOW * )result)->status = $2;
+          	//flow_compute((NDFLOW * )result);
+             }
       ;
       
 bid_list:	
-	bid {
+	    bid {
 		;
-	}
+	    }
 	|
-	bid_list COMMA bid {
-	    if (((NDBOX * )result)->dim > FLOW_MAX_DIM) {
-              ereport(ERROR,
+	    bid_list COMMA bid {
+	        if (((NDFLOW * )result)->dim > FLOW_MAX_DIM) {
+                   ereport(ERROR,
                       (errcode(ERRCODE_SYNTAX_ERROR),
                        errmsg("bad flow representation"),
                        errdetail("A flow cannot have more than %d bids.",FLOW_MAX_DIM)));
-              YYABORT;
-            }
+                   YYABORT;
+                }
 	}
 	
 bid:	
@@ -125,12 +124,11 @@ list:
 
 %%
 
-static NDBOX * add_bid(NDBOX *box, int64 *vals) {
+static NDFLOW * add_bid(NDFLOW *box, int64 *vals) {
 	int i;
 	BID *s;
-	NDBOX *newbox = box;
+	NDFLOW *newbox = box;
 	
-	// newbox = Ndbox_enlarge(box);
 	s = &newbox->x[box->dim];
 	box->dim +=1;
 	

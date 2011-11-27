@@ -111,13 +111,12 @@ void 	flow_yyerror(const char *message);
 int 	flow_yyparse(void *result);
 
 static NDFLOW * add_bid(NDFLOW *result, int64 *vals);
-extern NDFLOW * Ndbox_enlarge(NDFLOW *box);
 
 
 
 
 /* Line 189 of yacc.c  */
-#line 121 "flowparse.c"
+#line 120 "flowparse.c"
 
 /* Enabling traces.  */
 #ifndef YYDEBUG
@@ -161,10 +160,10 @@ typedef union YYSTYPE
 {
 
 /* Line 214 of yacc.c  */
-#line 44 "flowparse.y"
+#line 43 "flowparse.y"
 
   struct BND {
-    int64 vals[9];
+    int64 vals[BID_DIM];
     int dim;
   } bnd;
   STATUSNDFLOW status;
@@ -173,7 +172,7 @@ typedef union YYSTYPE
 
 
 /* Line 214 of yacc.c  */
-#line 177 "flowparse.c"
+#line 176 "flowparse.c"
 } YYSTYPE;
 # define YYSTYPE_IS_TRIVIAL 1
 # define yystype YYSTYPE /* obsolescent; will be withdrawn */
@@ -185,7 +184,7 @@ typedef union YYSTYPE
 
 
 /* Line 264 of yacc.c  */
-#line 189 "flowparse.c"
+#line 188 "flowparse.c"
 
 #ifdef short
 # undef short
@@ -469,7 +468,7 @@ static const yytype_int8 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,    66,    66,    70,    77,    81,    92,   105,   111
+       0,    65,    65,    69,    76,    80,    91,   104,   110
 };
 #endif
 
@@ -1371,50 +1370,50 @@ yyreduce:
         case 2:
 
 /* Line 1455 of yacc.c  */
-#line 66 "flowparse.y"
+#line 65 "flowparse.y"
     {
           	//empty
-          ;}
+             ;}
     break;
 
   case 3:
 
 /* Line 1455 of yacc.c  */
-#line 70 "flowparse.y"
+#line 69 "flowparse.y"
     {
           	//((NDFLOW * )result)->status = $2;
           	//flow_compute((NDFLOW * )result);
-          ;}
+             ;}
     break;
 
   case 4:
 
 /* Line 1455 of yacc.c  */
-#line 77 "flowparse.y"
+#line 76 "flowparse.y"
     {
 		;
-	;}
+	    ;}
     break;
 
   case 5:
 
 /* Line 1455 of yacc.c  */
-#line 81 "flowparse.y"
+#line 80 "flowparse.y"
     {
-	    if (((NDFLOW * )result)->dim > FLOW_MAX_DIM) {
-              ereport(ERROR,
+	        if (((NDFLOW * )result)->dim > FLOW_MAX_DIM) {
+                   ereport(ERROR,
                       (errcode(ERRCODE_SYNTAX_ERROR),
                        errmsg("bad flow representation"),
                        errdetail("A flow cannot have more than %d bids.",FLOW_MAX_DIM)));
-              YYABORT;
-            }
+                   YYABORT;
+                }
 	;}
     break;
 
   case 6:
 
 /* Line 1455 of yacc.c  */
-#line 92 "flowparse.y"
+#line 91 "flowparse.y"
     {
 		
 		if((yyvsp[(2) - (3)].bnd).dim != BID_DIM) {
@@ -1431,7 +1430,7 @@ yyreduce:
   case 7:
 
 /* Line 1455 of yacc.c  */
-#line 105 "flowparse.y"
+#line 104 "flowparse.y"
     {
 		(yyval.bnd).dim = 0;
 		(yyval.bnd).vals[(yyval.bnd).dim] = atoll((yyvsp[(1) - (1)].text));
@@ -1442,7 +1441,7 @@ yyreduce:
   case 8:
 
 /* Line 1455 of yacc.c  */
-#line 111 "flowparse.y"
+#line 110 "flowparse.y"
     {
 		if ((yyval.bnd).dim >= BID_DIM) {
 		
@@ -1461,7 +1460,7 @@ yyreduce:
 
 
 /* Line 1455 of yacc.c  */
-#line 1465 "flowparse.c"
+#line 1464 "flowparse.c"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -1673,7 +1672,7 @@ yyreturn:
 
 
 /* Line 1675 of yacc.c  */
-#line 126 "flowparse.y"
+#line 125 "flowparse.y"
 
 
 static NDFLOW * add_bid(NDFLOW *box, int64 *vals) {
@@ -1681,7 +1680,6 @@ static NDFLOW * add_bid(NDFLOW *box, int64 *vals) {
 	BID *s;
 	NDFLOW *newbox = box;
 	
-	// newbox = Ndbox_enlarge(box);
 	s = &newbox->x[box->dim];
 	box->dim +=1;
 	

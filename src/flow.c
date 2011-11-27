@@ -40,48 +40,43 @@ ob_tGlobales globales;
 */
 PG_FUNCTION_INFO_V1(flow_in);
 PG_FUNCTION_INFO_V1(flow_out);
+PG_FUNCTION_INFO_V1(flow_recv);
+PG_FUNCTION_INFO_V1(flow_send);
+
 PG_FUNCTION_INFO_V1(flow_proj);
 PG_FUNCTION_INFO_V1(flow_status);
 PG_FUNCTION_INFO_V1(flow_omega);
 PG_FUNCTION_INFO_V1(flow_omegax);
 PG_FUNCTION_INFO_V1(flow_provides);
-PG_FUNCTION_INFO_V1(flow_last_omega);
-PG_FUNCTION_INFO_V1(flow_last_replace);
 PG_FUNCTION_INFO_V1(flow_dim);
 PG_FUNCTION_INFO_V1(flow_get_fim1_fi);
 PG_FUNCTION_INFO_V1(flow_to_matrix);
+PG_FUNCTION_INFO_V1(flow_cat);
+
 
 Datum flow_in(PG_FUNCTION_ARGS);
 Datum flow_out(PG_FUNCTION_ARGS);
+Datum flow_recv(PG_FUNCTION_ARGS);
+Datum flow_send(PG_FUNCTION_ARGS);
+
 Datum flow_proj(PG_FUNCTION_ARGS);
 Datum flow_status(PG_FUNCTION_ARGS);
 Datum flow_omega(PG_FUNCTION_ARGS);
 Datum flow_omegax(PG_FUNCTION_ARGS);
 Datum flow_provides(PG_FUNCTION_ARGS);
-Datum flow_last_omega(PG_FUNCTION_ARGS);
-Datum flow_last_replace(PG_FUNCTION_ARGS);
 Datum flow_dim(PG_FUNCTION_ARGS);
 Datum flow_get_fim1_fi(PG_FUNCTION_ARGS);
 Datum flow_to_matrix(PG_FUNCTION_ARGS);
-
-
-PG_FUNCTION_INFO_V1(flow_cat);
 Datum flow_cat(PG_FUNCTION_ARGS);
 
-PG_FUNCTION_INFO_V1(flow_recv);
-Datum flow_recv(PG_FUNCTION_ARGS);
-
-PG_FUNCTION_INFO_V1(flow_send);
-Datum flow_send(PG_FUNCTION_ARGS);
-
 // for internal use
-char * flow_statusBoxToStr (NDFLOW *box);
 
+char *flow_statusBoxToStr (NDFLOW *box);
 // memory allocation of NDFLOW
-
-NDFLOW * Ndbox_enlarge(NDFLOW *box);
 static NDFLOW * Ndbox_init(int dim);
+NDFLOW *Ndbox_adjust(NDFLOW *box);
 
+// init
 void		_PG_init(void);
 void		_PG_fini(void);
 
@@ -116,15 +111,18 @@ flow_in(PG_FUNCTION_ARGS)
 		flow_yyerror("bogus input for a flow");
 
 	flow_scanner_finish();
-	
+	//result = Ndbox_adjust(result);
 	flowc_maximum(result,globales.verify);
 
 	PG_RETURN_NDFLOW(result);
 }
+/* provides a string representation of the flow 
+When internal is set, it gives complete representation of the flow,
+adding status and flowr */
 char *flow_ndboxToStr(NDFLOW *flow,bool internal) {
 	StringInfoData 	buf;
-	int			dim = flow->dim;
-	int			i;
+	int	dim = flow->dim;
+	int	i;
 
 	initStringInfo(&buf);
 
@@ -158,29 +156,28 @@ char *flow_ndboxToStr(NDFLOW *flow,bool internal) {
 	
 	return buf.data;
 }
-Datum
-flow_out(PG_FUNCTION_ARGS)
+
+Datum flow_out(PG_FUNCTION_ARGS)
 {
-	NDFLOW	   *flow;
-	char *	_res;
+	NDFLOW	*_flow;
+	char 	*_res;
 	
 	if(PG_ARGISNULL(0) )
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_out: with flow=NULL")));
-	flow = PG_GETARG_NDFLOW(0);					
-	_res = flow_ndboxToStr(flow,false);
+	_flow = PG_GETARG_NDFLOW(0);					
+	_res = flow_ndboxToStr(_flow,false);
 
-	PG_FREE_IF_COPY(flow, 0);
+	PG_FREE_IF_COPY(_flow, 0);
 	PG_RETURN_CSTRING(_res);
 }
 
-Datum
-flow_recv(PG_FUNCTION_ARGS)
+Datum flow_recv(PG_FUNCTION_ARGS)
 {
 	StringInfo	buf = (StringInfo) PG_GETARG_POINTER(0);
-	NDFLOW	   *flow;
-	int 	_i;
+	NDFLOW	  	 *flow;
+	int 		_i;
 
 	flow = Ndbox_init(FLOW_MAX_DIM);
 	flow->dim = (int) pq_getmsgint(buf,4);
@@ -227,12 +224,14 @@ flow_send(PG_FUNCTION_ARGS)
 }
 
 /*
-CREATE FUNCTION flow_cat(flow,int64,int64,int64,int64,int64,int64,int64,int64)
+FUNCTION flow_cat(flow,int64,int64,int64,int64,int64,int64,int64,int64)
 RETURNS flow
-AS 'MODULE_PATHNAME'
-LANGUAGE C IMMUTABLE STRICT;
-
-(flow,id,nr,qtt_prov,qtt_requ,sid,own,qtt,np)
+args:
+	(flow,id,nr,qtt_prov,qtt_requ,sid,own,qtt,np)
+Adds a bid at the end of the flow.
+	The flow must be not NULL
+	the bid added does not belong to the flow
+	the dimension of the flow after the bid is added is less or equal to FLOW_MAX_DIM
 */
 Datum flow_cat(PG_FUNCTION_ARGS)
 {
@@ -284,45 +283,8 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 	PG_RETURN_NDFLOW(result);
 }
 
-Datum flow_last_replace(PG_FUNCTION_ARGS)
-{
-	NDFLOW	*c;
-	NDFLOW	*result;
-	BID		*bid;
-	int 		dim;
-	
-	if(PG_ARGISNULL(0) )
-		ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_last_replace: with flow=NULL")));
-	c = PG_GETARG_NDFLOW(0);
-	dim = c->dim;		 
-	
-	result = Ndbox_init(FLOW_MAX_DIM);
-	memcpy(result,c,SIZE_NDFLOW(dim));
-	result->dim = dim;
-
-	bid = &result->x[dim-1];
-
-	bid->id 	= PG_GETARG_INT64(1);
-	bid->nr 	= PG_GETARG_INT64(2);
-	bid->qtt_prov 	= PG_GETARG_INT64(3);
-	bid->qtt_requ 	= PG_GETARG_INT64(4);
-	bid->sid 	= PG_GETARG_INT64(5);
-	bid->own 	= PG_GETARG_INT64(6);
-	bid->qtt 	= PG_GETARG_INT64(7);
-	bid->np 	= PG_GETARG_INT64(8);
-
-	flowc_maximum(result,globales.verify);
-	
-	PG_FREE_IF_COPY(c, 0);
-	PG_RETURN_NDFLOW(result);
-}
 /*
-CREATE FUNCTION flow_proj(flow,int)
-RETURNS int8[]
-AS 'MODULE_PATHNAME'
-LANGUAGE C IMMUTABLE STRICT;
+FUNCTION flow_proj(flow,int arg1) RETURNS int8[]
 returns an array of box->dim elements int64
 1 -> id, 2-> nr, ... 9->flowr
 */
@@ -420,10 +382,8 @@ Datum flow_status(PG_FUNCTION_ARGS)
 }
 
 /*
-CREATE FUNCTION flow_omega(flow)
-RETURNS float8
-AS 'MODULE_PATHNAME'
-LANGUAGE C IMMUTABLE STRICT;
+FUNCTION flow_omega(flow flow) RETURNS float8
+returns the product of qtt_prov[i]/qtt_requ[i]
 */
 Datum flow_omega(PG_FUNCTION_ARGS)
 {
@@ -438,7 +398,9 @@ Datum flow_omega(PG_FUNCTION_ARGS)
 	_omega = flowc_getProdOmega(c);
 	PG_RETURN_FLOAT8(_omega);
 }
-// flow_omegax(flox,qtt_prov,qtt_recu)
+/* FUNCTION flow_omega(flow flow,qtt_prov int8,qtt_recu int8) RETURNS float8
+return flow_omega(flow) * qtt_prov/qtt_recu
+*/
 Datum flow_omegax(PG_FUNCTION_ARGS)
 {
 	NDFLOW	*c;
@@ -449,7 +411,7 @@ Datum flow_omegax(PG_FUNCTION_ARGS)
 	if(PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_omegax: with at least one argument NULL")));		
+				errmsg("flow_omegax: called with at least one argument NULL")));		
 	c = PG_GETARG_NDFLOW(0);
 	qtt_prov = PG_GETARG_INT64(1);
 	qtt_requ = PG_GETARG_INT64(2);
@@ -467,7 +429,7 @@ Datum flow_provides(PG_FUNCTION_ARGS)
 	if(PG_ARGISNULL(0))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_provides: with at least one argument NULL")));		
+				errmsg("flow_provides: called with argument NULL")));		
 	c = PG_GETARG_NDFLOW(0);	
 	if(c->dim == 0)
 		_np = 0;
@@ -485,7 +447,7 @@ Datum flow_dim(PG_FUNCTION_ARGS)
 	if(PG_ARGISNULL(0))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_dim: with at least one argument NULL")));		
+				errmsg("flow_dim: called with at least one argument NULL")));		
 	c = PG_GETARG_NDFLOW(0);
 	
 	_dim = ((int32)(c->dim));
@@ -619,13 +581,12 @@ static NDFLOW * Ndbox_init(int dim) {
 	return box;
 }
 
-NDFLOW * Ndbox_enlarge(NDFLOW *box) {
+NDFLOW *Ndbox_adjust(NDFLOW *box) {
 	int 	size;
 	NDFLOW	*newbox;
 
-	size = SIZE_NDFLOW(box->dim+1);
+	size = SIZE_NDFLOW(box->dim);
 	newbox = repalloc(box,size);
-	newbox->dim = box->dim+1;
 	SET_VARSIZE(newbox,size);
 	return newbox;
 }
@@ -638,6 +599,8 @@ char * flow_statusBoxToStr (NDFLOW *box){
 	case loop: return "loop";
 	case draft: return "draft";
 	case undefined: return "undefined";
+	case tobedefined: return "tobedefined";
+	
 	default: return "unknown status!";
 	}
 }
