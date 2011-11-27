@@ -111,7 +111,8 @@ flow_in(PG_FUNCTION_ARGS)
 		flow_yyerror("bogus input for a flow");
 
 	flow_scanner_finish();
-	//result = Ndbox_adjust(result);
+	result = Ndbox_adjust(result);
+
 	flowc_maximum(result,globales.verify);
 
 	PG_RETURN_NDFLOW(result);
@@ -237,15 +238,16 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 {
 	NDFLOW	*c;
 	NDFLOW	*result;
-	BID		*bid;
-	int 		dim;
+	BID	*bid;
+	int 	dim;
 	int64	id;
 	
-	if(PG_ARGISNULL(0) )
+	if(PG_ARGISNULL(0) || PG_ARGISNULL(1)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7)|| PG_ARGISNULL(8) )
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_cat: with flow=NULL")));
+				errmsg("flow_cat: with at least one argument NULL")));
 	c = PG_GETARG_NDFLOW(0);
+	//elog(WARNING,"flow_cat: input %s",flow_ndboxToStr(c,true));
 
 	id = PG_GETARG_INT64(1);		
 
@@ -263,7 +265,7 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 	    		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("attempt to extend a flow out of range")));	
-		memcpy(result,c,SIZE_NDFLOW(dim));
+		memcpy(result,c,SIZE_NDFLOW(dim-1));
 		result->dim = dim;
 
 		bid = &result->x[dim-1];
@@ -277,6 +279,8 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 		bid->qtt 	= PG_GETARG_INT64(7);
 		bid->np 	= PG_GETARG_INT64(8);	
 	}
+	result = Ndbox_adjust(result);
+	//elog(WARNING,"flow_cat: output %s",flow_ndboxToStr(result,true));
 	// elog(WARNING,"flow_cat: bid(id=%lli,nr=%lli,np=%lli,sid=%lli) added to flow",bid->id,bid->nr,bid->np,bid->sid);
 	flowc_maximum(result,globales.verify);
 	PG_FREE_IF_COPY(c, 0);

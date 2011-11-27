@@ -30,14 +30,15 @@ typedef struct NDFLOW {
 #define ob_flux_CLastIgnore 	(32<<0)
 #define ob_flux_CVerify 	(32<<1)
 typedef struct ob_tChemin {
-	int 		cflags;
+	int 	cflags;
 	// cflags = or of ob_flux_*
-	int		nbOwn,nbStock;
-	int *		occOwn,*occStock;
+	int	nbOwn,nbStock;
+	int 	occOwn[FLOW_MAX_DIM],occStock[FLOW_MAX_DIM];
 	double	gain,prodOmega;
-	NDFLOW *	box;
-	double *	omegaCorrige,*fluxExact,*piom,*spiom;
-	ob_tNo	no[];
+	NDFLOW 	*box;
+	double 	omegaCorrige[FLOW_MAX_DIM],fluxExact[FLOW_MAX_DIM],piom[FLOW_MAX_DIM],spiom[FLOW_MAX_DIM];
+	int64	flowNodes[FLOW_MAX_DIM],flowStocks[FLOW_MAX_DIM],floor[FLOW_MAX_DIM];
+	ob_tNo	no[FLOW_MAX_DIM];
 	
 } ob_tChemin;
 

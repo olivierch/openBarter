@@ -19,7 +19,7 @@
 static void _calGains(ob_tChemin *pchemin,double omegaCorrige[]);
 static int _fluxMaximum(const ob_tChemin *pchemin, double *fluxExact) ;
 static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int _iStockExhausted);
-static ob_tChemin * _createChemin(NDFLOW *box, int cflags );
+static void _createChemin(NDFLOW *box, int cflags, ob_tChemin *pchemin );
 static bool _isCycle(NDFLOW *box);
 
 /******************************************************************************
@@ -36,7 +36,8 @@ static bool _isCycle(NDFLOW *box);
 
 void flowc_maximum(NDFLOW *box,bool verify) {
 	int _dim = box->dim;
-	ob_tChemin *pchemin;
+	ob_tChemin chemin;
+	ob_tChemin *pchemin = &chemin;
 	int _iStockExhausted;
 	int cflags;
 	
@@ -66,14 +67,12 @@ void flowc_maximum(NDFLOW *box,bool verify) {
 		// the flow is undefined
 		obMRange (_k,_dim)
 			box->x[_k].flowr = 0;	
-		if (cflags & ob_flux_CVerify ) {
-			pchemin = _createChemin(box,cflags);
-			pfree(pchemin);
-		}
+		if (cflags & ob_flux_CVerify ) 
+			_createChemin(box,cflags,pchemin);
 		return;
 	}
 
-	pchemin = _createChemin(box,cflags);
+	_createChemin(box,cflags,pchemin);
 	
 	if (pchemin->cflags & ob_flux_CLastIgnore) {
 		/* omega of the last node is not defined.
@@ -97,11 +96,8 @@ void flowc_maximum(NDFLOW *box,bool verify) {
 	to the nearest vector of positive integers */
 	if (_rounding(pchemin->fluxExact, pchemin,_iStockExhausted) ) 
 		box->status = draft; 
-	else {
+	else 
 		box->status = undefined;
-
-	}	
-	pfree(pchemin);
 	return;
 }
 
@@ -117,36 +113,14 @@ bool flowc_idInBox(NDFLOW *box,int64 id) {
 	
 }
 
-static ob_tChemin * _createChemin(NDFLOW *box, int cflags ) {
+static void _createChemin(NDFLOW *box, int cflags, ob_tChemin *pchemin ) {
 	
-	ob_tChemin *pchemin;
 	int *occOwn,*occStock;
 	int _stockIndex,_ownIndex,_n;
 	int _dim = box->dim;
-	int size_che,size_occ,size_dou,size_tot;
 	bool _verify = cflags & ob_flux_CVerify; 	
 
-	
-	/* memory allocation of chemin, occStock, occOwn and omegaCorrige
-	in the same block of memory */	
 
-	size_che = offsetof(ob_tChemin, no[0]);
-	size_che = MAXALIGN(size_che);
-	size_che = add_size(size_che,mul_size(_dim,sizeof(ob_tNo)));
-	size_occ = mul_size(_dim,MAXALIGN(sizeof(int)));
-	size_dou = mul_size(_dim,MAXALIGN(sizeof(double)));
-	
-	size_tot = size_che + (2 * size_occ) + (4 * size_dou);
-	
-	pchemin = (ob_tChemin *) (palloc0(size_tot));
-	pchemin->occStock = (int *) (pchemin + ((size_t)size_che));
-	pchemin->occOwn = (int *) (pchemin->occStock + ((size_t)size_occ));
-	pchemin->omegaCorrige = (double *) (pchemin->occOwn + ((size_t)size_occ));
-	pchemin->fluxExact = (double *) (pchemin->omegaCorrige + ((size_t)size_dou));
-	
-	pchemin->piom = (double *) (pchemin->fluxExact + ((size_t)size_dou));
-	pchemin->spiom = (double *) (pchemin->piom + ((size_t)size_dou));
-	
 	pchemin->box = box;	
 	
 	pchemin->prodOmega = 1.;
@@ -165,7 +139,6 @@ static ob_tChemin * _createChemin(NDFLOW *box, int cflags ) {
 		
 		// compute omega and prodOmega
 		if(b->qtt_prov == 0 || b->qtt_requ == 0) {
-			pfree(pchemin);
 			ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("createChemin: qtt_prov or qtt_requ is zero for bid[%i]",_n)));
@@ -176,24 +149,14 @@ static ob_tChemin * _createChemin(NDFLOW *box, int cflags ) {
 		// b.id and b.np are unique in box
 		if (_verify ) obMRange(_m,_n) {
 			if(b->id == box->x[_m].id) {
-				pfree(pchemin);
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("createChemin: bid[%i].id=%lli found twice",_n,b->id)));
 			}
-			// but not b.np
-			/*
-			if(b->np == box->x[_m].np) {
-				pfree(pchemin);
-				ereport(ERROR,
-					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("createChemin: bid[%i].np=%lli found twice",_n,b->np)));
-			} */
 		}
 		
 		if((_n != 0) &&  _verify ) 
 			if(box->x[_n-1].np != b->nr) {
-				pfree(pchemin);
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("createChemin: bid[%i].np=%lli != bid[%i].nr=%lli",_n-1,box->x[_n-1].np,_n,b->nr)));		
@@ -229,19 +192,16 @@ static ob_tChemin * _createChemin(NDFLOW *box, int cflags ) {
 			pchemin->nbStock += 1;
 		} else if (_verify ) { // found
 			if(b->own != box->x[_stockIndex].own) {
-				pfree(pchemin);
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("createChemin: the stock[%lli] has several owners!",b->sid)));
 			}
 			if(b->np != box->x[_stockIndex].np) {
-				pfree(pchemin);
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("createChemin: the stock[%lli] has several np!",b->sid)));
 			}
 			if(b->qtt != box->x[_stockIndex].qtt) {
-				pfree(pchemin);
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("createChemin: the stock[%lli] has several qtt!",b->sid)));
@@ -252,7 +212,6 @@ static ob_tChemin * _createChemin(NDFLOW *box, int cflags ) {
 	} 
 	
 	if(pchemin->nbOwn == 0 || pchemin->nbStock == 0) {
-		pfree(pchemin);
 		ereport(ERROR,
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			 errmsg("createChemin: nbOwn or nbStock equals zero")));		
@@ -264,19 +223,17 @@ static ob_tChemin * _createChemin(NDFLOW *box, int cflags ) {
 		int _m = pchemin->no[_dim-1].stockIndex;
 		
 		if( occStock[_m]!= 1) {
-				pfree(pchemin);
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("createChemin: when ob_flux_CLastIgnore, the last stock is not only used by the last bid")));
 			}
 		if(box->x[_m].sid != 0) {
-				pfree(pchemin);
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("createChemin: when ob_flux_CLastIgnore, the last stock is with sid != 0")));
 			}
 	}
-	return pchemin;	
+	return;	
 }
 
 
@@ -412,14 +369,14 @@ and:
 
  *******************************************************************************/
 static int _fluxMaximum(const ob_tChemin *pchemin, double *fluxExact) {
-	int _is, _jn,_jm;
-	double *_piom = pchemin->piom; //  _fPiomega(i)
-	double *_spiom = pchemin->spiom; // (SUM(_fPiomega(i)) for i in Sj)
-	double _min, _cour;
+	int 	_is, _jn,_jm;
+	double	*_piom = (double *) pchemin->piom; //  _fPiomega(i)
+	double	*_spiom = (double *) pchemin->spiom; // (SUM(_fPiomega(i)) for i in Sj)
+	double	_min, _cour;
 	int	_iStockExhausted;	
-	double *omegaCorrige = pchemin->omegaCorrige;
-	NDFLOW *box = pchemin->box;
-	int _dim = box->dim;
+	double	*omegaCorrige = (double *) pchemin->omegaCorrige;
+	NDFLOW	*box = pchemin->box;
+	int 	_dim = box->dim;
 		
 	// piom are obtained on each node, 
 	/**********************************************************/
@@ -501,22 +458,16 @@ static void _obtain_vertex(int dim,int mat,int64 *floor,int64 *flow) {
  *******************************************************************************/
 
 static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int iStockExhausted) {
-	int _i, _j, _k, _lonStock;
-	int _matcour, _matmax, _matbest;
-	bool _found;
-	int64 * _flowNodes,* _flowStocks, *_floor;
-	double _newdist, _maxdist;
-	NDFLOW *box = pchemin->box;
-	int _dim = box->dim;
-	size_t _s;
-	
-	_s = mul_size(_dim,MAXALIGN(sizeof(int64)));
-	_flowNodes = (int64 *) (palloc0(3*_s));
-	_flowStocks = (int64 *) (((char *)_flowNodes)+_s);
-	_floor = (int64 *) (((char *)_flowStocks)+_s);
-	
-	_lonStock = pchemin->nbStock;
-
+	int 	_i, _j, _k;
+	int	_lonStock = pchemin->nbStock;
+	int 	_matcour, _matmax, _matbest;
+	bool 	_found;
+	int64	*_flowNodes = pchemin->flowNodes;
+	int64	*_flowStocks = pchemin->flowStocks;
+	int64	*_floor = pchemin->floor;
+	double 	_newdist, _maxdist;
+	NDFLOW 	*box = pchemin->box;
+	int 	_dim = box->dim;
 
 	// computes floor[] from fluxExact[]
 	obMRange(_i,_dim) {
@@ -524,7 +475,6 @@ static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int iStockExhausted
 		int64 _f = (int64) _d;
 		if(_f < 0) _f = 0; 
 		if(((double)(_f)) != _d) {
-			pfree(_flowNodes);pfree(pchemin);
 			ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("in _rounding, fluxExact[%i] = %f cannot be rounded",_i,fluxExact[_i])));
@@ -534,7 +484,6 @@ static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int iStockExhausted
 
 	_matmax = 1 << _dim; // one bit for each node 
 	if(_matmax < 1) {
-		pfree(_flowNodes);pfree(pchemin);
 		ereport(ERROR,
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			 errmsg("in _rounding, matmax=%i,flow too long",_matmax)));
@@ -614,7 +563,6 @@ static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int iStockExhausted
 	} else obMRange (_k,_dim)
 			box->x[_k].flowr = 0;	
 
-	pfree(_flowNodes);
 	return _found; 
 }
 
