@@ -247,12 +247,13 @@ create table ob_tnoeud ( -- bid
 	on delete cascade not NULL , 
     nr int8 references ob_tquality(id) on update cascade 
 	on delete cascade not NULL ,
+    refused int8[] default ARRAY[]::int8[],
     qtt_prov int8,
     qtt_requ int8, 
     PRIMARY KEY (id)
 );
-psql:sql/model.sql:225: NOTICE:  CREATE TABLE will create implicit sequence "ob_tnoeud_id_seq" for serial column "ob_tnoeud.id"
-psql:sql/model.sql:225: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tnoeud_pkey" for table "ob_tnoeud"
+psql:sql/model.sql:226: NOTICE:  CREATE TABLE will create implicit sequence "ob_tnoeud_id_seq" for serial column "ob_tnoeud.id"
+psql:sql/model.sql:226: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tnoeud_pkey" for table "ob_tnoeud"
 comment on table ob_tnoeud is 'description of bids';
 comment on column ob_tnoeud.sid is 'refers to the stock offered';
 comment on column ob_tnoeud.nr is 'refers to quality required';
@@ -273,6 +274,7 @@ SELECT _reference_time('ob_tnoeud');
 -- OB_TFORBIT
 --------------------------------------------------------------------------------
 -- create sequence ob_tnoeud_id_seq;
+/*
 create table ob_trefused ( -- bid
     x int8 references ob_tnoeud(id) on update cascade 
 	on delete cascade not NULL , 
@@ -280,8 +282,9 @@ create table ob_trefused ( -- bid
 	on delete cascade not NULL ,
     PRIMARY KEY (x,y),UNIQUE(x,y)
 );
-psql:sql/model.sql:251: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_trefused_pkey" for table "ob_trefused"
+
 comment on table ob_trefused is 'list of relations refused';
+*/
 --------------------------------------------------------------------------------
 -- OB_TDRAFT
 -- draft		status
@@ -297,8 +300,8 @@ create table ob_tdraft (
     delay int8, 
     PRIMARY KEY(id)
 );
-psql:sql/model.sql:272: NOTICE:  CREATE TABLE will create implicit sequence "ob_tdraft_id_seq" for serial column "ob_tdraft.id"
-psql:sql/model.sql:272: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tdraft_pkey" for table "ob_tdraft"
+psql:sql/model.sql:273: NOTICE:  CREATE TABLE will create implicit sequence "ob_tdraft_id_seq" for serial column "ob_tdraft.id"
+psql:sql/model.sql:273: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tdraft_pkey" for table "ob_tdraft"
 comment on table ob_tdraft is 'description of draft agreements';
 SELECT _reference_time('ob_tdraft');
  _reference_time 
@@ -327,8 +330,8 @@ create table ob_tcommit (
 			-- [2] exhausted: stock.qtt=fluxarrondi for sid
 	PRIMARY KEY(id)
 );
-psql:sql/model.sql:296: NOTICE:  CREATE TABLE will create implicit sequence "ob_tcommit_id_seq" for serial column "ob_tcommit.id"
-psql:sql/model.sql:296: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tcommit_pkey" for table "ob_tcommit"
+psql:sql/model.sql:297: NOTICE:  CREATE TABLE will create implicit sequence "ob_tcommit_id_seq" for serial column "ob_tcommit.id"
+psql:sql/model.sql:297: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tcommit_pkey" for table "ob_tcommit"
 comment on table ob_tcommit is 
 'description of an element of the draft agreement refered by ob_tcommit.did';
 comment on column ob_tcommit.did is 'refers to the draft containing this commit';
@@ -363,8 +366,8 @@ create table ob_tmvt (
 	nat int8 references ob_tquality(id) 
 		on update cascade on delete cascade not null
 );
-psql:sql/model.sql:332: NOTICE:  CREATE TABLE will create implicit sequence "ob_tmvt_id_seq" for serial column "ob_tmvt.id"
-psql:sql/model.sql:332: NOTICE:  CREATE TABLE / UNIQUE will create implicit index "ob_tmvt_id_key" for table "ob_tmvt"
+psql:sql/model.sql:333: NOTICE:  CREATE TABLE will create implicit sequence "ob_tmvt_id_seq" for serial column "ob_tmvt.id"
+psql:sql/model.sql:333: NOTICE:  CREATE TABLE / UNIQUE will create implicit index "ob_tmvt_id_key" for table "ob_tmvt"
 comment on table ob_tmvt is 
 'records a change of ownership';
 comment on column ob_tmvt.did is 
@@ -1219,7 +1222,8 @@ BEGIN
 			IF(owner.id = _commot.wid) THEN
 				-- (prec->bid) inserted
 				-- RAISE INFO 'ref(%->%)',_cbid_prec,_commot.bid;
-				INSERT INTO ob_trefused (x,y) VALUES (_cbid_prec,_commot.bid);
+				-- INSERT INTO ob_trefused (x,y) VALUES (_cbid_prec,_commot.bid);
+				UPDATE ob_tnoeud SET refused = refused || _cbid_prec WHERE id = _commot.bid;
 			END IF;
 		END IF;
 		_cbid_prec := _commot.bid;
@@ -1233,9 +1237,10 @@ BEGIN
 	END LOOP;
 	
 	IF(NOT _cbid_first is NULL) THEN
-		-- (last->first) inserted 
+		-- (last->first) inserted , last is _commot.bid
 		-- RAISE INFO 'ref2(%->%)',_commot.bid,_cbid_first;
-		INSERT INTO ob_trefused (x,y) VALUES (_commot.bid,_cbid_first);
+		-- INSERT INTO ob_trefused (x,y) VALUES (_commot.bid,_cbid_first);
+		UPDATE ob_tnoeud SET refused = refused || _commot.bid WHERE id = _cbid_first;
 	END IF;
 	
 	------------- delete draft --------------------------------------------
@@ -1617,10 +1622,10 @@ DECLARE
 	_FLOWNULL flow := '[]'::flow;
 BEGIN
 	CREATE TEMP TABLE _tmp ON COMMIT DROP AS (
-		WITH RECURSIVE search_backward(id,sid,nr,qtt_prov,qtt_requ,
+		WITH RECURSIVE search_backward(id,sid,nr,qtt_prov,qtt_requ,refused,
 						own,qtt,np,
 						depth) AS (
-			SELECT b.id, b.sid, b.nr,b.qtt_prov,b.qtt_requ,
+			SELECT b.id, b.sid, b.nr,b.qtt_prov,b.qtt_requ,b.refused,
 				v.own,v.qtt,v.np,
 				2
 				FROM ob_tnoeud b, ob_tstock v
@@ -1628,7 +1633,7 @@ BEGIN
 					AND b.sid = v.id 
 					AND v.qtt != 0
 			UNION 
-			SELECT Xb.id, Xb.sid, Xb.nr,Xb.qtt_prov,Xb.qtt_requ,
+			SELECT Xb.id, Xb.sid, Xb.nr,Xb.qtt_prov,Xb.qtt_requ,Xb.refused,
 				Xv.own,Xv.qtt,Xv.np,
 				Y.depth + 1
 				FROM ob_tnoeud Xb, ob_tstock Xv, search_backward Y
@@ -1636,7 +1641,8 @@ BEGIN
 					AND Xb.sid = Xv.id 
 					AND Xv.qtt !=0 
 					AND Y.depth < _obCMAXCYCLE
-					AND (Xb.id,Y.id) NOT IN (SELECT x,y FROM ob_trefused)
+					-- AND (Xb.id,Y.id) NOT IN (SELECT x,y FROM ob_trefused)
+					AND Xb.id != ALL (Y.refused)
 		)
 		SELECT id,sid,nr,qtt_prov,qtt_requ,own,qtt,np,_FLOWNULL as flow,0 as valid,depth FROM search_backward
 	);
@@ -1814,5 +1820,4 @@ truncate ob_tquality cascade;
 NOTICE:  truncate cascades to table "ob_tstock"
 NOTICE:  truncate cascades to table "ob_tnoeud"
 NOTICE:  truncate cascades to table "ob_tmvt"
-NOTICE:  truncate cascades to table "ob_trefused"
 NOTICE:  truncate cascades to table "ob_tcommit"

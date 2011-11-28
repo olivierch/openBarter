@@ -6,7 +6,6 @@ truncate ob_tquality cascade;select setval('ob_tquality_id_seq',1,false);
 psql:sql/truncate_model.sql:3: NOTICE:  truncate cascades to table "ob_tstock"
 psql:sql/truncate_model.sql:3: NOTICE:  truncate cascades to table "ob_tnoeud"
 psql:sql/truncate_model.sql:3: NOTICE:  truncate cascades to table "ob_tmvt"
-psql:sql/truncate_model.sql:3: NOTICE:  truncate cascades to table "ob_trefused"
 psql:sql/truncate_model.sql:3: NOTICE:  truncate cascades to table "ob_tcommit"
  setval 
 --------
@@ -18,7 +17,6 @@ psql:sql/truncate_model.sql:4: NOTICE:  truncate cascades to table "ob_tstock"
 psql:sql/truncate_model.sql:4: NOTICE:  truncate cascades to table "ob_tcommit"
 psql:sql/truncate_model.sql:4: NOTICE:  truncate cascades to table "ob_tmvt"
 psql:sql/truncate_model.sql:4: NOTICE:  truncate cascades to table "ob_tnoeud"
-psql:sql/truncate_model.sql:4: NOTICE:  truncate cascades to table "ob_trefused"
  setval 
 --------
       1
@@ -27,21 +25,19 @@ psql:sql/truncate_model.sql:4: NOTICE:  truncate cascades to table "ob_trefused"
 truncate ob_tstock cascade; select setval('ob_tstock_id_seq',1,false);
 psql:sql/truncate_model.sql:5: NOTICE:  truncate cascades to table "ob_tnoeud"
 psql:sql/truncate_model.sql:5: NOTICE:  truncate cascades to table "ob_tcommit"
-psql:sql/truncate_model.sql:5: NOTICE:  truncate cascades to table "ob_trefused"
  setval 
 --------
       1
 (1 row)
 
 truncate ob_tnoeud cascade; select setval('ob_tnoeud_id_seq',1,false);
-psql:sql/truncate_model.sql:6: NOTICE:  truncate cascades to table "ob_trefused"
 psql:sql/truncate_model.sql:6: NOTICE:  truncate cascades to table "ob_tcommit"
  setval 
 --------
       1
 (1 row)
 
-truncate ob_trefused cascade;
+-- truncate ob_trefused cascade;
 truncate ob_tdraft cascade; select setval('ob_tdraft_id_seq',1,false);
 psql:sql/truncate_model.sql:8: NOTICE:  truncate cascades to table "ob_tcommit"
  setval 
@@ -66,7 +62,6 @@ psql:sql/truncate_model.sql:11: NOTICE:  truncate cascades to table "ob_tstock"
 psql:sql/truncate_model.sql:11: NOTICE:  truncate cascades to table "ob_tcommit"
 psql:sql/truncate_model.sql:11: NOTICE:  truncate cascades to table "ob_tmvt"
 psql:sql/truncate_model.sql:11: NOTICE:  truncate cascades to table "ob_tnoeud"
-psql:sql/truncate_model.sql:11: NOTICE:  truncate cascades to table "ob_trefused"
  setval 
 --------
       1
@@ -150,10 +145,11 @@ select ob_frefuse_draft(2,'own1');
                 0
 (1 row)
 
-select * from ob_trefused; -- relation (x->y) = (8->7) refused
- x | y 
----+---
- 8 | 7
+-- select * from ob_trefused; -- relation (x->y) = (8->7) refused
+select refused from ob_tnoeud where id=7;
+ refused 
+---------
+ {8}
 (1 row)
 
 -- bid 8 remains

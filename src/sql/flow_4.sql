@@ -21,7 +21,8 @@ select ob_finsert_bid('own1','q1',50,100,'q2');
 select ob_finsert_bid('own2','q2',100,50,'q1'); -- bid 8
 --draft 2 formed
 select ob_frefuse_draft(2,'own1');
-select * from ob_trefused; -- relation (x->y) = (8->7) refused
+-- select * from ob_trefused; -- relation (x->y) = (8->7) refused
+select refused from ob_tnoeud where id=7;
 -- bid 8 remains
 select ob_fadd_account('own3','q2',200);
 select ob_finsert_bid('own3','q2',100,50,'q1');

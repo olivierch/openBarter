@@ -219,6 +219,7 @@ create table ob_tnoeud ( -- bid
 	on delete cascade not NULL , 
     nr int8 references ob_tquality(id) on update cascade 
 	on delete cascade not NULL ,
+    refused int8[] default ARRAY[]::int8[],
     qtt_prov int8,
     qtt_requ int8, 
     PRIMARY KEY (id)
@@ -241,7 +242,7 @@ SELECT _reference_time('ob_tnoeud');
 -- OB_TFORBIT
 --------------------------------------------------------------------------------
 -- create sequence ob_tnoeud_id_seq;
-
+/*
 create table ob_trefused ( -- bid
     x int8 references ob_tnoeud(id) on update cascade 
 	on delete cascade not NULL , 
@@ -251,7 +252,7 @@ create table ob_trefused ( -- bid
 );
 
 comment on table ob_trefused is 'list of relations refused';
-
+*/
 
 
 --------------------------------------------------------------------------------
@@ -1200,7 +1201,8 @@ BEGIN
 			IF(owner.id = _commot.wid) THEN
 				-- (prec->bid) inserted
 				-- RAISE INFO 'ref(%->%)',_cbid_prec,_commot.bid;
-				INSERT INTO ob_trefused (x,y) VALUES (_cbid_prec,_commot.bid);
+				-- INSERT INTO ob_trefused (x,y) VALUES (_cbid_prec,_commot.bid);
+				UPDATE ob_tnoeud SET refused = refused || _cbid_prec WHERE id = _commot.bid;
 			END IF;
 		END IF;
 		_cbid_prec := _commot.bid;
@@ -1214,9 +1216,10 @@ BEGIN
 	END LOOP;
 	
 	IF(NOT _cbid_first is NULL) THEN
-		-- (last->first) inserted 
+		-- (last->first) inserted , last is _commot.bid
 		-- RAISE INFO 'ref2(%->%)',_commot.bid,_cbid_first;
-		INSERT INTO ob_trefused (x,y) VALUES (_commot.bid,_cbid_first);
+		-- INSERT INTO ob_trefused (x,y) VALUES (_commot.bid,_cbid_first);
+		UPDATE ob_tnoeud SET refused = refused || _commot.bid WHERE id = _cbid_first;
 	END IF;
 	
 	------------- delete draft --------------------------------------------
@@ -1607,10 +1610,10 @@ DECLARE
 	_FLOWNULL flow := '[]'::flow;
 BEGIN
 	CREATE TEMP TABLE _tmp ON COMMIT DROP AS (
-		WITH RECURSIVE search_backward(id,sid,nr,qtt_prov,qtt_requ,
+		WITH RECURSIVE search_backward(id,sid,nr,qtt_prov,qtt_requ,refused,
 						own,qtt,np,
 						depth) AS (
-			SELECT b.id, b.sid, b.nr,b.qtt_prov,b.qtt_requ,
+			SELECT b.id, b.sid, b.nr,b.qtt_prov,b.qtt_requ,b.refused,
 				v.own,v.qtt,v.np,
 				2
 				FROM ob_tnoeud b, ob_tstock v
@@ -1618,7 +1621,7 @@ BEGIN
 					AND b.sid = v.id 
 					AND v.qtt != 0
 			UNION 
-			SELECT Xb.id, Xb.sid, Xb.nr,Xb.qtt_prov,Xb.qtt_requ,
+			SELECT Xb.id, Xb.sid, Xb.nr,Xb.qtt_prov,Xb.qtt_requ,Xb.refused,
 				Xv.own,Xv.qtt,Xv.np,
 				Y.depth + 1
 				FROM ob_tnoeud Xb, ob_tstock Xv, search_backward Y
@@ -1626,7 +1629,8 @@ BEGIN
 					AND Xb.sid = Xv.id 
 					AND Xv.qtt !=0 
 					AND Y.depth < _obCMAXCYCLE
-					AND (Xb.id,Y.id) NOT IN (SELECT x,y FROM ob_trefused)
+					-- AND (Xb.id,Y.id) NOT IN (SELECT x,y FROM ob_trefused)
+					AND Xb.id != ALL (Y.refused)
 		)
 		SELECT id,sid,nr,qtt_prov,qtt_requ,own,qtt,np,_FLOWNULL as flow,0 as valid,depth FROM search_backward
 	);

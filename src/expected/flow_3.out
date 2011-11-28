@@ -33,5 +33,4 @@ truncate ob_tquality cascade;
 NOTICE:  truncate cascades to table "ob_tstock"
 NOTICE:  truncate cascades to table "ob_tnoeud"
 NOTICE:  truncate cascades to table "ob_tmvt"
-NOTICE:  truncate cascades to table "ob_trefused"
 NOTICE:  truncate cascades to table "ob_tcommit"
