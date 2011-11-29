@@ -1600,7 +1600,9 @@ CREATE FUNCTION ob_get_drafts(_spivot ob_tstock,_nr int8,_qtt_prov int8,_qtt_req
 DECLARE 
 	_FLOWNULL flow := '[]'::flow;
 	_maxDepth int;
+	_x int;
 BEGIN
+	_x := ob_fcan_exec();
 	_maxDepth := ob_create_tmp(_nr);
 	
 	IF (_maxDepth is NULL or _maxDepth = 0) THEN
@@ -1641,10 +1643,9 @@ BEGIN
 					AND Xb.sid = Xv.id 
 					AND Xv.qtt !=0 
 					AND Y.depth < _obCMAXCYCLE
-					-- AND (Xb.id,Y.id) NOT IN (SELECT x,y FROM ob_trefused)
 					AND Xb.id != ALL (Y.refused)
 		)
-		SELECT id,sid,nr,qtt_prov,qtt_requ,own,qtt,np,_FLOWNULL as flow,0 as valid,depth FROM search_backward
+		SELECT id,sid,nr,qtt_prov,qtt_requ,own,qtt,np,NULL::flow as flow,0 as valid,depth FROM search_backward
 	);
 	SELECT max(depth) INTO _maxDepth FROM _tmp;
 	RETURN _maxDepth;
@@ -1662,7 +1663,7 @@ DECLARE
 	_flow flow;
 	_idPivot int8 := 0;
 BEGIN
-	CREATE INDEX _tmp_idx ON _tmp(valid,nr);
+	-- CREATE INDEX _tmp_idx ON _tmp(valid,nr);
 	LOOP -- repeate as long as a draft is found
 		_cntgraph := _cntgraph+1;
 /*******************************************************************************
@@ -1681,20 +1682,18 @@ the graph is traversed forward to be reduced
 				WHERE X.np = Y.nr AND Y.valid = _cntgraph-1 -- X->Y, use of index
 					AND Y.qtt != 0 
 					AND Y.id != _idPivot  -- includes pivot
-					-- to exclude it, it would be Y.id = _idPivot
-					
 					AND X.depth < _maxDepth
 		) 
 	
 		UPDATE _tmp t 
 		SET flow = CASE WHEN _np = t.nr -- source
-				THEN flow_cat(_FLOWNULL,_FLOWNULL,t.id,t.nr,t.qtt_prov,t.qtt_requ,t.sid,t.own,t.qtt,t.np) 
+				THEN flow_init(t.id,t.nr,t.qtt_prov,t.qtt_requ,t.sid,t.own,t.qtt,t.np) 
 				ELSE _FLOWNULL END,
 			valid = _cntgraph
 		FROM search_forward sf WHERE t.id = sf.id;
 		
 		-- nodes that cannot be reached are deleted
-		-- DELETE FROM _tmp WHERE valid != _cntgraph;
+		DELETE FROM _tmp WHERE valid != _cntgraph;
 		
 /*******************************************************************************
 bellman_ford
@@ -1717,17 +1716,20 @@ _obCMAXCYCLE times.
 
 		FOR _cnt IN 1 .. _maxDepth LOOP
 			UPDATE _tmp Y 
-			-- Z<-X.flow+Y.bid
 			SET flow = flow_cat(Y.flow,X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.sid,Y.own,Y.qtt,Y.np) 
+			-- Z<-X.flow+Y.bid
 			-- if(Z) Y.flow<-Z else Y.flow<- Y.flow	
-			FROM _tmp X WHERE flow_dim(X.flow) > 0 
+			FROM _tmp X WHERE 
+				X.np  = Y.nr  
 				AND X.id != _idPivot -- arcs pivot->sources are not considered
-				AND X.np  = Y.nr AND X.valid=_cntgraph AND Y.valid=_cntgraph
-				AND flow_omega(Y.flow) < (flow_omegax(X.flow,Y.qtt_prov,Y.qtt_requ));
+				AND flow_dim(X.flow) > 0
+				AND flow_omegay(Y.flow,X.flow,Y.qtt_prov,Y.qtt_requ);
+				-- omega(Y.flow) < omega(X.flow)*Y.qtt_prov/Y.qtt_requ
 		END LOOP;
 		
 		-- flow of pivot
 		SELECT flow INTO _flow FROM _tmp WHERE id = _idPivot; 
+		-- EXIT WHEN _flow IS NULL;
 		EXIT WHEN flow_dim(_flow) = 0;
 		
 		RETURN NEXT _flow; -- new row returned

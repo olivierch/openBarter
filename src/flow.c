@@ -53,6 +53,7 @@ PG_FUNCTION_INFO_V1(flow_get_fim1_fi);
 PG_FUNCTION_INFO_V1(flow_to_matrix);
 PG_FUNCTION_INFO_V1(flow_cat);
 PG_FUNCTION_INFO_V1(flow_init);
+PG_FUNCTION_INFO_V1(flow_omegay);
 
 Datum flow_in(PG_FUNCTION_ARGS);
 Datum flow_out(PG_FUNCTION_ARGS);
@@ -69,6 +70,7 @@ Datum flow_get_fim1_fi(PG_FUNCTION_ARGS);
 Datum flow_to_matrix(PG_FUNCTION_ARGS);
 Datum flow_cat(PG_FUNCTION_ARGS);
 Datum flow_init(PG_FUNCTION_ARGS);
+Datum flow_omegay(PG_FUNCTION_ARGS);
 
 // for internal use
 
@@ -221,7 +223,7 @@ flow_send(PG_FUNCTION_ARGS)
 		pq_sendint64(&buf,flow->x[_i].np);
 		pq_sendint64(&buf,flow->x[_i].flowr);
 	}
-
+	PG_FREE_IF_COPY(flow, 0);
 	PG_RETURN_BYTEA_P(pq_endtypsend(&buf));
 }
 
@@ -234,6 +236,14 @@ Adds a bid at the end of the flow.
 	All arguments must be not NULL execept X.flow
 	the bid added does not belong to the flow
 	the dimension of the flow after the bid is added is less or equal to FLOW_MAX_DIM
+	
+if(X.flow is NULL) 
+	returns [bid]	
+else if a solution exists
+	returns X.flow+bid
+else 
+	returns Y.flow
+
 */
 Datum flow_cat(PG_FUNCTION_ARGS)
 {
@@ -243,7 +253,7 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 	int 	dim;
 	int64	id;
 	
-	if(PG_ARGISNULL(0) || PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7)|| PG_ARGISNULL(8) || PG_ARGISNULL(9))
+	if( PG_ARGISNULL(0)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7)|| PG_ARGISNULL(8) || PG_ARGISNULL(9))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_cat: with at least one argument NULL")));
@@ -263,9 +273,9 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 		bid->qtt 	= PG_GETARG_INT64(8);
 		bid->np 	= PG_GETARG_INT64(9); 
 		
-		goto endend;
+		goto end;
 	}
-	Y = PG_GETARG_NDFLOW(0);
+	
 	c = PG_GETARG_NDFLOW(1);
 	//elog(WARNING,"flow_cat: input %s",flow_ndboxToStr(c,true));
 
@@ -279,39 +289,40 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 				 errmsg("flow_cat(box,id) while box contains id=%lli\n%s",
 				 id,flow_ndboxToStr(c,true))));
 		result->dim = 0;
-		goto end;
-	} 
+	} else {
 			
-	dim = c->dim+1;	
-	if(dim > FLOW_MAX_DIM)
-    		ereport(ERROR,
-			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-			errmsg("attempt to extend a flow out of range")));	
-	memcpy(result,c,SIZE_NDFLOW(dim-1));
+		dim = c->dim+1;	
+		if(dim > FLOW_MAX_DIM)
+	    		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				errmsg("attempt to extend a flow out of range")));	
+		memcpy(result,c,SIZE_NDFLOW(dim-1));
 	
-	result->dim = dim;
+		result->dim = dim;
 
-	bid = &result->x[dim-1];
+		bid = &result->x[dim-1];
 
-	bid->id 	= id;
-	bid->nr 	= PG_GETARG_INT64(3);
-	bid->qtt_prov 	= PG_GETARG_INT64(4);
-	bid->qtt_requ 	= PG_GETARG_INT64(5);
-	bid->sid 	= PG_GETARG_INT64(6);
-	bid->own 	= PG_GETARG_INT64(7);
-	bid->qtt 	= PG_GETARG_INT64(8);
-	bid->np 	= PG_GETARG_INT64(9);	
+		bid->id 	= id;
+		bid->nr 	= PG_GETARG_INT64(3);
+		bid->qtt_prov 	= PG_GETARG_INT64(4);
+		bid->qtt_requ 	= PG_GETARG_INT64(5);
+		bid->sid 	= PG_GETARG_INT64(6);
+		bid->own 	= PG_GETARG_INT64(7);
+		bid->qtt 	= PG_GETARG_INT64(8);
+		bid->np 	= PG_GETARG_INT64(9);	
 
-	//result = Ndbox_adjust(result);
+		//result = Ndbox_adjust(result);
 	
-	if(!flowc_maximum(result,globales.verify)) {
-		// no solution found, 
-		memcpy(result,Y,SIZE_NDFLOW(Y->dim));
+		if(!flowc_maximum(result,globales.verify)) {
+			// no solution found, Y returned
+			Y = PG_GETARG_NDFLOW(0);
+			memcpy(result,Y,SIZE_NDFLOW(Y->dim));
+			PG_FREE_IF_COPY(Y, 0);
+		}
 	}
-end:
-	PG_FREE_IF_COPY(Y, 0);
+	
 	PG_FREE_IF_COPY(c, 1);
-endend:
+end:
 	result = Ndbox_adjust(result);
 	PG_RETURN_NDFLOW(result);
 }
@@ -326,7 +337,6 @@ Datum flow_init(PG_FUNCTION_ARGS)
 {
 	NDFLOW	*result;
 	BID	*bid;
-	int64	id;
 	
 	if(PG_ARGISNULL(0) || PG_ARGISNULL(1)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7))
 		ereport(ERROR,
@@ -491,6 +501,38 @@ Datum flow_omegax(PG_FUNCTION_ARGS)
 	_omega = flowc_getProdOmega(c);
 	_omega *= ((double)qtt_prov) / ((double)qtt_requ);
 	PG_RETURN_FLOAT8(_omega);
+}
+/* FUNCTION flow_omegay(Y.flow flow,X.flow flow,qtt_prov int8,qtt_requ int8) RETURNS bool
+return flow_omega(Y.flow) < flow_omega(X.flow) * qtt_prov/qtt_requ
+	if Y.flow is NULL returns true
+	if X.flow is NULL returns false
+*/
+Datum flow_omegay(PG_FUNCTION_ARGS)
+{
+	NDFLOW	*X,*Y;
+	int64	qtt_prov;
+	int64	qtt_requ;
+	double 	_omegaX,_omegaY;
+
+	if( PG_ARGISNULL(2) || PG_ARGISNULL(3))
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				errmsg("flow_omegax: called with one argument NULL")));
+				
+	if(PG_ARGISNULL(0)) PG_RETURN_BOOL(true);
+	if(PG_ARGISNULL(1)) PG_RETURN_BOOL(false);
+				
+	Y = PG_GETARG_NDFLOW(0);
+	X = PG_GETARG_NDFLOW(1);	
+	qtt_prov = PG_GETARG_INT64(2);
+	qtt_requ = PG_GETARG_INT64(3);
+		
+	_omegaX = flowc_getProdOmega(X) * ((double)qtt_prov) / ((double)qtt_requ);
+	_omegaY = flowc_getProdOmega(Y);
+
+	PG_FREE_IF_COPY(Y, 0);
+	PG_FREE_IF_COPY(X, 1);
+	PG_RETURN_BOOL(_omegaY < _omegaX);
 }
 
 Datum flow_provides(PG_FUNCTION_ARGS)
