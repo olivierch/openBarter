@@ -20,7 +20,7 @@ static void _calGains(ob_tChemin *pchemin,double omegaCorrige[]);
 static int _fluxMaximum(const ob_tChemin *pchemin, double *fluxExact) ;
 static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int _iStockExhausted);
 static void _createChemin(NDFLOW *box, int cflags, ob_tChemin *pchemin );
-static bool _isCycle(NDFLOW *box);
+
 
 /******************************************************************************
  * gives the maximum flow of box
@@ -34,7 +34,7 @@ static bool _isCycle(NDFLOW *box);
 	
  *****************************************************************************/
 
-void flowc_maximum(NDFLOW *box,bool verify) {
+bool flowc_maximum(NDFLOW *box,bool verify) {
 	int _dim = box->dim;
 	ob_tChemin chemin;
 	ob_tChemin *pchemin = &chemin;
@@ -43,7 +43,7 @@ void flowc_maximum(NDFLOW *box,bool verify) {
 	
 	if(_dim == 0) {
 		box->status = empty;
-		return;
+		return true;
 	}
 
 	if(_dim > FLOW_MAX_DIM) 
@@ -60,7 +60,7 @@ void flowc_maximum(NDFLOW *box,bool verify) {
 	if(verify) cflags |= ob_flux_CVerify;
 	else cflags &= ~(ob_flux_CVerify);	
 	
-	if (!_isCycle(box)) {
+	if (box->x[0].nr != box->x[box->dim-1].np) { // box is not a cycle
 		int _k;
 		
 		box->status = noloop;
@@ -69,7 +69,7 @@ void flowc_maximum(NDFLOW *box,bool verify) {
 			box->x[_k].flowr = 0;	
 		if (cflags & ob_flux_CVerify ) 
 			_createChemin(box,cflags,pchemin);
-		return;
+		return true;
 	}
 
 	_createChemin(box,cflags,pchemin);
@@ -94,11 +94,13 @@ void flowc_maximum(NDFLOW *box,bool verify) {
 	
 	/* the floating point vector is rounded 
 	to the nearest vector of positive integers */
-	if (_rounding(pchemin->fluxExact, pchemin,_iStockExhausted) ) 
+	if (_rounding(pchemin->fluxExact, pchemin,_iStockExhausted) ) {
 		box->status = draft; 
-	else 
-		box->status = undefined;
-	return;
+		return true;
+	} else {
+		box->status = undefined; 
+		return false;
+	}
 }
 
 bool flowc_idInBox(NDFLOW *box,int64 id) {
@@ -292,31 +294,20 @@ static void _calGains(ob_tChemin *pchemin,double omegaCorrige[]) {
 	int _dim = pchemin->box->dim;
 
 	// the gain is shared between owners
-	pchemin->gain = pow(pchemin->prodOmega, -1.0 /((double) pchemin->nbOwn));
+	pchemin->gain = pow(pchemin->prodOmega, 1.0 /((double) pchemin->nbOwn));
 
 	// next, it is shared between nodes
 	obMRange(_i,_dim) {
 		_occ = occOwn[pchemin->no[_i].ownIndex];
 		omegaCorrige[_i] = pchemin->no[_i].omega;
 		if (_occ == 1)
-			omegaCorrige[_i] *= pchemin->gain;
+			omegaCorrige[_i] /= pchemin->gain;
 		else /* _occ is never zero */
-			omegaCorrige[_i] *= pow(pchemin->gain, 1.0 / ((double) _occ));
+			omegaCorrige[_i] /= pow(pchemin->gain, 1.0 / ((double) _occ));
 		
 	}
-	/* it would be clearer like this:
-	pchemin->gain = pow(pchemin->prodOmega, 1.0 /((double) pchemin->nbOwn));
-	.....
-			omegaCorrige[_i] /= pchemin->gain;
-		else 
-			omegaCorrige[_i] /= pow(pchemin->gain, 1.0 / ((double) _occ));
-	*/
-	return;
-}
 
-static bool _isCycle(NDFLOW *box) {
-	int _dim = box->dim;	
-	return box->x[0].nr == box->x[_dim-1].np;
+	return;
 }
 
 /*******************************************************************************
@@ -511,13 +502,14 @@ static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int iStockExhausted
 
 		// several checkings
 		/*******************/
+		
 		obMRange (_k,_lonStock) {
-
 			// All _flowStocks[.] > 0
 			if(_flowStocks[_k] == 0) {
 				_admissible = false; break;
 			}
 		}
+		if (!_admissible) continue; // the vertex is rejected
 		
 		if(!(pchemin->cflags & ob_flux_CLastIgnore)) obMRange (_k,_lonStock) {
 			

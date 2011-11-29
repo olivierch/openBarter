@@ -17,7 +17,12 @@ typedef struct ob_tNo {
 
 
 typedef enum STATUSNDFLOW {
-	empty,noloop,loop,draft,undefined,tobedefined
+	empty, // dim=0
+	noloop, // it is not a loop
+	loop,
+	draft, // loop, a solution was found
+	undefined, // loop, but rounding did not find any solution
+	tobedefined
 } STATUSNDFLOW;
 
 typedef struct NDFLOW {
@@ -53,7 +58,7 @@ extern ob_tGlobales globales; //defined in flow.c
 #define PG_RETURN_NDFLOW(x)	PG_RETURN_POINTER(x)
 #define SIZE_NDFLOW(dim)	(offsetof(NDFLOW, x[0])+(dim)*sizeof(BID))
 
-extern void 	flowc_maximum(NDFLOW *box,bool verify);
+extern bool 	flowc_maximum(NDFLOW *box,bool verify);
 extern double 	flowc_getProdOmega(NDFLOW *box);
 extern char *flow_ndboxToStr(NDFLOW *flow,bool internal);
 extern char * flowc_cheminToStr(ob_tChemin *pchemin);

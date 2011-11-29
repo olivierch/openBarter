@@ -1688,7 +1688,7 @@ the graph is traversed forward to be reduced
 	
 		UPDATE _tmp t 
 		SET flow = CASE WHEN _np = t.nr -- source
-				THEN flow_cat(_FLOWNULL,t.id,t.nr,t.qtt_prov,t.qtt_requ,t.sid,t.own,t.qtt,t.np) 
+				THEN flow_cat(_FLOWNULL,_FLOWNULL,t.id,t.nr,t.qtt_prov,t.qtt_requ,t.sid,t.own,t.qtt,t.np) 
 				ELSE _FLOWNULL END,
 			valid = _cntgraph
 		FROM search_forward sf WHERE t.id = sf.id;
@@ -1717,10 +1717,12 @@ _obCMAXCYCLE times.
 
 		FOR _cnt IN 1 .. _maxDepth LOOP
 			UPDATE _tmp Y 
-			SET flow = flow_cat(X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.sid,Y.own,Y.qtt,Y.np)
+			-- Z<-X.flow+Y.bid
+			SET flow = flow_cat(Y.flow,X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.sid,Y.own,Y.qtt,Y.np) 
+			-- if(Z) Y.flow<-Z else Y.flow<- Y.flow	
 			FROM _tmp X WHERE flow_dim(X.flow) > 0 
-				AND X.np  = Y.nr AND X.valid=_cntgraph AND Y.valid=_cntgraph
 				AND X.id != _idPivot -- arcs pivot->sources are not considered
+				AND X.np  = Y.nr AND X.valid=_cntgraph AND Y.valid=_cntgraph
 				AND flow_omega(Y.flow) < (flow_omegax(X.flow,Y.qtt_prov,Y.qtt_requ));
 		END LOOP;
 		

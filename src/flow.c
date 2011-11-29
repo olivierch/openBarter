@@ -53,7 +53,6 @@ PG_FUNCTION_INFO_V1(flow_get_fim1_fi);
 PG_FUNCTION_INFO_V1(flow_to_matrix);
 PG_FUNCTION_INFO_V1(flow_cat);
 
-
 Datum flow_in(PG_FUNCTION_ARGS);
 Datum flow_out(PG_FUNCTION_ARGS);
 Datum flow_recv(PG_FUNCTION_ARGS);
@@ -113,7 +112,7 @@ flow_in(PG_FUNCTION_ARGS)
 	flow_scanner_finish();
 	result = Ndbox_adjust(result);
 
-	flowc_maximum(result,globales.verify);
+	(void) flowc_maximum(result,globales.verify);
 
 	PG_RETURN_NDFLOW(result);
 }
@@ -236,20 +235,21 @@ Adds a bid at the end of the flow.
 */
 Datum flow_cat(PG_FUNCTION_ARGS)
 {
-	NDFLOW	*c;
+	NDFLOW	*c,*Y;
 	NDFLOW	*result;
 	BID	*bid;
 	int 	dim;
 	int64	id;
 	
-	if(PG_ARGISNULL(0) || PG_ARGISNULL(1)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7)|| PG_ARGISNULL(8) )
+	if(PG_ARGISNULL(0) || PG_ARGISNULL(1)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7)|| PG_ARGISNULL(8) || PG_ARGISNULL(9))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_cat: with at least one argument NULL")));
-	c = PG_GETARG_NDFLOW(0);
+	Y = PG_GETARG_NDFLOW(0);
+	c = PG_GETARG_NDFLOW(1);
 	//elog(WARNING,"flow_cat: input %s",flow_ndboxToStr(c,true));
 
-	id = PG_GETARG_INT64(1);		
+	id = PG_GETARG_INT64(2);		
 
 	result = Ndbox_init(FLOW_MAX_DIM);
 	if(flowc_idInBox(c,id)) {
@@ -259,33 +259,42 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 				 errmsg("flow_cat(box,id) while box contains id=%lli\n%s",
 				 id,flow_ndboxToStr(c,true))));
 		result->dim = 0;
-	} else {		
-		dim = c->dim+1;	
-		if(dim > FLOW_MAX_DIM)
-	    		ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("attempt to extend a flow out of range")));	
-		memcpy(result,c,SIZE_NDFLOW(dim-1));
-		result->dim = dim;
+		goto end;
+	} 
+			
+	dim = c->dim+1;	
+	if(dim > FLOW_MAX_DIM)
+    		ereport(ERROR,
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+			errmsg("attempt to extend a flow out of range")));	
+	memcpy(result,c,SIZE_NDFLOW(dim-1));
+	
+	result->dim = dim;
 
-		bid = &result->x[dim-1];
+	bid = &result->x[dim-1];
 
-		bid->id 	= id;
-		bid->nr 	= PG_GETARG_INT64(2);
-		bid->qtt_prov 	= PG_GETARG_INT64(3);
-		bid->qtt_requ 	= PG_GETARG_INT64(4);
-		bid->sid 	= PG_GETARG_INT64(5);
-		bid->own 	= PG_GETARG_INT64(6);
-		bid->qtt 	= PG_GETARG_INT64(7);
-		bid->np 	= PG_GETARG_INT64(8);	
-	}
+	bid->id 	= id;
+	bid->nr 	= PG_GETARG_INT64(3);
+	bid->qtt_prov 	= PG_GETARG_INT64(4);
+	bid->qtt_requ 	= PG_GETARG_INT64(5);
+	bid->sid 	= PG_GETARG_INT64(6);
+	bid->own 	= PG_GETARG_INT64(7);
+	bid->qtt 	= PG_GETARG_INT64(8);
+	bid->np 	= PG_GETARG_INT64(9);	
+
 	result = Ndbox_adjust(result);
-	//elog(WARNING,"flow_cat: output %s",flow_ndboxToStr(result,true));
-	// elog(WARNING,"flow_cat: bid(id=%lli,nr=%lli,np=%lli,sid=%lli) added to flow",bid->id,bid->nr,bid->np,bid->sid);
-	flowc_maximum(result,globales.verify);
-	PG_FREE_IF_COPY(c, 0);
+	
+	if(!flowc_maximum(result,globales.verify)) {
+		// no solution found, 
+		memcpy(result,Y,SIZE_NDFLOW(Y->dim));
+	}
+end:
+	result = Ndbox_adjust(result);
+	PG_FREE_IF_COPY(Y, 0);
+	PG_FREE_IF_COPY(c, 1);  
 	PG_RETURN_NDFLOW(result);
 }
+
 
 /*
 FUNCTION flow_proj(flow,int arg1) RETURNS int8[]

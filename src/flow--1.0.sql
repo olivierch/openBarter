@@ -53,8 +53,8 @@ CREATE TYPE flow (
 
 COMMENT ON TYPE flow IS 'flow ''[(id,nr,qtt_prov,qtt_requ,sid,own,qtt,np), ...]''';
 
--- (flow,id,nr,qtt_prov,qtt_requ,sid,own,qtt,np)
-CREATE FUNCTION flow_cat(flow,int8,int8,int8,int8,int8,int8,int8,int8)
+-- (Y.flow,X.flow,id,nr,qtt_prov,qtt_requ,sid,own,qtt,np)
+CREATE FUNCTION flow_cat(flow,flow,int8,int8,int8,int8,int8,int8,int8,int8)
 RETURNS flow
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
