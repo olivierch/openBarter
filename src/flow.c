@@ -52,6 +52,7 @@ PG_FUNCTION_INFO_V1(flow_dim);
 PG_FUNCTION_INFO_V1(flow_get_fim1_fi);
 PG_FUNCTION_INFO_V1(flow_to_matrix);
 PG_FUNCTION_INFO_V1(flow_cat);
+PG_FUNCTION_INFO_V1(flow_init);
 
 Datum flow_in(PG_FUNCTION_ARGS);
 Datum flow_out(PG_FUNCTION_ARGS);
@@ -67,6 +68,7 @@ Datum flow_dim(PG_FUNCTION_ARGS);
 Datum flow_get_fim1_fi(PG_FUNCTION_ARGS);
 Datum flow_to_matrix(PG_FUNCTION_ARGS);
 Datum flow_cat(PG_FUNCTION_ARGS);
+Datum flow_init(PG_FUNCTION_ARGS);
 
 // for internal use
 
@@ -224,12 +226,12 @@ flow_send(PG_FUNCTION_ARGS)
 }
 
 /*
-FUNCTION flow_cat(flow,int64,int64,int64,int64,int64,int64,int64,int64)
+FUNCTION flow_cat(flow,flow,int64,int64,int64,int64,int64,int64,int64,int64)
 RETURNS flow
 args:
-	(flow,id,nr,qtt_prov,qtt_requ,sid,own,qtt,np)
+	(Y.flow,X.flow,id,nr,qtt_prov,qtt_requ,sid,own,qtt,np)
 Adds a bid at the end of the flow.
-	The flow must be not NULL
+	All arguments must be not NULL execept X.flow
 	the bid added does not belong to the flow
 	the dimension of the flow after the bid is added is less or equal to FLOW_MAX_DIM
 */
@@ -241,15 +243,33 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 	int 	dim;
 	int64	id;
 	
-	if(PG_ARGISNULL(0) || PG_ARGISNULL(1)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7)|| PG_ARGISNULL(8) || PG_ARGISNULL(9))
+	if(PG_ARGISNULL(0) || PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7)|| PG_ARGISNULL(8) || PG_ARGISNULL(9))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_cat: with at least one argument NULL")));
+	
+	id = PG_GETARG_INT64(2);
+	if(PG_ARGISNULL(1)) {
+		result = Ndbox_init(1);	
+		result->dim = 1;
+		bid = &result->x[0];
+
+		bid->id 	= id;
+		bid->nr 	= PG_GETARG_INT64(3);
+		bid->qtt_prov 	= PG_GETARG_INT64(4);
+		bid->qtt_requ 	= PG_GETARG_INT64(5);
+		bid->sid 	= PG_GETARG_INT64(6);
+		bid->own 	= PG_GETARG_INT64(7);
+		bid->qtt 	= PG_GETARG_INT64(8);
+		bid->np 	= PG_GETARG_INT64(9); 
+		
+		goto endend;
+	}
 	Y = PG_GETARG_NDFLOW(0);
 	c = PG_GETARG_NDFLOW(1);
 	//elog(WARNING,"flow_cat: input %s",flow_ndboxToStr(c,true));
 
-	id = PG_GETARG_INT64(2);		
+			
 
 	result = Ndbox_init(FLOW_MAX_DIM);
 	if(flowc_idInBox(c,id)) {
@@ -282,16 +302,55 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 	bid->qtt 	= PG_GETARG_INT64(8);
 	bid->np 	= PG_GETARG_INT64(9);	
 
-	result = Ndbox_adjust(result);
+	//result = Ndbox_adjust(result);
 	
 	if(!flowc_maximum(result,globales.verify)) {
 		// no solution found, 
 		memcpy(result,Y,SIZE_NDFLOW(Y->dim));
 	}
 end:
-	result = Ndbox_adjust(result);
 	PG_FREE_IF_COPY(Y, 0);
-	PG_FREE_IF_COPY(c, 1);  
+	PG_FREE_IF_COPY(c, 1);
+endend:
+	result = Ndbox_adjust(result);
+	PG_RETURN_NDFLOW(result);
+}
+/*
+FUNCTION flow_init(int64,int64,int64,int64,int64,int64,int64,int64)
+RETURNS flow
+args:
+	(,id,nr,qtt_prov,qtt_requ,sid,own,qtt,np)
+creates a flow with a single bid.
+*/
+Datum flow_init(PG_FUNCTION_ARGS)
+{
+	NDFLOW	*result;
+	BID	*bid;
+	int64	id;
+	
+	if(PG_ARGISNULL(0) || PG_ARGISNULL(1)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7))
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				errmsg("flow_init: with at least one argument NULL")));	
+
+	result = Ndbox_init(1);
+	
+	result->dim = 1;
+
+	bid = &result->x[0];
+
+	bid->id 	= PG_GETARG_INT64(0);
+	bid->nr 	= PG_GETARG_INT64(1);
+	bid->qtt_prov 	= PG_GETARG_INT64(2);
+	bid->qtt_requ 	= PG_GETARG_INT64(3);
+	bid->sid 	= PG_GETARG_INT64(4);
+	bid->own 	= PG_GETARG_INT64(5);
+	bid->qtt 	= PG_GETARG_INT64(6);
+	bid->np 	= PG_GETARG_INT64(7);	
+
+	result = Ndbox_adjust(result);
+	
+	flowc_maximum(result,globales.verify);
 	PG_RETURN_NDFLOW(result);
 }
 
