@@ -827,7 +827,7 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- test on return is NULL
 CREATE FUNCTION 
-	ob_acquires_locks_draft(draft_id int8) 
+	ob_facquires_locks_draft(draft_id int8) 
 	RETURNS ob_tdraft AS $$
 DECLARE 
 	draft		ob_tdraft%rowtype;
@@ -841,7 +841,7 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- test on return is NULL
 CREATE FUNCTION 
-	ob_is_partner_draft(draft_id int8,name_owner text) 
+	ob_fis_partner_draft(draft_id int8,name_owner text) 
 	RETURNS ob_towner AS $$
 DECLARE 
 	owner		ob_towner%rowtype;
@@ -907,7 +907,7 @@ DECLARE
 	_accepted	int4; 
 	_res 		int;
 BEGIN
-	_draft := ob_acquires_locks_draft(draft_id);
+	_draft := ob_facquires_locks_draft(draft_id);
 	IF(_draft IS NULL) THEN
 		RAISE NOTICE '[-30422] The draft % has not the status Draft or does not exist',draft_id;
 		RETURN -30422;
@@ -916,7 +916,7 @@ BEGIN
 		RAISE NOTICE '[-30422] The draft % has not the status Draft or does not exist',draft_id;
 		RETURN -30422;
 	END IF;	
-	_owner := ob_is_partner_draft(draft_id,name_owner);
+	_owner := ob_fis_partner_draft(draft_id,name_owner);
 	if(_owner IS NULL) THEN
 		RAISE NOTICE '[-30421] The owner % does not exist or is not the partner of the draft %',name_owner,draft_id;
 		RETURN -30421;
@@ -1113,7 +1113,7 @@ DECLARE
 	_res	int;
 	_draft ob_tdraft%rowtype;
 BEGIN
-	_draft := ob_acquires_locks_draft(draft_id);
+	_draft := ob_facquires_locks_draft(draft_id);
 	IF(_draft IS NULL) THEN
 		RAISE NOTICE '[-30422] The draft % has not the status Draft or does not exist',draft_id;
 		RETURN -30422;
@@ -1122,7 +1122,7 @@ BEGIN
 		RAISE NOTICE '[-30422] The draft % has not the status Draft or does not exist',draft_id;
 		RETURN -30422;
 	END IF;	
-	_owner := ob_is_partner_draft(draft_id,name_owner);
+	_owner := ob_fis_partner_draft(draft_id,name_owner);
 	if(_owner IS NULL) THEN
 		RAISE NOTICE '[-30421] The owner % does not exist or is not the partner of the draft %',name_owner,draft_id;
 		RETURN -30421;
@@ -1166,7 +1166,7 @@ BEGIN
 		_cbid_prec := _commot.bid;
 		
 		-- commit.sid_src <- commit.sid_dst
-		_qtt := ob_get_qtt_commit(_commot);
+		_qtt := ob_fget_qtt_commit(_commot);
 		-- stock[_commot.sid_src] is increased
 		UPDATE ob_tstock SET qtt = qtt+_qtt 
 			WHERE id=_commot.sid_src;
@@ -1187,7 +1187,7 @@ END;
 $$ LANGUAGE PLPGSQL;	
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	ob_get_qtt_commit(commit ob_tcommit) 
+	ob_fget_qtt_commit(commit ob_tcommit) 
 	RETURNS int8 AS $$
 DECLARE 
 	_qtt int8;
@@ -1509,7 +1509,7 @@ create extension flow;
 /*--------------------------------------------------------------------------------
 read omega, returns setof (num int8,qtt_r int8,nr int8,qtt_p int8,np int8)
 -------------------------------------------------------------------------------*/
-CREATE FUNCTION ob_get_omegas(_nr int8,_np int8) RETURNS SETOF __flow_to_commits AS $$
+CREATE FUNCTION ob_fget_omegas(_nr int8,_np int8) RETURNS SETOF __flow_to_commits AS $$
 DECLARE 
 	_FLOWNULL flow := '[]'::flow;
 
@@ -1519,7 +1519,7 @@ DECLARE
 	_flow	flow;
 	_commit	__flow_to_commits;
 BEGIN
-	_maxDepth := ob_create_tmp(_nr);
+	_maxDepth := ob_fcreate_tmp(_nr);
 	
 	IF (_maxDepth is NULL or _maxDepth = 0) THEN
 		RETURN;
@@ -1538,7 +1538,7 @@ BEGIN
 	-- RETURN QUERY SELECT flow_to_commits(ob_fget_flows) FROM ob_fget_flows(_np,_maxDepth);
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION ob_get_omegas(int8,int8)  TO market;
+GRANT EXECUTE ON FUNCTION ob_fget_omegas(int8,int8)  TO market;
 
 /*--------------------------------------------------------------------------------
 read omega, returns setof flow_to_matrix(flow)
@@ -1548,7 +1548,7 @@ DECLARE
 	_FLOWNULL flow := '[]'::flow;
 	_maxDepth int;
 BEGIN
-	_maxDepth := ob_create_tmp(_nr);
+	_maxDepth := ob_fcreate_tmp(_nr);
 	
 	IF (_maxDepth is NULL or _maxDepth = 0) THEN
 		RETURN;
@@ -1563,7 +1563,7 @@ $$ LANGUAGE PLPGSQL;
 /*--------------------------------------------------------------------------------
  creates the table _tmp deleted on commit
 -------------------------------------------------------------------------------*/
-CREATE FUNCTION ob_create_tmp(_nr int8) RETURNS int AS $$
+CREATE FUNCTION ob_fcreate_tmp(_nr int8) RETURNS int AS $$
 DECLARE 
 	_obCMAXCYCLE int := ob_get_const('obCMAXCYCLE');
 	_maxDepth int;

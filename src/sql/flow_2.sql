@@ -8,14 +8,14 @@ insert into ob_tnoeud (sid,nr,qtt_prov,qtt_requ) values
 -- np: 5->1->2->3->4
 -- bid: 1  2  3  4
 
--- ob_get_omegas(_nr int8,_np int8) RETURNS SETOF int8[]
-select ob_get_omegas(4,5); -- {100,100}
-select ob_get_omegas(4,1); -- {200,200}
-select ob_get_omegas(4,2); -- {300,300}
-select ob_get_omegas(4,3); -- {400,400}
-select ob_get_omegas(3,5); -- {100,100} -- pb
-select ob_get_omegas(3,1); -- {200,200}
-select ob_get_omegas(300,1); -- not results
+-- ob_fget_omegas(_nr int8,_np int8) RETURNS SETOF int8[]
+select ob_fget_omegas(4,5); -- {100,100}
+select ob_fget_omegas(4,1); -- {200,200}
+select ob_fget_omegas(4,2); -- {300,300}
+select ob_fget_omegas(4,3); -- {400,400}
+select ob_fget_omegas(3,5); -- {100,100} -- pb
+select ob_fget_omegas(3,1); -- {200,200}
+select ob_fget_omegas(300,1); -- not results
 
 truncate ob_tquality cascade;
 
