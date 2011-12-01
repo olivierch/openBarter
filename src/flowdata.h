@@ -47,6 +47,12 @@ typedef struct ob_tChemin {
 	
 } ob_tChemin;
 
+typedef struct FTCOMMIT {
+	struct {
+		int64 qtt_r,nr,qtt_p,np;
+	} c[FLOW_MAX_DIM];
+} FTCOMMIT;
+
 
 typedef struct ob_tGlobales {
 	bool verify;

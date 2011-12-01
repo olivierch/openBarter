@@ -17,6 +17,7 @@
 #include "utils/builtins.h"
 #include "utils/lsyscache.h"
 #include "catalog/pg_type.h"
+#include "funcapi.h"
 
 #include "flowdata.h"
 
@@ -54,6 +55,7 @@ PG_FUNCTION_INFO_V1(flow_to_matrix);
 PG_FUNCTION_INFO_V1(flow_cat);
 PG_FUNCTION_INFO_V1(flow_init);
 PG_FUNCTION_INFO_V1(flow_omegay);
+PG_FUNCTION_INFO_V1(flow_to_commits);
 
 Datum flow_in(PG_FUNCTION_ARGS);
 Datum flow_out(PG_FUNCTION_ARGS);
@@ -71,6 +73,9 @@ Datum flow_to_matrix(PG_FUNCTION_ARGS);
 Datum flow_cat(PG_FUNCTION_ARGS);
 Datum flow_init(PG_FUNCTION_ARGS);
 Datum flow_omegay(PG_FUNCTION_ARGS);
+Datum flow_to_commits(PG_FUNCTION_ARGS);
+
+static FTCOMMIT *_flowFtCommit(NDFLOW * flow);
 
 // for internal use
 
@@ -718,6 +723,118 @@ char * flow_statusBoxToStr (NDFLOW *box){
 	default: return "unknown status!";
 	}
 }
+
+/* used by flow_to_commits
+*/
+static FTCOMMIT *_flowFtCommit(NDFLOW * flow) {
+	int i,j,dim = flow->dim;
+	FTCOMMIT *ret = palloc(sizeof(FTCOMMIT));
+
+	obMRange (i,dim) {
+		if(i==0) j = dim-1;
+		else j = i-1;
+		ret->c[i].qtt_r = flow->x[j].qtt;
+		ret->c[i].nr = flow->x[j].np;
+		ret->c[i].qtt_p = flow->x[i].qtt;
+		ret->c[i].np = flow->x[i].np;
+	}	
+	
+	return ret;
+}
+/* flow_to_commits(flow) returns set of (qtt_r int8,nr int8,qtt_p int8,np int8)
+for an indice i
+	[i].qtt_r	<- commit[i-1].qtt
+	[i].nr		<- commit[i-1].np
+	[i].qtt_p	<- commit[i].qtt
+	[i].np		<- commit[i].np
+*/
+
+Datum flow_to_commits(PG_FUNCTION_ARGS) {
+	FuncCallContext	*funcctx;
+	int	call_cntr;
+	int	max_calls;	
+	TupleDesc	tupdesc;
+	AttInMetadata *attinmeta;
+	/* stuff done only on the first call of the function */
+	FTCOMMIT *ftc;
+	
+	if (SRF_IS_FIRSTCALL())
+	{
+		MemoryContext oldcontext;
+		NDFLOW *box;
+		/* create a function context for cross-call persistence */
+		funcctx = SRF_FIRSTCALL_INIT();
+		/* switch to memory context appropriate for multiple function calls */
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+		
+		if(PG_ARGISNULL(0))
+			ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				errmsg("flow_to_commits: with flow argument NULL")));	
+			
+		box = PG_GETARG_NDFLOW(0);		
+		funcctx->user_fctx = (void *) _flowFtCommit(box);
+		
+		/* total number of tuples to be returned */
+		funcctx->max_calls = (int32) box->dim;
+		
+		PG_FREE_IF_COPY(box,0);
+		
+		/* Build a tuple descriptor for our result type */
+		if (get_call_result_type(fcinfo, NULL, &tupdesc) != TYPEFUNC_COMPOSITE)
+			ereport(ERROR,
+				(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+				errmsg("flow_to_commits: function returning record called in context "
+				"that cannot accept type record")));
+		/*
+		* generate attribute metadata needed later to produce tuples from raw
+		* C strings
+		*/
+		attinmeta = TupleDescGetAttInMetadata(tupdesc);
+		funcctx->attinmeta = attinmeta;
+		MemoryContextSwitchTo(oldcontext);
+	}
+	/* stuff done on every call of the function */
+	funcctx = SRF_PERCALL_SETUP();
+	call_cntr = funcctx->call_cntr;
+	max_calls = funcctx->max_calls;
+	attinmeta = funcctx->attinmeta;
+	ftc = (FTCOMMIT *) funcctx->user_fctx;
+	if (call_cntr < max_calls)
+	{
+		char 	**values;
+		HeapTuple tuple;
+		Datum 	result;
+		int	_k;
+
+		values = (char **) palloc(4 * sizeof(char *));
+		obMRange (_k,4) {
+			values[_k] = (char *) palloc(32 * sizeof(char));
+		}
+		
+		snprintf(values[0],32,"%lli",ftc->c[call_cntr].qtt_r);
+		snprintf(values[1],32,"%lli",ftc->c[call_cntr].nr);
+		snprintf(values[2],32,"%lli",ftc->c[call_cntr].qtt_p);
+		snprintf(values[3],32,"%lli",ftc->c[call_cntr].np);
+		
+
+		tuple = BuildTupleFromCStrings(attinmeta, values);
+		/* make the tuple into a datum */
+		result = HeapTupleGetDatum(tuple);
+		/* clean up (this is not really necessary) */
+		obMRange (_k,4) pfree(values[_k]);
+		pfree(values);
+		
+		SRF_RETURN_NEXT(funcctx, result);
+	} else {
+		/* do when there is no more left */
+		pfree(ftc);
+		SRF_RETURN_DONE(funcctx);
+	}
+}
+
+
+
 
 
 

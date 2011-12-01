@@ -74,3 +74,12 @@ RETURNS int8[]
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
 
+CREATE TYPE __flow_to_commits AS (qtt_r int8,nr int8,qtt_p int8,np int8);
+COMMENT ON TYPE __flow_to_commits IS '(qtt_r int8,nr int8,qtt_p int8,np int8)';
+CREATE FUNCTION flow_to_commits(flow)
+RETURNS SETOF __flow_to_commits
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+
+
