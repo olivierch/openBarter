@@ -37,7 +37,6 @@ create table ob_tconst(
 );
 psql:sql/model.sql:24: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tconst_pkey" for table "ob_tconst"
 INSERT INTO ob_tconst (name,value) VALUES ('obCMAXCYCLE',8);
-INSERT INTO ob_tconst (name,value) VALUES ('MAINTENANCE',0);
 CREATE FUNCTION ob_get_const(_name text) RETURNS int AS $$
 DECLARE
 	_ret text;
@@ -48,38 +47,6 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION ob_get_const(text) TO market;
 --------------------------------------------------------------------------------
-CREATE FUNCTION ob_fset_maintenance(_b bool) RETURNS void AS $$
-DECLARE
-	_v int;
-BEGIN
-	IF(_b) THEN 
-		IF(ob_get_const('MAINTENANCE')=1) THEN
-			RAISE INFO 'Already in maintenance mode';
-		END IF;
-		_v=1;
-	ELSE 
-		IF(ob_get_const('MAINTENANCE')=0) THEN
-			RAISE INFO 'Already in non maintenance mode';
-		END IF;
-		_v= 0;
-	END IF;
-	UPDATE ob_tconst SET value=_v WHERE name='MAINTENANCE';
-	RETURN;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION ob_fset_maintenance(bool) TO market;
---------------------------------------------------------------------------------
-CREATE FUNCTION ob_fcan_exec() RETURNS int AS $$
-DECLARE
-	_v int;
-BEGIN
-	SELECT value INTO _v FROM ob_tconst WHERE name='MAINTENANCE';
-	IF(_v = 1) THEN 
-		RAISE EXCEPTION 'Maitenance in process';
-	ELSE RETURN 1;
-	END IF;
-END; 
-$$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- ob_ftime_updated 
 --	trigger before insert on tables
@@ -156,9 +123,9 @@ create table ob_tquality (
     PRIMARY KEY (id),
     UNIQUE(name)
 );
-psql:sql/model.sql:148: NOTICE:  CREATE TABLE will create implicit sequence "ob_tquality_id_seq" for serial column "ob_tquality.id"
-psql:sql/model.sql:148: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tquality_pkey" for table "ob_tquality"
-psql:sql/model.sql:148: NOTICE:  CREATE TABLE / UNIQUE will create implicit index "ob_tquality_name_key" for table "ob_tquality"
+psql:sql/model.sql:116: NOTICE:  CREATE TABLE will create implicit sequence "ob_tquality_id_seq" for serial column "ob_tquality.id"
+psql:sql/model.sql:116: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tquality_pkey" for table "ob_tquality"
+psql:sql/model.sql:116: NOTICE:  CREATE TABLE / UNIQUE will create implicit index "ob_tquality_name_key" for table "ob_tquality"
 comment on table ob_tquality is 
 'description of qualities';
 alter sequence ob_tquality_id_seq owned by ob_tquality.id;
@@ -181,9 +148,9 @@ create table ob_towner (
     PRIMARY KEY (id),
     UNIQUE(name)
 );
-psql:sql/model.sql:166: NOTICE:  CREATE TABLE will create implicit sequence "ob_towner_id_seq" for serial column "ob_towner.id"
-psql:sql/model.sql:166: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_towner_pkey" for table "ob_towner"
-psql:sql/model.sql:166: NOTICE:  CREATE TABLE / UNIQUE will create implicit index "ob_towner_name_key" for table "ob_towner"
+psql:sql/model.sql:134: NOTICE:  CREATE TABLE will create implicit sequence "ob_towner_id_seq" for serial column "ob_towner.id"
+psql:sql/model.sql:134: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_towner_pkey" for table "ob_towner"
+psql:sql/model.sql:134: NOTICE:  CREATE TABLE / UNIQUE will create implicit index "ob_towner_name_key" for table "ob_towner"
 comment on table ob_towner is 
 'description of owners of values';
 alter sequence ob_towner_id_seq owned by ob_towner.id;
@@ -221,9 +188,9 @@ create table ob_tstock (
     -- only one account for each (own,np)
     EXCLUDE (own with =,np with =,type with =) WHERE (type='Account')
 );
-psql:sql/model.sql:200: NOTICE:  CREATE TABLE will create implicit sequence "ob_tstock_id_seq" for serial column "ob_tstock.id"
-psql:sql/model.sql:200: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tstock_pkey" for table "ob_tstock"
-psql:sql/model.sql:200: NOTICE:  CREATE TABLE / EXCLUDE will create implicit index "ob_tstock_own_np_type_excl" for table "ob_tstock"
+psql:sql/model.sql:168: NOTICE:  CREATE TABLE will create implicit sequence "ob_tstock_id_seq" for serial column "ob_tstock.id"
+psql:sql/model.sql:168: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tstock_pkey" for table "ob_tstock"
+psql:sql/model.sql:168: NOTICE:  CREATE TABLE / EXCLUDE will create implicit index "ob_tstock_own_np_type_excl" for table "ob_tstock"
 comment on table ob_tstock is 'description of values';
 comment on column ob_tstock.own is 'refers to the owner';
 comment on column ob_tstock.qtt is 'quantity of the value';
@@ -252,8 +219,8 @@ create table ob_tnoeud ( -- bid
     qtt_requ int8, 
     PRIMARY KEY (id)
 );
-psql:sql/model.sql:226: NOTICE:  CREATE TABLE will create implicit sequence "ob_tnoeud_id_seq" for serial column "ob_tnoeud.id"
-psql:sql/model.sql:226: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tnoeud_pkey" for table "ob_tnoeud"
+psql:sql/model.sql:194: NOTICE:  CREATE TABLE will create implicit sequence "ob_tnoeud_id_seq" for serial column "ob_tnoeud.id"
+psql:sql/model.sql:194: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tnoeud_pkey" for table "ob_tnoeud"
 comment on table ob_tnoeud is 'description of bids';
 comment on column ob_tnoeud.sid is 'refers to the stock offered';
 comment on column ob_tnoeud.nr is 'refers to quality required';
@@ -300,8 +267,8 @@ create table ob_tdraft (
     delay int8, 
     PRIMARY KEY(id)
 );
-psql:sql/model.sql:273: NOTICE:  CREATE TABLE will create implicit sequence "ob_tdraft_id_seq" for serial column "ob_tdraft.id"
-psql:sql/model.sql:273: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tdraft_pkey" for table "ob_tdraft"
+psql:sql/model.sql:241: NOTICE:  CREATE TABLE will create implicit sequence "ob_tdraft_id_seq" for serial column "ob_tdraft.id"
+psql:sql/model.sql:241: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tdraft_pkey" for table "ob_tdraft"
 comment on table ob_tdraft is 'description of draft agreements';
 SELECT _reference_time('ob_tdraft');
  _reference_time 
@@ -330,8 +297,8 @@ create table ob_tcommit (
 			-- [2] exhausted: stock.qtt=fluxarrondi for sid
 	PRIMARY KEY(id)
 );
-psql:sql/model.sql:297: NOTICE:  CREATE TABLE will create implicit sequence "ob_tcommit_id_seq" for serial column "ob_tcommit.id"
-psql:sql/model.sql:297: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tcommit_pkey" for table "ob_tcommit"
+psql:sql/model.sql:265: NOTICE:  CREATE TABLE will create implicit sequence "ob_tcommit_id_seq" for serial column "ob_tcommit.id"
+psql:sql/model.sql:265: NOTICE:  CREATE TABLE / PRIMARY KEY will create implicit index "ob_tcommit_pkey" for table "ob_tcommit"
 comment on table ob_tcommit is 
 'description of an element of the draft agreement refered by ob_tcommit.did';
 comment on column ob_tcommit.did is 'refers to the draft containing this commit';
@@ -366,8 +333,8 @@ create table ob_tmvt (
 	nat int8 references ob_tquality(id) 
 		on update cascade on delete cascade not null
 );
-psql:sql/model.sql:333: NOTICE:  CREATE TABLE will create implicit sequence "ob_tmvt_id_seq" for serial column "ob_tmvt.id"
-psql:sql/model.sql:333: NOTICE:  CREATE TABLE / UNIQUE will create implicit index "ob_tmvt_id_key" for table "ob_tmvt"
+psql:sql/model.sql:301: NOTICE:  CREATE TABLE will create implicit sequence "ob_tmvt_id_seq" for serial column "ob_tmvt.id"
+psql:sql/model.sql:301: NOTICE:  CREATE TABLE / UNIQUE will create implicit index "ob_tmvt_id_key" for table "ob_tmvt"
 comment on table ob_tmvt is 
 'records a change of ownership';
 comment on column ob_tmvt.did is 
@@ -619,9 +586,7 @@ DECLARE
 	_draft ob_tdraft%rowtype;
 	res int;
 	_user text;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	ret.created := statement_timestamp();
 	
 	-- mean time of draft
@@ -711,9 +676,7 @@ DECLARE
 	_wid int8;
 	_q  ob_tquality%rowtype;
 	_id_mvt int8;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	_q := ob_fupdate_quality(_quality,_qtt,true);
 	
 	BEGIN
@@ -758,9 +721,7 @@ DECLARE
 	mar ob_tstock%rowtype;
 	mvt ob_tmvt%rowtype;
 	_q ob_tquality%rowtype;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	SELECT s.* INTO acc FROM ob_tstock s,ob_tquality q,ob_towner w
 		WHERE q.name=_quality 
 		AND w.name= _owner 
@@ -969,9 +930,7 @@ DECLARE
 	_commot		ob_tcommit%rowtype;
 	_accepted	int4; 
 	_res 		int;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	_draft := ob_acquires_locks_draft(draft_id);
 	IF(_draft IS NULL) THEN
 		RAISE NOTICE '[-30422] The draft % has not the status Draft or does not exist',draft_id;
@@ -1173,9 +1132,7 @@ DECLARE
 	_owner	 ob_towner%rowtype;
 	_res	int;
 	_draft ob_tdraft%rowtype;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	_draft := ob_acquires_locks_draft(draft_id);
 	IF(_draft IS NULL) THEN
 		RAISE NOTICE '[-30422] The draft % has not the status Draft or does not exist',draft_id;
@@ -1286,9 +1243,7 @@ DECLARE
 	_own		ob_towner%rowtype;
 	_id		int8;
 	_ret		int;
-	_x 		int;
 BEGIN
-	_x := ob_fcan_exec();
 	SELECT s.* INTO _stock FROM ob_tstock s,ob_tnoeud n
 		WHERE s.id=n.sid AND n.id=bid_id 
 		FOR UPDATE;
@@ -1353,9 +1308,7 @@ DECLARE
 	noeud	ob_tnoeud%rowtype;
 	cnt 		int;
 	stock 	ob_tstock%rowtype;
-	_x 	int;
 BEGIN
-	_x := ob_fcan_exec();
 	SELECT n.* INTO noeud FROM ob_tnoeud n 
 		WHERE n.id = bid_id;
 	IF NOT FOUND THEN
@@ -1400,9 +1353,7 @@ DECLARE
 	_stock 	ob_tstock%rowtype;
 	_m	ob_tstock%rowtype;
 	_user text;
-	_x 	int;
 BEGIN
-	_x := ob_fcan_exec();
 	-- controls
 	SELECT s.* INTO _stock FROM ob_tstock s 
 		INNER JOIN ob_towner w ON (w.id=s.own ) 
@@ -1569,18 +1520,18 @@ $$ LANGUAGE PLPGSQL;
 -- finsert_bid_int 	getdraft_get(pivot.id,_omega,pivot.nf,_nr)
 create extension flow;
 /*--------------------------------------------------------------------------------
-read omega, returns setof array(flowr[dim-1],flowr[0])
+read omega, returns setof (num int8,qtt_r int8,nr int8,qtt_p int8,np int8)
 -------------------------------------------------------------------------------*/
-CREATE FUNCTION ob_get_omegas(_nr int8,_np int8) RETURNS SETOF int8[] AS $$
+CREATE FUNCTION ob_get_omegas(_nr int8,_np int8) RETURNS SETOF __flow_to_commits AS $$
 DECLARE 
 	_FLOWNULL flow := '[]'::flow;
 
-	_idPivot int8 := 0;
+	_num int8 := 0;
 	_sidPivot int8 := 0;
 	_maxDepth int;
-	_x int;
+	_flow	flow;
+	_commit	__flow_to_commits;
 BEGIN
-	_x := ob_fcan_exec();
 	_maxDepth := ob_create_tmp(_nr);
 	
 	IF (_maxDepth is NULL or _maxDepth = 0) THEN
@@ -1589,7 +1540,15 @@ BEGIN
 	-- insert the pivot
 	INSERT INTO _tmp (id,sid,   nr,qtt_prov,qtt_requ,own,qtt,np, flow,     valid,depth) VALUES
 			 (0 ,  0,  _nr,1,       1,       0,  1,  _np,_FLOWNULL,0,1);
-	RETURN QUERY SELECT flow_get_fim1_fi(ob_fget_flows,0) FROM ob_fget_flows(_np,_maxDepth);
+	FOR _flow IN SELECT ob_fget_flows FROM ob_fget_flows(_np,_maxDepth) LOOP
+		FOR _commit IN SELECT * FROM flow_to_commits(_flow) LOOP
+			_num := _num+1;
+			_commit.num := _num;
+			RETURN NEXT _commit;
+		END LOOP;	
+	END LOOP;
+	RETURN;	 
+	-- RETURN QUERY SELECT flow_to_commits(ob_fget_flows) FROM ob_fget_flows(_np,_maxDepth);
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION ob_get_omegas(int8,int8)  TO market;
@@ -1600,9 +1559,7 @@ CREATE FUNCTION ob_get_drafts(_spivot ob_tstock,_nr int8,_qtt_prov int8,_qtt_req
 DECLARE 
 	_FLOWNULL flow := '[]'::flow;
 	_maxDepth int;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	_maxDepth := ob_create_tmp(_nr);
 	
 	IF (_maxDepth is NULL or _maxDepth = 0) THEN
@@ -1780,40 +1737,55 @@ insert into ob_tnoeud (sid,nr,qtt_prov,qtt_requ) values
 -- bid: 1  2  3  4
 -- ob_get_omegas(_nr int8,_np int8) RETURNS SETOF int8[]
 select ob_get_omegas(4,5); -- {100,100}
- ob_get_omegas 
----------------
- {100,100}
-(1 row)
+  ob_get_omegas  
+-----------------
+ (1,1,5,100,1)
+ (2,100,1,200,2)
+ (3,200,2,300,3)
+ (4,300,3,400,4)
+ (5,400,4,1,5)
+(5 rows)
 
 select ob_get_omegas(4,1); -- {200,200}
- ob_get_omegas 
----------------
- {200,200}
-(1 row)
+  ob_get_omegas  
+-----------------
+ (1,1,1,200,2)
+ (2,200,2,300,3)
+ (3,300,3,400,4)
+ (4,400,4,1,1)
+(4 rows)
 
 select ob_get_omegas(4,2); -- {300,300}
- ob_get_omegas 
----------------
- {300,300}
-(1 row)
+  ob_get_omegas  
+-----------------
+ (1,1,2,300,3)
+ (2,300,3,400,4)
+ (3,400,4,1,2)
+(3 rows)
 
 select ob_get_omegas(4,3); -- {400,400}
  ob_get_omegas 
 ---------------
- {400,400}
-(1 row)
+ (1,1,3,400,4)
+ (2,400,4,1,3)
+(2 rows)
 
 select ob_get_omegas(3,5); -- {100,100} -- pb
- ob_get_omegas 
----------------
- {100,100}
-(1 row)
+  ob_get_omegas  
+-----------------
+ (1,1,5,100,1)
+ (2,100,1,200,2)
+ (3,200,2,300,3)
+ (4,300,3,1,5)
+(4 rows)
 
 select ob_get_omegas(3,1); -- {200,200}
- ob_get_omegas 
----------------
- {200,200}
-(1 row)
+  ob_get_omegas  
+-----------------
+ (1,1,1,200,2)
+ (2,200,2,300,3)
+ (3,300,3,1,1)
+(3 rows)
 
 select ob_get_omegas(300,1); -- not results
  ob_get_omegas 

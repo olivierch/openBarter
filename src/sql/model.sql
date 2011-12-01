@@ -23,7 +23,7 @@ create table ob_tconst(
     	UNIQUE(name)
 );
 INSERT INTO ob_tconst (name,value) VALUES ('obCMAXCYCLE',8);
-INSERT INTO ob_tconst (name,value) VALUES ('MAINTENANCE',0);
+
 CREATE FUNCTION ob_get_const(_name text) RETURNS int AS $$
 DECLARE
 	_ret text;
@@ -34,38 +34,6 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION ob_get_const(text) TO market;
 --------------------------------------------------------------------------------
-CREATE FUNCTION ob_fset_maintenance(_b bool) RETURNS void AS $$
-DECLARE
-	_v int;
-BEGIN
-	IF(_b) THEN 
-		IF(ob_get_const('MAINTENANCE')=1) THEN
-			RAISE INFO 'Already in maintenance mode';
-		END IF;
-		_v=1;
-	ELSE 
-		IF(ob_get_const('MAINTENANCE')=0) THEN
-			RAISE INFO 'Already in non maintenance mode';
-		END IF;
-		_v= 0;
-	END IF;
-	UPDATE ob_tconst SET value=_v WHERE name='MAINTENANCE';
-	RETURN;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION ob_fset_maintenance(bool) TO market;
---------------------------------------------------------------------------------
-CREATE FUNCTION ob_fcan_exec() RETURNS int AS $$
-DECLARE
-	_v int;
-BEGIN
-	SELECT value INTO _v FROM ob_tconst WHERE name='MAINTENANCE';
-	IF(_v = 1) THEN 
-		RAISE EXCEPTION 'Maitenance in process';
-	ELSE RETURN 1;
-	END IF;
-END; 
-$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- ob_ftime_updated 
@@ -589,9 +557,7 @@ DECLARE
 	_draft ob_tdraft%rowtype;
 	res int;
 	_user text;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	ret.created := statement_timestamp();
 	
 	-- mean time of draft
@@ -682,9 +648,7 @@ DECLARE
 	_wid int8;
 	_q  ob_tquality%rowtype;
 	_id_mvt int8;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	_q := ob_fupdate_quality(_quality,_qtt,true);
 	
 	BEGIN
@@ -730,9 +694,7 @@ DECLARE
 	mar ob_tstock%rowtype;
 	mvt ob_tmvt%rowtype;
 	_q ob_tquality%rowtype;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	SELECT s.* INTO acc FROM ob_tstock s,ob_tquality q,ob_towner w
 		WHERE q.name=_quality 
 		AND w.name= _owner 
@@ -944,9 +906,7 @@ DECLARE
 	_commot		ob_tcommit%rowtype;
 	_accepted	int4; 
 	_res 		int;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	_draft := ob_acquires_locks_draft(draft_id);
 	IF(_draft IS NULL) THEN
 		RAISE NOTICE '[-30422] The draft % has not the status Draft or does not exist',draft_id;
@@ -1152,9 +1112,7 @@ DECLARE
 	_owner	 ob_towner%rowtype;
 	_res	int;
 	_draft ob_tdraft%rowtype;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	_draft := ob_acquires_locks_draft(draft_id);
 	IF(_draft IS NULL) THEN
 		RAISE NOTICE '[-30422] The draft % has not the status Draft or does not exist',draft_id;
@@ -1265,9 +1223,7 @@ DECLARE
 	_own		ob_towner%rowtype;
 	_id		int8;
 	_ret		int;
-	_x 		int;
 BEGIN
-	_x := ob_fcan_exec();
 	SELECT s.* INTO _stock FROM ob_tstock s,ob_tnoeud n
 		WHERE s.id=n.sid AND n.id=bid_id 
 		FOR UPDATE;
@@ -1333,9 +1289,7 @@ DECLARE
 	noeud	ob_tnoeud%rowtype;
 	cnt 		int;
 	stock 	ob_tstock%rowtype;
-	_x 	int;
 BEGIN
-	_x := ob_fcan_exec();
 	SELECT n.* INTO noeud FROM ob_tnoeud n 
 		WHERE n.id = bid_id;
 	IF NOT FOUND THEN
@@ -1380,9 +1334,7 @@ DECLARE
 	_stock 	ob_tstock%rowtype;
 	_m	ob_tstock%rowtype;
 	_user text;
-	_x 	int;
 BEGIN
-	_x := ob_fcan_exec();
 	-- controls
 	SELECT s.* INTO _stock FROM ob_tstock s 
 		INNER JOIN ob_towner w ON (w.id=s.own ) 
@@ -1555,18 +1507,18 @@ $$ LANGUAGE PLPGSQL;
 create extension flow;
 
 /*--------------------------------------------------------------------------------
-read omega, returns setof array(flowr[dim-1],flowr[0])
+read omega, returns setof (num int8,qtt_r int8,nr int8,qtt_p int8,np int8)
 -------------------------------------------------------------------------------*/
-CREATE FUNCTION ob_get_omegas(_nr int8,_np int8) RETURNS SETOF int8[] AS $$
+CREATE FUNCTION ob_get_omegas(_nr int8,_np int8) RETURNS SETOF __flow_to_commits AS $$
 DECLARE 
 	_FLOWNULL flow := '[]'::flow;
 
-	_idPivot int8 := 0;
+	_num int8 := 0;
 	_sidPivot int8 := 0;
 	_maxDepth int;
-	_x int;
+	_flow	flow;
+	_commit	__flow_to_commits;
 BEGIN
-	_x := ob_fcan_exec();
 	_maxDepth := ob_create_tmp(_nr);
 	
 	IF (_maxDepth is NULL or _maxDepth = 0) THEN
@@ -1575,7 +1527,15 @@ BEGIN
 	-- insert the pivot
 	INSERT INTO _tmp (id,sid,   nr,qtt_prov,qtt_requ,own,qtt,np, flow,     valid,depth) VALUES
 			 (0 ,  0,  _nr,1,       1,       0,  1,  _np,_FLOWNULL,0,1);
-	RETURN QUERY SELECT flow_get_fim1_fi(ob_fget_flows,0) FROM ob_fget_flows(_np,_maxDepth);
+	FOR _flow IN SELECT ob_fget_flows FROM ob_fget_flows(_np,_maxDepth) LOOP
+		FOR _commit IN SELECT * FROM flow_to_commits(_flow) LOOP
+			_num := _num+1;
+			_commit.num := _num;
+			RETURN NEXT _commit;
+		END LOOP;	
+	END LOOP;
+	RETURN;	 
+	-- RETURN QUERY SELECT flow_to_commits(ob_fget_flows) FROM ob_fget_flows(_np,_maxDepth);
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION ob_get_omegas(int8,int8)  TO market;
@@ -1587,9 +1547,7 @@ CREATE FUNCTION ob_get_drafts(_spivot ob_tstock,_nr int8,_qtt_prov int8,_qtt_req
 DECLARE 
 	_FLOWNULL flow := '[]'::flow;
 	_maxDepth int;
-	_x int;
 BEGIN
-	_x := ob_fcan_exec();
 	_maxDepth := ob_create_tmp(_nr);
 	
 	IF (_maxDepth is NULL or _maxDepth = 0) THEN

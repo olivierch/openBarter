@@ -82,7 +82,7 @@ static FTCOMMIT *_flowFtCommit(NDFLOW * flow);
 char *flow_statusBoxToStr (NDFLOW *box);
 // memory allocation of NDFLOW
 static NDFLOW * Ndbox_init(int dim);
-NDFLOW *Ndbox_adjust(NDFLOW *box);
+static NDFLOW *Ndbox_adjust(NDFLOW *box);
 
 // init
 void		_PG_init(void);
@@ -444,7 +444,7 @@ flow_proj(PG_FUNCTION_ARGS)
 	/* now build the array */
 	result = construct_md_array(_datum_out, isnull, ndims, dims, lbs,
 		                INT8OID, typlen, typbyval, typalign);
-
+	PG_FREE_IF_COPY(box,0);
 	PG_RETURN_ARRAYTYPE_P(result);
 }
 
@@ -465,6 +465,7 @@ Datum flow_status(PG_FUNCTION_ARGS)
 				errmsg("flow_status: with flow=NULL")));	
 	c = PG_GETARG_NDFLOW(0);
 	_strStatus = flow_statusBoxToStr(c);
+	PG_FREE_IF_COPY(c,0);
 	PG_RETURN_CSTRING(_strStatus);
 }
 
@@ -483,6 +484,7 @@ Datum flow_omega(PG_FUNCTION_ARGS)
 				errmsg("flow_omega: with flow=NULL")));	
 	c = PG_GETARG_NDFLOW(0);
 	_omega = flowc_getProdOmega(c);
+	PG_FREE_IF_COPY(c,0);
 	PG_RETURN_FLOAT8(_omega);
 }
 /* FUNCTION flow_omega(flow flow,qtt_prov int8,qtt_recu int8) RETURNS float8
@@ -505,6 +507,7 @@ Datum flow_omegax(PG_FUNCTION_ARGS)
 		
 	_omega = flowc_getProdOmega(c);
 	_omega *= ((double)qtt_prov) / ((double)qtt_requ);
+	PG_FREE_IF_COPY(c,0);
 	PG_RETURN_FLOAT8(_omega);
 }
 /* FUNCTION flow_omegay(Y.flow flow,X.flow flow,qtt_prov int8,qtt_requ int8) RETURNS bool
@@ -554,6 +557,7 @@ Datum flow_provides(PG_FUNCTION_ARGS)
 		_np = 0;
 	else
 		_np = c->x[c->dim-1].np;
+	PG_FREE_IF_COPY(c,0);
 	PG_RETURN_INT64(_np);
 }
 
@@ -570,6 +574,7 @@ Datum flow_dim(PG_FUNCTION_ARGS)
 	c = PG_GETARG_NDFLOW(0);
 	
 	_dim = ((int32)(c->dim));
+	PG_FREE_IF_COPY(c,0);
 	PG_RETURN_INT32(_dim);
 }
 /* returns ARRAY(x[i-1].flowr,x[i].flowr) */
@@ -613,7 +618,7 @@ Datum flow_get_fim1_fi(PG_FUNCTION_ARGS)
 	/* now build the array */
 	result = construct_md_array(_datum_out, _null_out, ndims, dims, lbs,
 		                INT8OID, typlen, typbyval, typalign);
-
+	PG_FREE_IF_COPY(box,0);
 	PG_RETURN_ARRAYTYPE_P(result);
 }
 
@@ -681,7 +686,7 @@ Datum flow_to_matrix(PG_FUNCTION_ARGS)
 	/* now build the array */
 	result = construct_md_array(_datum_out, _null_out, ndims, dims, lbs,
 		                INT8OID, typlen, typbyval, typalign);
-
+	PG_FREE_IF_COPY(box,0);
 	PG_RETURN_ARRAYTYPE_P(result);
 }
 
@@ -700,7 +705,7 @@ static NDFLOW * Ndbox_init(int dim) {
 	return box;
 }
 
-NDFLOW *Ndbox_adjust(NDFLOW *box) {
+static NDFLOW *Ndbox_adjust(NDFLOW *box) {
 	int 	size;
 	NDFLOW	*newbox;
 
@@ -806,23 +811,25 @@ Datum flow_to_commits(PG_FUNCTION_ARGS) {
 		HeapTuple tuple;
 		Datum 	result;
 		int	_k;
+		//char	*zero= "0";
 
-		values = (char **) palloc(4 * sizeof(char *));
-		obMRange (_k,4) {
+		values = (char **) palloc(5 * sizeof(char *));
+		obMRange (_k,5) {
 			values[_k] = (char *) palloc(32 * sizeof(char));
 		}
-		
-		snprintf(values[0],32,"%lli",ftc->c[call_cntr].qtt_r);
-		snprintf(values[1],32,"%lli",ftc->c[call_cntr].nr);
-		snprintf(values[2],32,"%lli",ftc->c[call_cntr].qtt_p);
-		snprintf(values[3],32,"%lli",ftc->c[call_cntr].np);
+		//values[0] = zero;
+		snprintf(values[0],32,"%lli",0LL);
+		snprintf(values[1],32,"%lli",ftc->c[call_cntr].qtt_r);
+		snprintf(values[2],32,"%lli",ftc->c[call_cntr].nr);
+		snprintf(values[3],32,"%lli",ftc->c[call_cntr].qtt_p);
+		snprintf(values[4],32,"%lli",ftc->c[call_cntr].np);
 		
 
 		tuple = BuildTupleFromCStrings(attinmeta, values);
 		/* make the tuple into a datum */
 		result = HeapTupleGetDatum(tuple);
 		/* clean up (this is not really necessary) */
-		obMRange (_k,4) pfree(values[_k]);
+		obMRange (_k,5) pfree(values[_k]);
 		pfree(values);
 		
 		SRF_RETURN_NEXT(funcctx, result);
