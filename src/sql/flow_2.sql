@@ -17,5 +17,5 @@ select ob_fget_omegas(3,5); -- {100,100} -- pb
 select ob_fget_omegas(3,1); -- {200,200}
 select ob_fget_omegas(300,1); -- not results
 
-truncate ob_tquality cascade;
+-- truncate ob_tquality cascade;
 
