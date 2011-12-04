@@ -56,6 +56,7 @@ PG_FUNCTION_INFO_V1(flow_cat);
 PG_FUNCTION_INFO_V1(flow_init);
 PG_FUNCTION_INFO_V1(flow_omegay);
 PG_FUNCTION_INFO_V1(flow_to_commits);
+// PG_FUNCTION_INFO_V1(flow_testb);
 
 Datum flow_in(PG_FUNCTION_ARGS);
 Datum flow_out(PG_FUNCTION_ARGS);
@@ -74,6 +75,7 @@ Datum flow_cat(PG_FUNCTION_ARGS);
 Datum flow_init(PG_FUNCTION_ARGS);
 Datum flow_omegay(PG_FUNCTION_ARGS);
 Datum flow_to_commits(PG_FUNCTION_ARGS);
+//Datum flow_testb(PG_FUNCTION_ARGS);
 
 static FTCOMMIT *_flowFtCommit(NDFLOW * flow);
 
@@ -258,33 +260,15 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 	int 	dim;
 	int64	id;
 	
-	if( PG_ARGISNULL(0)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7)|| PG_ARGISNULL(8) || PG_ARGISNULL(9))
+	if( PG_ARGISNULL(0) || PG_ARGISNULL(1)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7)|| PG_ARGISNULL(8) || PG_ARGISNULL(9))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_cat: with at least one argument NULL")));
 	
 	id = PG_GETARG_INT64(2);
-	if(PG_ARGISNULL(1)) {
-		result = Ndbox_init(1);	
-		result->dim = 1;
-		bid = &result->x[0];
-
-		bid->id 	= id;
-		bid->nr 	= PG_GETARG_INT64(3);
-		bid->qtt_prov 	= PG_GETARG_INT64(4);
-		bid->qtt_requ 	= PG_GETARG_INT64(5);
-		bid->sid 	= PG_GETARG_INT64(6);
-		bid->own 	= PG_GETARG_INT64(7);
-		bid->qtt 	= PG_GETARG_INT64(8);
-		bid->np 	= PG_GETARG_INT64(9); 
-		
-		goto end;
-	}
 	
 	c = PG_GETARG_NDFLOW(1);
-	//elog(WARNING,"flow_cat: input %s",flow_ndboxToStr(c,true));
-
-			
+	//elog(WARNING,"flow_cat: input %s",flow_ndboxToStr(c,true));		
 
 	result = Ndbox_init(FLOW_MAX_DIM);
 	if(flowc_idInBox(c,id)) {
@@ -327,7 +311,7 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 	}
 	
 	PG_FREE_IF_COPY(c, 1);
-end:
+
 	result = Ndbox_adjust(result);
 	PG_RETURN_NDFLOW(result);
 }
@@ -522,13 +506,10 @@ Datum flow_omegay(PG_FUNCTION_ARGS)
 	int64	qtt_requ;
 	double 	_omegaX,_omegaY;
 
-	if( PG_ARGISNULL(2) || PG_ARGISNULL(3))
+	if( PG_ARGISNULL(0) ||PG_ARGISNULL(1) ||PG_ARGISNULL(2) || PG_ARGISNULL(3))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_omegax: called with one argument NULL")));
-				
-	if(PG_ARGISNULL(0)) PG_RETURN_BOOL(true);
-	if(PG_ARGISNULL(1)) PG_RETURN_BOOL(false);
 				
 	Y = PG_GETARG_NDFLOW(0);
 	X = PG_GETARG_NDFLOW(1);	
@@ -540,9 +521,23 @@ Datum flow_omegay(PG_FUNCTION_ARGS)
 
 	PG_FREE_IF_COPY(Y, 0);
 	PG_FREE_IF_COPY(X, 1);
+	//elog(WARNING,"flow_omegay:  returns ????");
 	PG_RETURN_BOOL(_omegaY < _omegaX);
 }
-
+/*
+Datum flow_testb(PG_FUNCTION_ARGS)
+{
+	bool	b;
+	
+	if(PG_ARGISNULL(0)) {
+		elog(WARNING,"flow_testb");
+		PG_RETURN_BOOL(true);
+	}	
+	b = PG_GETARG_BOOL(0);
+	
+	PG_RETURN_BOOL(b);
+}
+*/
 Datum flow_provides(PG_FUNCTION_ARGS)
 {
 	NDFLOW	*c;

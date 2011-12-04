@@ -1452,7 +1452,7 @@ BEGIN
 	_time_begin := clock_timestamp();
 	-- _commits := ARRAY[]::int8[];
 	/*-- RAISE INFO 'ob_getdraft_get(%,%,%,%)',pivot.id,_omega,pivot.nf,_nr; */
-	FOR _matrix IN SELECT * FROM ob_get_drafts(_spivot,_nr,_qttprovided,_qttrequired) LOOP
+	FOR _matrix IN SELECT * FROM ob_fget_drafts(_spivot,_nr,_qttprovided,_qttrequired) LOOP
 		
 		_nbcommit := array_upper(_matrix,1); 
 		INSERT INTO ob_tdraft (status,nbnoeud) 
@@ -1524,8 +1524,6 @@ read omega, returns setof (num int8,qtt_r int8,nr int8,qtt_p int8,np int8)
 -------------------------------------------------------------------------------*/
 CREATE FUNCTION ob_fget_omegas(_nr int8,_np int8) RETURNS SETOF __flow_to_commits AS $$
 DECLARE 
-	_FLOWNULL flow := '[]'::flow;
-
 	_num int8 := 0;
 	_sidPivot int8 := 0;
 	_maxDepth int;
@@ -1539,7 +1537,7 @@ BEGIN
 	END IF;
 	-- insert the pivot
 	INSERT INTO _tmp (id,sid,   nr,qtt_prov,qtt_requ,own,qtt,np, flow,     valid,depth) VALUES
-			 (0 ,  0,  _nr,1,       1,       0,  1,  _np,_FLOWNULL,0,1);
+			 (0 ,  0,  _nr,1,       1,       0,  1,  _np,NULL::flow,0,1);
 	FOR _flow IN SELECT ob_fget_flows FROM ob_fget_flows(_np,_maxDepth) LOOP
 		FOR _commit IN SELECT * FROM flow_to_commits(_flow) LOOP
 			_num := _num+1;
@@ -1555,9 +1553,8 @@ GRANT EXECUTE ON FUNCTION ob_fget_omegas(int8,int8)  TO market;
 /*--------------------------------------------------------------------------------
 read omega, returns setof flow_to_matrix(flow)
 --------------------------------------------------------------------------------*/
-CREATE FUNCTION ob_get_drafts(_spivot ob_tstock,_nr int8,_qtt_prov int8,_qtt_requ int8) RETURNS SETOF int8[] AS $$
+CREATE FUNCTION ob_fget_drafts(_spivot ob_tstock,_nr int8,_qtt_prov int8,_qtt_requ int8) RETURNS SETOF int8[] AS $$
 DECLARE 
-	_FLOWNULL flow := '[]'::flow;
 	_maxDepth int;
 BEGIN
 	_maxDepth := ob_fcreate_tmp(_nr);
@@ -1567,7 +1564,7 @@ BEGIN
 	END IF;
 	-- insert the pivot
 	INSERT INTO _tmp (id,      sid, nr, qtt_prov, qtt_requ,        own,        qtt,        np,     flow,valid,depth) VALUES
-			 (0 ,_spivot.id,_nr,_qtt_prov,_qtt_requ,_spivot.own,_spivot.qtt,_spivot.np,_FLOWNULL,    0,    1);
+			 (0 ,_spivot.id,_nr,_qtt_prov,_qtt_requ,_spivot.own,_spivot.qtt,_spivot.np,NULL::flow,    0,    1);
 	RETURN QUERY SELECT flow_to_matrix(ob_fget_flows) FROM ob_fget_flows(_spivot.np,_maxDepth);
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -1578,7 +1575,6 @@ CREATE FUNCTION ob_fcreate_tmp(_nr int8) RETURNS int AS $$
 DECLARE 
 	_obCMAXCYCLE int := ob_get_const('obCMAXCYCLE');
 	_maxDepth int;
-	_FLOWNULL flow := '[]'::flow;
 BEGIN
 	CREATE TEMP TABLE _tmp ON COMMIT DROP AS (
 		WITH RECURSIVE search_backward(id,sid,nr,qtt_prov,qtt_requ,refused,
@@ -1615,8 +1611,7 @@ $$ LANGUAGE PLPGSQL;
 CREATE FUNCTION ob_fget_flows(_np int8,_maxDepth int) RETURNS SETOF flow AS $$
 DECLARE 
 	_cnt int;
-	_cntgraph int :=0;
-	_FLOWNULL flow := '[]'::flow;
+	_cntgraph int :=0; 
 	_flow flow;
 	_idPivot int8 := 0;
 BEGIN
@@ -1645,7 +1640,7 @@ the graph is traversed forward to be reduced
 		UPDATE _tmp t 
 		SET flow = CASE WHEN _np = t.nr -- source
 				THEN flow_init(t.id,t.nr,t.qtt_prov,t.qtt_requ,t.sid,t.own,t.qtt,t.np) 
-				ELSE _FLOWNULL END,
+				ELSE NULL::flow END,
 			valid = _cntgraph
 		FROM search_forward sf WHERE t.id = sf.id;
 		
@@ -1673,24 +1668,30 @@ _obCMAXCYCLE times.
 
 		FOR _cnt IN 1 .. _maxDepth LOOP
 			UPDATE _tmp Y 
-			SET flow = flow_cat(Y.flow,X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.sid,Y.own,Y.qtt,Y.np) 
-			-- Z<-X.flow+Y.bid
-			-- if(Z) Y.flow<-Z else Y.flow<- Y.flow	
+			SET flow = flow_cat(
+				CASE WHEN Y.flow IS NULL THEN '[]'::flow ELSE Y.flow END
+				,X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.sid,Y.own,Y.qtt,Y.np) 
+			-- Y.flow = flow_cat(Y.flow,X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.sid,Y.own,Y.qtt,Y.np)
+			-- 	Z<-X.flow+Y.bid
+			-- 	if(solution Z found) Y.flow<-Z else Y.flow<- Y.flow	
 			FROM _tmp X WHERE 
 				X.np  = Y.nr  
 				AND X.id != _idPivot -- arcs pivot->sources are not considered
-				AND flow_dim(X.flow) > 0
-				AND flow_omegay(Y.flow,X.flow,Y.qtt_prov,Y.qtt_requ);
-				-- omega(Y.flow) < omega(X.flow)*Y.qtt_prov/Y.qtt_requ
+				AND  X.flow IS NOT NULL 
+				AND ( Y.flow IS NULL 
+					OR flow_omegay(Y.flow,X.flow,Y.qtt_prov,Y.qtt_requ)
+				);
+				-- flow_omegay(Y.flow,X.flow,Y.qtt_prov,Y.qtt_requ)
+				--      omega(Y.flow) < omega(X.flow)*Y.qtt_prov/Y.qtt_requ
+
 		END LOOP;
-		
+
 		-- flow of pivot
 		SELECT flow INTO _flow FROM _tmp WHERE id = _idPivot; 
-		-- EXIT WHEN _flow IS NULL;
-		EXIT WHEN flow_dim(_flow) = 0;
+		
+		EXIT WHEN _flow IS NULL OR flow_dim(_flow) = 0;
 		
 		RETURN NEXT _flow; -- new row returned
-		
 		
 		-- values used by this flow are substracted from _tmp
 		DECLARE
@@ -1703,7 +1704,6 @@ _obCMAXCYCLE times.
 			_flowrs := flow_proj(_flow,9);
 			_sids   := flow_proj(_flow,5);
 			_dim    := flow_dim(_flow) - 1;
-			-- RAISE NOTICE '_cntgraph=% dim=% ',_cntgraph,_dim+1;
 			-- the pivot is not considered
 			FOR _cnt IN 1 .. _dim LOOP
 				_flowr := _flowrs[_cnt];
