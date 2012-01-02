@@ -57,18 +57,23 @@
 <h2>Installation</h2>
 <p>Create a database and connect to it with a special user that will be the owner of the model and should not be used later. The extension does not depend of any database name or schema name. For illustration, we choosed <tt>dbob</tt> for the name of the database, and <tt>actor</tt> for the new user that will be allowed to use the extension.</p>
 <div class="content"><pre>
-<tt>dbob# CREATE EXTENSION flow;</tt>
 <tt>dbob# \i sql/model.sql</tt>
-<tt>dbob# CREATE ROLE actor WITH ROLE market LOGIN;</tt>
+<tt>dbob# CREATE ROLE actor WITH LOGIN;</tt>
+<tt>dbob# GRANT market TO actor;</tt>
 </pre></div>
-<p>These commands create the extension, the model and a special role <tt>market</tt>. functions and tables can be displayed with the commands <tt>\df</tt> and <tt>\dt</tt>.</p>
+<p>These commands create the extension <tt>flow</tt>, the model and a special role <tt>market</tt>. functions and tables can be displayed with the commands <tt>\df</tt> and <tt>\dt</tt>.</p>
 <h2>Usage</h2>
-<p>Reconnect to <tt>dbob</tt> with the user <tt>actor</tt>.</p>
+<p>Reconnect to <tt>dbob</tt> with the user <tt>actor</tt>:</p>
+<div class="content"><pre>
+<tt>$ psql -ddbob -Uactor</tt>
+</pre></div>
 <h3>Add to or remove a resource from an account</h3>
 <div class="content"><pre>
 <tt>SELECT ob_fadd_account('luc','Iron',100);</tt>
 <tt>SELECT * from ob_vowned;</tt>
 </pre></div>
+
+
 
 
 
