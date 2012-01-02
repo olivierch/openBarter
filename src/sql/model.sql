@@ -87,8 +87,21 @@ BEGIN
 	RETURN 0;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
+/*
+--------------------------------------------------------------------------------
+-- 
+--------------------------------------------------------------------------------
+CREATE FUNCTION _grant_exec(_public bool,_funct text) RETURNS int AS $$
 
-
+BEGIN
+	EXECUTE 'REVOKE ALL ON FUNCTION ' || _funct || ' FROM public' ; 
+	IF(_public) THEN
+		EXECUTE 'GRANT EXECUTE ON FUNCTION ' || _funct || ' TO market';
+	END IF;
+	RETURN 0;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+*/
 
 CREATE FUNCTION _reference_time(_table text) RETURNS int AS $$
 DECLARE
@@ -119,6 +132,7 @@ comment on table ob_tquality is
 alter sequence ob_tquality_id_seq owned by ob_tquality.id;
 create index tquality_name_idx on ob_tquality(name);
 SELECT _reference_time('ob_tquality');
+\copy ob_tquality (name) from data/ISO4217.data
 
 	
 --------------------------------------------------------------------------------
@@ -618,9 +632,11 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION ob_fstats() TO market;
+
 CREATE FUNCTION ob_fget_errs() RETURNS bigint AS $$
 select (unbalanced_qualities+corrupted_draft+corrupted_stock_s+corrupted_stock_a) AS result from ob_fstats();
 $$ LANGUAGE SQL;
+
 
 --------------------------------------------------------------------------------
 -- ob_fadd_account 
