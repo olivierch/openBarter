@@ -6,11 +6,12 @@ OBJS= flow.o flowparse.o flowc.o
 EXTENSION = flow
 DATA = flow--1.0.sql flow--unpackaged--1.0.sql
 
-REGRESS = flow_1 flow_2 flow_3 flow_4
+REGRESS = flow_1 flow_2
+# flow_2 flow_3 flow_4
 
 EXTRA_CLEAN = y.tab.c y.tab.h
 
-SHLIB_LINK += $(filter -lm, $(LIBS))
+SHLIB_LINK += $(filter -lm, $(LIBS)) `uuid-config --libs`
 
 ifdef USE_PGXS
 PG_CONFIG = pg_config

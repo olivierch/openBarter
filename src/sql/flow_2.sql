@@ -1,21 +1,59 @@
-\i sql/drop_model.sql
+SET client_min_messages = warning;
+\set ECHO none
 \i sql/model.sql
-insert into ob_tquality (name) values ('q1'),('q2'),('q3'),('q4'),('q5'),('q6'),('q7'),('q8');
-insert into ob_towner (name) values ('w1'),('w2'),('w3'),('w4'),('w5'),('w6'),('w7'),('w8');
-insert into ob_tstock (own,qtt,np) values (1,100,1),(2,200,2),(3,300,3),(4,400,4),(5,500,5),(6,600,6),(7,700,7),(8,800,8);
-insert into ob_tnoeud (sid,nr,qtt_prov,qtt_requ) values
-(1,5,1,1),(2,1,1,1),(3,2,1,1),(4,3,1,1);
--- np: 5->1->2->3->4
--- bid: 1  2  3  4
+set search_path='t';
+\set ECHO all
+-- RESET client_min_messages;
 
--- ob_fget_omegas(_nr int8,_np int8) RETURNS SETOF int8[]
-select ob_fget_omegas(4,5); -- {100,100}
-select ob_fget_omegas(4,1); -- {200,200}
-select ob_fget_omegas(4,2); -- {300,300}
-select ob_fget_omegas(4,3); -- {400,400}
-select ob_fget_omegas(3,5); -- {100,100} -- pb
-select ob_fget_omegas(3,1); -- {200,200}
-select ob_fget_omegas(300,1); -- not results
+insert into tuser(name) values (current_user);
+select fuser(current_user,0);
+select fspendquota(current_timestamp::timestamp);
+select fconnect(false);
+select fexplodequality(current_user || '/q1');
+select fupdate_quality(current_user || '/q1',0);
+select fverify();
+select current_user;
 
--- truncate ob_tquality cascade;
+select fadmin(); -- market opened
+
+select id from fdroporder(1::int8);
+-- finsertorder(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text)
+-- 1 q1 -> 2 q2 -> 3 q3
+
+select finsertorder('o1',current_user || '/q1',1,3,current_user || '/q3');
+select finsertorder('o2',current_user || '/q2',2,1,current_user || '/q1');
+select finsertorder('o3',current_user || '/q3',3,2,current_user || '/q2');
+
+-- 2 owners
+-- update tconst set value=0 where name='VERIFY';
+select finsertorder('o1',current_user || '/q1',1,3,current_user || '/q3');
+select finsertorder('o2',current_user || '/q2',2,1,current_user || '/q1');
+select finsertorder('o2',current_user || '/q3',3,2,current_user || '/q2'); 
+
+-- no barter
+select finsertorder('o1',current_user || '/q1',1,2,current_user || '/q2');
+select finsertorder('o2',current_user || '/q2',2,1,current_user || '/q1');
+
+
+-- long barter
+select finsertorder('o1',current_user || '/q1',2,2,current_user || '/q2');
+select finsertorder('o2',current_user || '/q2',2,1,current_user || '/q1');
+
+-- short barter
+select finsertorder('o1',current_user || '/q1',1,4,current_user || '/q2'); -- [1]
+select finsertorder('o2',current_user || '/q2',2,1,current_user || '/q1'); -- refused
+
+-- cycle with [1]
+select finsertorder('o2',current_user || '/q2',4,1,current_user || '/q1');
+
+select id from fdroporder(12);
+select fadmin();
+select fadmin(); --closed
+
+select fadmin();
+select finsertorder('o2',current_user || '/q2',4,1,current_user || '/q1');
+select finsertorder('o2',current_user || '/q2',4,1,current_user || '/q1');
+select fadmin();
+select fadmin(); --closed
+select state,backup,diagnostic from vmarket;
 

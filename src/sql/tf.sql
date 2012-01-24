@@ -1,0 +1,12 @@
+create or replace function ftt() RETURNS void AS $$
+DECLARE
+	_millisec int8;
+BEGIN
+	BEGIN
+		INSERT INTO towner (name) VALUES ('xx');
+		RAISE EXCEPTION USING ERRCODE='Y0001';
+	EXCEPTION WHEN SQLSTATE 'Y0001' THEN
+		RAISE NOTICE 'ici';
+	END;
+END;		
+$$ LANGUAGE PLPGSQL;

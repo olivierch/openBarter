@@ -22,7 +22,7 @@
  */
 #define YYMALLOC palloc
 #define YYFREE   pfree
-#define BID_DIM  8
+#define BID_DIM  7
 extern int 	flow_yylex(void);
 
 static char 	*scanbuf;
@@ -82,7 +82,7 @@ bid_list:
                    ereport(ERROR,
                       (errcode(ERRCODE_SYNTAX_ERROR),
                        errmsg("bad flow representation"),
-                       errdetail("A flow cannot have more than %d bids.",FLOW_MAX_DIM)));
+                       errdetail("A flow cannot have more than %d orders.",FLOW_MAX_DIM)));
                    YYABORT;
                 }
 	}
@@ -93,8 +93,8 @@ bid:
 		if($2.dim != BID_DIM) {
 			ereport(ERROR,
 			      (errcode(ERRCODE_SYNTAX_ERROR),
-			       errmsg("bad bid representation"),
-			       errdetail("A bid should have %d elements.",BID_DIM)));
+			       errmsg("bad order representation"),
+			       errdetail("An order should have %d elements.",BID_DIM)));
 			YYABORT;
 		}
 		add_bid(result,$2.vals);
@@ -108,13 +108,12 @@ list:
 	  }
       |
 	  list COMMA FLOWINT {
-		if ($$.dim >= BID_DIM) {
-		
-		ereport(ERROR,
-		      (errcode(ERRCODE_SYNTAX_ERROR),
-		       errmsg("bad bid representation"),
-		       errdetail("A bid should have %d elements.",BID_DIM)));
-		YYABORT;
+		if ($$.dim >= BID_DIM) {		
+			ereport(ERROR,
+			      (errcode(ERRCODE_SYNTAX_ERROR),
+			       errmsg("bad order representation"),
+			       errdetail("An order should have %d elements.",BID_DIM)));
+			YYABORT;
 		}
 		//elog(WARNING,"red \"%lli\" ",atoll($3));	  	
 		$$.vals[$$.dim] = atoll($3);
@@ -132,13 +131,12 @@ static NDFLOW * add_bid(NDFLOW *box, int64 *vals) {
 	s = &newbox->x[box->dim];
 	box->dim +=1;
 	
-	// id,nr,qtt_prov,qtt_requ,sid,own,qtt,np
+	// id,nr,qtt_prov,qtt_requ,own,qtt,np
 	i = 0;
 	s->id = vals[i];i +=1;
 	s->nr = vals[i];i +=1;
 	s->qtt_prov = vals[i];i +=1;
 	s->qtt_requ = vals[i];i +=1;
-	s->sid = vals[i];i +=1;
 	s->own = vals[i];i +=1;
 	s->qtt = vals[i];i +=1;
 	s->np = vals[i];i +=1;

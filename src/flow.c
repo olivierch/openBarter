@@ -18,6 +18,7 @@
 #include "utils/lsyscache.h"
 #include "catalog/pg_type.h"
 #include "funcapi.h"
+#include "uuid.h"
 
 #include "flowdata.h"
 
@@ -29,7 +30,7 @@ PG_MODULE_MAGIC;
 #define ARRPTR(x)  ( (double *) ARR_DATA_PTR(x) )
 #define ARRNELEMS(x)  ArrayGetNItems( ARR_NDIM(x), ARR_DIMS(x))
 
-extern int	flow_yyparse();
+extern int  flow_yyparse();
 extern void flow_yyerror(const char *message);
 extern void flow_scanner_init(const char *str);
 extern void flow_scanner_finish(void);
@@ -45,18 +46,14 @@ PG_FUNCTION_INFO_V1(flow_recv);
 PG_FUNCTION_INFO_V1(flow_send);
 
 PG_FUNCTION_INFO_V1(flow_proj);
-PG_FUNCTION_INFO_V1(flow_status);
-PG_FUNCTION_INFO_V1(flow_omega);
-PG_FUNCTION_INFO_V1(flow_omegax);
-PG_FUNCTION_INFO_V1(flow_provides);
+PG_FUNCTION_INFO_V1(flow_refused);
 PG_FUNCTION_INFO_V1(flow_dim);
-PG_FUNCTION_INFO_V1(flow_get_fim1_fi);
 PG_FUNCTION_INFO_V1(flow_to_matrix);
 PG_FUNCTION_INFO_V1(flow_cat);
 PG_FUNCTION_INFO_V1(flow_init);
 PG_FUNCTION_INFO_V1(flow_omegay);
 PG_FUNCTION_INFO_V1(flow_to_commits);
-// PG_FUNCTION_INFO_V1(flow_testb);
+PG_FUNCTION_INFO_V1(flow_uuid);
 
 Datum flow_in(PG_FUNCTION_ARGS);
 Datum flow_out(PG_FUNCTION_ARGS);
@@ -64,18 +61,14 @@ Datum flow_recv(PG_FUNCTION_ARGS);
 Datum flow_send(PG_FUNCTION_ARGS);
 
 Datum flow_proj(PG_FUNCTION_ARGS);
-Datum flow_status(PG_FUNCTION_ARGS);
-Datum flow_omega(PG_FUNCTION_ARGS);
-Datum flow_omegax(PG_FUNCTION_ARGS);
-Datum flow_provides(PG_FUNCTION_ARGS);
+Datum flow_refused(PG_FUNCTION_ARGS);
 Datum flow_dim(PG_FUNCTION_ARGS);
-Datum flow_get_fim1_fi(PG_FUNCTION_ARGS);
 Datum flow_to_matrix(PG_FUNCTION_ARGS);
 Datum flow_cat(PG_FUNCTION_ARGS);
 Datum flow_init(PG_FUNCTION_ARGS);
 Datum flow_omegay(PG_FUNCTION_ARGS);
 Datum flow_to_commits(PG_FUNCTION_ARGS);
-//Datum flow_testb(PG_FUNCTION_ARGS);
+Datum flow_uuid(PG_FUNCTION_ARGS);
 
 static FTCOMMIT *_flowFtCommit(NDFLOW * flow);
 
@@ -147,12 +140,12 @@ char *flow_ndboxToStr(NDFLOW *flow,bool internal) {
 		
 		if(i != 0) appendStringInfoChar(&buf, ',');
 
-		// id,nr,qtt_prov,qtt_requ,sid,own,qtt,np and flowr;
+		// id,nr,qtt_prov,qtt_requ,own,qtt,np and flowr;
 		appendStringInfo(&buf, "(%lli, ", s->id);
 		appendStringInfo(&buf, "%lli, ", s->nr);
 		appendStringInfo(&buf, "%lli, ", s->qtt_prov);
 		appendStringInfo(&buf, "%lli, ", s->qtt_requ);
-		appendStringInfo(&buf, "%lli, ", s->sid);
+		//appendStringInfo(&buf, "%lli, ", s->sid);
 		appendStringInfo(&buf, "%lli, ", s->own);
 		appendStringInfo(&buf, "%lli, ", s->qtt);
 		
@@ -198,7 +191,7 @@ Datum flow_recv(PG_FUNCTION_ARGS)
 		flow->x[_i].nr = pq_getmsgint64(buf);
 		flow->x[_i].qtt_prov = pq_getmsgint64(buf);
 		flow->x[_i].qtt_requ = pq_getmsgint64(buf);
-		flow->x[_i].sid = pq_getmsgint64(buf);
+		//flow->x[_i].sid = pq_getmsgint64(buf);
 		flow->x[_i].own = pq_getmsgint64(buf);
 		flow->x[_i].qtt = pq_getmsgint64(buf);
 		flow->x[_i].np = pq_getmsgint64(buf);
@@ -224,7 +217,7 @@ flow_send(PG_FUNCTION_ARGS)
 		pq_sendint64(&buf,flow->x[_i].nr);
 		pq_sendint64(&buf,flow->x[_i].qtt_prov);
 		pq_sendint64(&buf,flow->x[_i].qtt_requ);
-		pq_sendint64(&buf,flow->x[_i].sid);
+		//pq_sendint64(&buf,flow->x[_i].sid);
 		pq_sendint64(&buf,flow->x[_i].own);
 		pq_sendint64(&buf,flow->x[_i].qtt);
 		pq_sendint64(&buf,flow->x[_i].np);
@@ -238,7 +231,7 @@ flow_send(PG_FUNCTION_ARGS)
 FUNCTION flow_cat(flow,flow,int64,int64,int64,int64,int64,int64,int64,int64)
 RETURNS flow
 args:
-	(Y.flow,X.flow,id,nr,qtt_prov,qtt_requ,sid,own,qtt,np)
+	(X.flow,id,nr,qtt_prov,qtt_requ,sid,own,qtt,np)
 Adds a bid at the end of the flow.
 	All arguments must be not NULL execept X.flow
 	the bid added does not belong to the flow
@@ -246,28 +239,34 @@ Adds a bid at the end of the flow.
 	
 if(X.flow is NULL) 
 	returns [bid]	
-else if a solution exists
-	returns X.flow+bid
 else 
-	returns Y.flow
-
+	returns X.flow+bid
+	0
+	1	0
+	2	1
+	3	2
+	4	3
+	5
+	6
+	7
+	8
 */
 Datum flow_cat(PG_FUNCTION_ARGS)
 {
-	NDFLOW	*c,*Y;
+	NDFLOW	*c;
 	NDFLOW	*result;
 	BID	*bid;
 	int 	dim;
 	int64	id;
 	
-	if( PG_ARGISNULL(0) || PG_ARGISNULL(1)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7)|| PG_ARGISNULL(8) || PG_ARGISNULL(9))
+	if( PG_ARGISNULL(0) || PG_ARGISNULL(1)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_cat: with at least one argument NULL")));
 	
-	id = PG_GETARG_INT64(2);
+	id = PG_GETARG_INT64(1);
 	
-	c = PG_GETARG_NDFLOW(1);
+	c = PG_GETARG_NDFLOW(0);
 	//elog(WARNING,"flow_cat: input %s",flow_ndboxToStr(c,true));		
 
 	result = Ndbox_init(FLOW_MAX_DIM);
@@ -292,25 +291,28 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 		bid = &result->x[dim-1];
 
 		bid->id 	= id;
-		bid->nr 	= PG_GETARG_INT64(3);
-		bid->qtt_prov 	= PG_GETARG_INT64(4);
-		bid->qtt_requ 	= PG_GETARG_INT64(5);
-		bid->sid 	= PG_GETARG_INT64(6);
-		bid->own 	= PG_GETARG_INT64(7);
-		bid->qtt 	= PG_GETARG_INT64(8);
-		bid->np 	= PG_GETARG_INT64(9);	
+		bid->nr 	= PG_GETARG_INT64(2);
+		bid->qtt_prov 	= PG_GETARG_INT64(3);
+		bid->qtt_requ 	= PG_GETARG_INT64(4);
+		//bid->sid 	= PG_GETARG_INT64(6);
+		bid->own 	= PG_GETARG_INT64(5);
+		bid->qtt 	= PG_GETARG_INT64(6);
+		bid->np 	= PG_GETARG_INT64(7);	
 
 		//result = Ndbox_adjust(result);
-	
+		
+		(void) flowc_maximum(result,globales.verify);
+		
+		/*
 		if(!flowc_maximum(result,globales.verify)) {
 			// no solution found, Y returned
 			Y = PG_GETARG_NDFLOW(0);
 			memcpy(result,Y,SIZE_NDFLOW(Y->dim));
 			PG_FREE_IF_COPY(Y, 0);
-		}
+		}*/
 	}
 	
-	PG_FREE_IF_COPY(c, 1);
+	PG_FREE_IF_COPY(c, 0);
 
 	result = Ndbox_adjust(result);
 	PG_RETURN_NDFLOW(result);
@@ -327,7 +329,7 @@ Datum flow_init(PG_FUNCTION_ARGS)
 	NDFLOW	*result;
 	BID	*bid;
 	
-	if(PG_ARGISNULL(0) || PG_ARGISNULL(1)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6)|| PG_ARGISNULL(7))
+	if(PG_ARGISNULL(0) || PG_ARGISNULL(1)|| PG_ARGISNULL(2)|| PG_ARGISNULL(3)|| PG_ARGISNULL(4)|| PG_ARGISNULL(5)|| PG_ARGISNULL(6))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				errmsg("flow_init: with at least one argument NULL")));	
@@ -342,10 +344,10 @@ Datum flow_init(PG_FUNCTION_ARGS)
 	bid->nr 	= PG_GETARG_INT64(1);
 	bid->qtt_prov 	= PG_GETARG_INT64(2);
 	bid->qtt_requ 	= PG_GETARG_INT64(3);
-	bid->sid 	= PG_GETARG_INT64(4);
-	bid->own 	= PG_GETARG_INT64(5);
-	bid->qtt 	= PG_GETARG_INT64(6);
-	bid->np 	= PG_GETARG_INT64(7);	
+	//bid->sid 	= PG_GETARG_INT64(4);
+	bid->own 	= PG_GETARG_INT64(4);
+	bid->qtt 	= PG_GETARG_INT64(5);
+	bid->np 	= PG_GETARG_INT64(6);	
 
 	result = Ndbox_adjust(result);
 	
@@ -402,16 +404,16 @@ flow_proj(PG_FUNCTION_ARGS)
 			case 2: _r = box->x[_i].nr;break;
 			case 3: _r = box->x[_i].qtt_prov;break;
 			case 4: _r = box->x[_i].qtt_requ;break;
-			case 5: _r = box->x[_i].sid;break;
-			case 6: _r = box->x[_i].own;break;
-			case 7: _r = box->x[_i].qtt;break;
-			case 8: _r = box->x[_i].np;break;
-			case 9: _r = box->x[_i].flowr;break;
+			//case 5: _r = box->x[_i].sid;break;
+			case 5: _r = box->x[_i].own;break;
+			case 6: _r = box->x[_i].qtt;break;
+			case 7: _r = box->x[_i].np;break;
+			case 8: _r = box->x[_i].flowr;break;
 			default: 
 				pfree(_datum_out);		
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("flow_proj: with arg1 not in [1,9]")));
+					 errmsg("flow_proj: with arg1 not in [1,8]")));
 		}
 
 		_datum_out[_i] = Int64GetDatum(_r);
@@ -432,68 +434,6 @@ flow_proj(PG_FUNCTION_ARGS)
 	PG_RETURN_ARRAYTYPE_P(result);
 }
 
-/*
-CREATE FUNCTION flow_status(flow)
-RETURNS text
-AS 'MODULE_PATHNAME'
-LANGUAGE C IMMUTABLE STRICT;
-*/
-Datum flow_status(PG_FUNCTION_ARGS)
-{
-	NDFLOW	*c;
-	char 	*_strStatus;
-	
-	if(PG_ARGISNULL(0))
-		ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_status: with flow=NULL")));	
-	c = PG_GETARG_NDFLOW(0);
-	_strStatus = flow_statusBoxToStr(c);
-	PG_FREE_IF_COPY(c,0);
-	PG_RETURN_CSTRING(_strStatus);
-}
-
-/*
-FUNCTION flow_omega(flow flow) RETURNS float8
-returns the product of qtt_prov[i]/qtt_requ[i]
-*/
-Datum flow_omega(PG_FUNCTION_ARGS)
-{
-	NDFLOW	*c;
-	double 	_omega;
-
-	if(PG_ARGISNULL(0))
-		ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_omega: with flow=NULL")));	
-	c = PG_GETARG_NDFLOW(0);
-	_omega = flowc_getProdOmega(c);
-	PG_FREE_IF_COPY(c,0);
-	PG_RETURN_FLOAT8(_omega);
-}
-/* FUNCTION flow_omega(flow flow,qtt_prov int8,qtt_recu int8) RETURNS float8
-return flow_omega(flow) * qtt_prov/qtt_recu
-*/
-Datum flow_omegax(PG_FUNCTION_ARGS)
-{
-	NDFLOW	*c;
-	int64	qtt_prov;
-	int64	qtt_requ;
-	double 	_omega;
-
-	if(PG_ARGISNULL(0) || PG_ARGISNULL(1) || PG_ARGISNULL(2))
-		ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_omegax: called with at least one argument NULL")));		
-	c = PG_GETARG_NDFLOW(0);
-	qtt_prov = PG_GETARG_INT64(1);
-	qtt_requ = PG_GETARG_INT64(2);
-		
-	_omega = flowc_getProdOmega(c);
-	_omega *= ((double)qtt_prov) / ((double)qtt_requ);
-	PG_FREE_IF_COPY(c,0);
-	PG_RETURN_FLOAT8(_omega);
-}
 /* FUNCTION flow_omegay(Y.flow flow,X.flow flow,qtt_prov int8,qtt_requ int8) RETURNS bool
 return flow_omega(Y.flow) < flow_omega(X.flow) * qtt_prov/qtt_requ
 	if Y.flow is NULL returns true
@@ -538,24 +478,20 @@ Datum flow_testb(PG_FUNCTION_ARGS)
 	PG_RETURN_BOOL(b);
 }
 */
-Datum flow_provides(PG_FUNCTION_ARGS)
-{
+Datum flow_refused(PG_FUNCTION_ARGS) {
 	NDFLOW	*c;
-	int64 	_np;
-
+	int	_i;
+	
 	if(PG_ARGISNULL(0))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_provides: called with argument NULL")));		
-	c = PG_GETARG_NDFLOW(0);	
-	if(c->dim == 0)
-		_np = 0;
-	else
-		_np = c->x[c->dim-1].np;
+				errmsg("flow_refused: called with argument NULL")));		
+	c = PG_GETARG_NDFLOW(0);
+	
+	_i = flowc_refused(c);
 	PG_FREE_IF_COPY(c,0);
-	PG_RETURN_INT64(_np);
+	PG_RETURN_INT32(_i);
 }
-
 
 Datum flow_dim(PG_FUNCTION_ARGS)
 {
@@ -565,61 +501,17 @@ Datum flow_dim(PG_FUNCTION_ARGS)
 	if(PG_ARGISNULL(0))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_dim: called with at least one argument NULL")));		
+				errmsg("flow_dim: called with argument NULL")));		
 	c = PG_GETARG_NDFLOW(0);
 	
 	_dim = ((int32)(c->dim));
 	PG_FREE_IF_COPY(c,0);
 	PG_RETURN_INT32(_dim);
 }
-/* returns ARRAY(x[i-1].flowr,x[i].flowr) */
-Datum flow_get_fim1_fi(PG_FUNCTION_ARGS)
-{
-	NDFLOW	   *box;
-	ArrayType	*result;
-
-	int16       typlen;
-	bool        typbyval;
-	char        typalign;
-	int         ndims = 1;
-	int         dims[1] = {2};
-	int         lbs[2] = {1};
-
-	int 		_dim,_i,_j;
-	Datum		_datum_out[2];
-	bool		_null_out[2] = {false,false};
-	
-	if(PG_ARGISNULL(0) || PG_ARGISNULL(1))
-		ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_get_fim1_fi: with at least one argument NULL")));		
-	box = PG_GETARG_NDFLOW(0);
-	_i = PG_GETARG_INT32(1);
-	_dim = box->dim;
-	
-	if(_dim < 2 || _i<0 || _i>=_dim)
-		ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_get_fim1_fi: with dim <2 or i out of range")));;
-
-	_j = _i-1;
-	if(_j<0) _j = _dim-1;
-	_datum_out[0] = Int64GetDatum(box->x[_j].flowr);
-	_datum_out[1] = Int64GetDatum(box->x[_i].flowr);
-
-	/* get required info about the INT8 */
-	get_typlenbyvalalign(INT8OID, &typlen, &typbyval, &typalign);
-
-	/* now build the array */
-	result = construct_md_array(_datum_out, _null_out, ndims, dims, lbs,
-		                INT8OID, typlen, typbyval, typalign);
-	PG_FREE_IF_COPY(box,0);
-	PG_RETURN_ARRAYTYPE_P(result);
-}
 
 Datum flow_to_matrix(PG_FUNCTION_ARGS)
 {
-#define DIMELTRESULT 9
+#define DIMELTRESULT 8
 
 	NDFLOW	   *box;
 	ArrayType	*result;
@@ -666,11 +558,11 @@ Datum flow_to_matrix(PG_FUNCTION_ARGS)
 		_null_out[_j+1] = false; _datum_out[_j+1] = Int64GetDatum(box->x[_i].nr);
 		_null_out[_j+2] = false; _datum_out[_j+2] = Int64GetDatum(box->x[_i].qtt_prov);
 		_null_out[_j+3] = false; _datum_out[_j+3] = Int64GetDatum(box->x[_i].qtt_requ);
-		_null_out[_j+4] = false; _datum_out[_j+4] = Int64GetDatum(box->x[_i].sid);
-		_null_out[_j+5] = false; _datum_out[_j+5] = Int64GetDatum(box->x[_i].own);
-		_null_out[_j+6] = false; _datum_out[_j+6] = Int64GetDatum(box->x[_i].qtt);
-		_null_out[_j+7] = false; _datum_out[_j+7] = Int64GetDatum(box->x[_i].np);
-		_null_out[_j+8] = false; _datum_out[_j+8] = Int64GetDatum(box->x[_i].flowr);
+		//_null_out[_j+4] = false; _datum_out[_j+4] = Int64GetDatum(box->x[_i].sid);
+		_null_out[_j+4] = false; _datum_out[_j+4] = Int64GetDatum(box->x[_i].own);
+		_null_out[_j+5] = false; _datum_out[_j+5] = Int64GetDatum(box->x[_i].qtt);
+		_null_out[_j+6] = false; _datum_out[_j+6] = Int64GetDatum(box->x[_i].np);
+		_null_out[_j+7] = false; _datum_out[_j+7] = Int64GetDatum(box->x[_i].flowr);
 	}
 
 	dims[0] = _dim;
@@ -833,6 +725,23 @@ Datum flow_to_commits(PG_FUNCTION_ARGS) {
 		pfree(ftc);
 		SRF_RETURN_DONE(funcctx);
 	}
+}
+
+Datum flow_uuid(PG_FUNCTION_ARGS)
+{
+// TODO gcc `uuid-config --cflags` -lm `uuid-config --libs` uuid.c
+	
+	uuid_t *uuid;
+	char *str;
+	
+	uuid_create(&uuid);
+	uuid_make(uuid, UUID_MAKE_V1);
+	str = NULL;
+	uuid_export(uuid, UUID_FMT_STR, &str, NULL);
+	uuid_destroy(uuid);
+	PG_RETURN_CSTRING(str);
+	
+	// PG_RETURN_CSTRING("TO BE DEFINED");
 }
 
 

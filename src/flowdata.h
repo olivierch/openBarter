@@ -5,7 +5,8 @@
 
 
 typedef struct BID {
-	int64	id,nr,qtt_prov,qtt_requ,sid,own,qtt,np,flowr;
+	//int64	id,nr,qtt_prov,qtt_requ,sid,own,qtt,np,flowr;
+	int64	id,nr,qtt_prov,qtt_requ,own,qtt,np,flowr;
 } BID;
 //typedef BID SBID;
 
@@ -29,6 +30,7 @@ typedef struct NDFLOW {
 	int32		vl_len_; /* varlena header (do not touch directly!) */
 	unsigned int dim;
 	STATUSNDFLOW	status;
+	bool	accepted; 
 	BID	x[1];
 } NDFLOW;
 
@@ -37,12 +39,13 @@ typedef struct NDFLOW {
 typedef struct ob_tChemin {
 	int 	cflags;
 	// cflags = or of ob_flux_*
-	int	nbOwn,nbStock;
-	int 	occOwn[FLOW_MAX_DIM],occStock[FLOW_MAX_DIM];
+	int	nbOwn; //,nbStock;
+	int 	occOwn[FLOW_MAX_DIM]; //,occStock[FLOW_MAX_DIM];
 	double	gain,prodOmega;
 	NDFLOW 	*box;
-	double 	omegaCorrige[FLOW_MAX_DIM],fluxExact[FLOW_MAX_DIM],piom[FLOW_MAX_DIM],spiom[FLOW_MAX_DIM];
-	int64	flowNodes[FLOW_MAX_DIM],flowStocks[FLOW_MAX_DIM],floor[FLOW_MAX_DIM];
+	double 	omegaCorrige[FLOW_MAX_DIM],fluxExact[FLOW_MAX_DIM],piom[FLOW_MAX_DIM]; //,spiom[FLOW_MAX_DIM];
+	int64	flowNodes[FLOW_MAX_DIM]; //,flowStocks[FLOW_MAX_DIM],
+	int64	floor[FLOW_MAX_DIM];
 	ob_tNo	no[FLOW_MAX_DIM];
 	
 } ob_tChemin;
@@ -69,3 +72,4 @@ extern double 	flowc_getProdOmega(NDFLOW *box);
 extern char *flow_ndboxToStr(NDFLOW *flow,bool internal);
 extern char * flowc_cheminToStr(ob_tChemin *pchemin);
 extern bool flowc_idInBox(NDFLOW *box,int64 id);
+extern int flowc_refused(NDFLOW *box);

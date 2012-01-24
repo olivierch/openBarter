@@ -101,7 +101,7 @@
  */
 #define YYMALLOC palloc
 #define YYFREE   pfree
-#define BID_DIM  8
+#define BID_DIM  7
 extern int 	flow_yylex(void);
 
 static char 	*scanbuf;
@@ -1404,7 +1404,7 @@ yyreduce:
                    ereport(ERROR,
                       (errcode(ERRCODE_SYNTAX_ERROR),
                        errmsg("bad flow representation"),
-                       errdetail("A flow cannot have more than %d bids.",FLOW_MAX_DIM)));
+                       errdetail("A flow cannot have more than %d orders.",FLOW_MAX_DIM)));
                    YYABORT;
                 }
 	;}
@@ -1419,8 +1419,8 @@ yyreduce:
 		if((yyvsp[(2) - (3)].bnd).dim != BID_DIM) {
 			ereport(ERROR,
 			      (errcode(ERRCODE_SYNTAX_ERROR),
-			       errmsg("bad bid representation"),
-			       errdetail("A bid should have %d elements.",BID_DIM)));
+			       errmsg("bad order representation"),
+			       errdetail("An order should have %d elements.",BID_DIM)));
 			YYABORT;
 		}
 		add_bid(result,(yyvsp[(2) - (3)].bnd).vals);
@@ -1443,13 +1443,12 @@ yyreduce:
 /* Line 1455 of yacc.c  */
 #line 110 "flowparse.y"
     {
-		if ((yyval.bnd).dim >= BID_DIM) {
-		
-		ereport(ERROR,
-		      (errcode(ERRCODE_SYNTAX_ERROR),
-		       errmsg("bad bid representation"),
-		       errdetail("A bid should have %d elements.",BID_DIM)));
-		YYABORT;
+		if ((yyval.bnd).dim >= BID_DIM) {		
+			ereport(ERROR,
+			      (errcode(ERRCODE_SYNTAX_ERROR),
+			       errmsg("bad order representation"),
+			       errdetail("An order should have %d elements.",BID_DIM)));
+			YYABORT;
 		}
 		//elog(WARNING,"red \"%lli\" ",atoll($3));	  	
 		(yyval.bnd).vals[(yyval.bnd).dim] = atoll((yyvsp[(3) - (3)].text));
@@ -1460,7 +1459,7 @@ yyreduce:
 
 
 /* Line 1455 of yacc.c  */
-#line 1464 "flowparse.c"
+#line 1463 "flowparse.c"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -1672,7 +1671,7 @@ yyreturn:
 
 
 /* Line 1675 of yacc.c  */
-#line 125 "flowparse.y"
+#line 124 "flowparse.y"
 
 
 static NDFLOW * add_bid(NDFLOW *box, int64 *vals) {
@@ -1683,13 +1682,12 @@ static NDFLOW * add_bid(NDFLOW *box, int64 *vals) {
 	s = &newbox->x[box->dim];
 	box->dim +=1;
 	
-	// id,nr,qtt_prov,qtt_requ,sid,own,qtt,np
+	// id,nr,qtt_prov,qtt_requ,own,qtt,np
 	i = 0;
 	s->id = vals[i];i +=1;
 	s->nr = vals[i];i +=1;
 	s->qtt_prov = vals[i];i +=1;
 	s->qtt_requ = vals[i];i +=1;
-	s->sid = vals[i];i +=1;
 	s->own = vals[i];i +=1;
 	s->qtt = vals[i];i +=1;
 	s->np = vals[i];i +=1;
