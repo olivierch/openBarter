@@ -702,7 +702,7 @@ BEGIN
 	_np := fupdate_quality(_qualityprovided,_qttprovided); 
 	_nr := fupdate_quality(_qualityrequired,0);
 	
-	-- the owner should exist, is inserted if not
+	-- if the owner does not exist, it is inserted
 	_wid := fowner(_owner);
 	
 	_pivot.own := _wid;
@@ -728,7 +728,55 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION finsertorder(text,text,int8,int8,text) TO market;
-
+--------------------------------------------------------------------------------
+-- fexecute_flow
+--------------------------------------------------------------------------------
+/*
+CREATE FUNCTION fexecute_flow(_flw flow) RETURNS void AS $$
+DECLARE
+	_commits	int8[][];
+	_i		int;
+	_next_i		int;
+	_nbcommit	int;
+	_oid		int8;
+	_w_src		int8;
+	_w_dst		int8;
+	_flowr		int8;
+	_first_mvt	int8;
+	_insert_dummy_mvt	int;
+	_exhausted	bool := false;
+	
+BEGIN
+	_commits := flow_to_matrix(_flw);
+	
+	-- RAISE NOTICE '_commits=%',_commits;
+	_nbcommit := flow_dim(_flw); -- array_upper(_commits,1); 
+	IF(_nbcommit < 2) THEN
+		RAISE WARNING 'nbcommit % < 2',_nbcommit;
+		RAISE EXCEPTION USING ERRCODE='YA003';
+	END IF;
+		
+	_i := _nbcommit;
+	_first_mvt := NULL;
+	_insert_dummy_mvt := fgetconst('INSERT_DUMMY_MVT');
+	
+	FOR _next_i IN 1 .. _nbcommit LOOP
+		_oid	:= _commits[_i][1];
+		-- _commits[_next_i] follows _commits[_i]
+		_w_src	:= _commits[_i][5];
+		_w_dst	:= _commits[_next_i][5];
+		_flowr	:= _commits[_i][6];
+		
+		IF NOT ((_insert_dummy_mvt = 0) AND (_w_src = _w_dst)) THEN
+		
+			UPDATE torder set qtt = qtt - _flowr ,updated = statement_timestamp()
+				WHERE id = _oid AND _flowr <= qtt ;
+			IF(NOT FOUND) THEN
+				RAISE NOTICE 'the flow is not in sync with the database';
+				RAISE INFO 'torder[%].qtt does not exist or < %',_oid,_flowr;
+				RAISE EXCEPTION USING ERRCODE='YU001';
+			END IF;				
+*/
 --------------------------------------------------------------------------------
 -- finsert_order_int
 --------------------------------------------------------------------------------
@@ -1139,19 +1187,14 @@ _obCMAXCYCLE times.
 *******************************************************************************/	
 /* il reste à prendre en compte _lastIgnore représenté pas sid==0*/
 
-		FOR _cnt IN 1 .. _maxDepth LOOP
+		FOR _cnt IN 2 .. _maxDepth LOOP
 			UPDATE _tmp Y 
 			SET flow = flow_cat(
 				-- CASE WHEN Y.flow IS NULL THEN '[]'::flow ELSE Y.flow END,
 				   X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.own,Y.qtt,Y.np) 
 
 			-- Y.flow = flow_cat(Y.flow,X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.own,Y.qtt,Y.np)
-			-- Z<-X.flow+Y.bid
-			-- TODO remove Y.flow parameter from flow_cat()
-			-- NO MORE
-			-- 	Z<-X.flow+Y.bid
-			-- 	if(solution Z found) Y.flow<-Z else Y.flow<- Y.flow
-			-- END	
+			-- Z<-X.flow+Y.bid	
 			FROM _tmp X WHERE 
 				X.np  = Y.nr  
 				AND X.id != _idPivot -- arcs pivot->sources are not considered

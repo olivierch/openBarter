@@ -77,8 +77,6 @@ def simu():
 				if(nbOper == 300):
 					break
 			except KeyboardInterrupt:
-
-			
 				break
 			except Exception,e:
 				print "Exception inattendue"

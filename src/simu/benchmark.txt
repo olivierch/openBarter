@@ -1,0 +1,51 @@
+résultats:
+End: 3405 operations
+Total 38843.714624 seconds (10 heures 47 min)
+Mean 11.407846 seconds
+
+count(*)	table		analyze
+1986 		tmvt		37 ms
+2843		torder		43 ms
+4235		trefused	2 ms
+599		agreements
+
+925		torder where qtt!=0
+
+select count(*),i from (select grp,count(*) i from tmvt group by grp) a group by i order by i asc;
+count	i
+203	2
+175	3
+110	4
+59	5
+45	6
+6	7
+1	8
+
+select count(*) from torder x,torder y where x.np=y.nr and not exists (select * from trefused r where x.id=r.x and y.id=r.y);
+390655
+
+select count(*) from torder x,torder y where x.np=y.nr and x.qtt!=0 and Y.qtt!=0 and not exists (select * from trefused r where x.id=r.x and y.id=r.y);
+33072
+soit 35 arcs pour 1 noeud
+
+***************************************************************
+cycles:
+  id  |  id  |  id  | np | np | np 
+------+------+------+----+----+----
+ 2944 | 1642 | 3249 | 20 |  1 |  2
+ 2884 |   40 | 3249 | 19 |  1 |  2
+ 2875 | 2339 | 3249 | 16 |  1 |  2
+ 2158 |   40 | 3249 | 19 |  1 |  2
+ 2875 | 2418 | 3249 | 16 |  1 |  2
+
+
+
+sans les trefused
+select count(*) from torder x,torder y where x.np=y.nr and x.qtt!=0 and Y.qtt!=0;
+33563
+
+fverify OK
+
+
+
+
