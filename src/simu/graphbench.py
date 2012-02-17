@@ -44,7 +44,7 @@ cur_user = 'olivier'
 
 def connect():
 	dbcon = psycopg2.connect(
-				database  = 'test',
+				database  = 'test2',
 				password  = '',
 				user = cur_user,
 				host = 'localhost',
@@ -54,6 +54,7 @@ def connect():
 	return dbcon
 	
 def isOpened(cursor):
+	return True
 	cursor.execute("SELECT state FROM vmarket ")
 	res = [e[0] for e in cursor]
 	return (res[0] == "OPENED")
@@ -69,11 +70,12 @@ def getgraph(cursor):
 	print 'digraph database {'
 	pref = '    '
 	print pref+'ratio=1'
-	sql ='select x.id as a,y.id as b,x.np as q from torder x,torder y where x.np=y.nr and x.qtt!=0 and y.qtt!=0 and not exists (select * from trefused r where x.id=r.x and y.id=r.y)'
+	sql ='select x.id as a,y.id as b,x.np as q from torder x,torder y where x.np=y.nr and x.qtt!=0 and y.qtt!=0 and flow_maxdimrefused(y.refused,30) and flow_maxdimrefused(x.refused,30) AND NOT(y.id=ANY(x.refused))'
 	cursor.execute(sql)
 	for e in cursor:
 		color = colors[e[2] % len(colors)]
-		print pref+'%i -> %i [label=q%i,color=%s]'%(e[0],e[1],e[2],color)
+		#print pref+'%i -> %i [label=q%i,color=%s]'%(e[0],e[1],e[2],color)
+		print pref+'%i -> %i [label=q%i]'%(e[0],e[1],e[2])
 	print '}'
 
 def getgraphQ(cursor):
@@ -83,14 +85,13 @@ def getgraphQ(cursor):
 	print pref+'ratio=1'
 	sql ='select q.id from tquality q'
 	cursor.execute(sql)
-	for e in cursor:
-		
+	for e in cursor:		
 		print pref+'%i [label=q%i]'%(e[0],e[0])
-	sql ='select x.np as a,x.nr as b,x.own from torder x where x.qtt!=0'
+	sql ='select x.np as a,x.nr as b,x.own,x.id from torder x where x.qtt!=0'
 	cursor.execute(sql)
 	for e in cursor:
 		color = colors[e[2] % len(colors)]
-		print pref+'%i -> %i [color=%s]'%(e[0],e[1],color)
+		print pref+'%i -> %i [color=%s,label="%i"]'%(e[0],e[1],color,e[3])
 	print '}'		
 	
 
@@ -105,7 +106,7 @@ def simu():
 		print >>sys.stderr,"Market not opened"		
 	else:
 		try:
-			getgraphQ(cursor)
+			getgraph(cursor)
 		except Exception,e:
 			print >>sys.stderr,"Exception inattendue"
 			print >>sys.stderr,e

@@ -1,6 +1,7 @@
 /* contrib/flow/flowdata.h */
 
 #define FLOW_MAX_DIM (8)
+#define FLOW_MAX_REFUSED (30)
 #define obMRange(v,S) for (v=0;v<(S);v++)
 
 
@@ -18,19 +19,17 @@ typedef struct ob_tNo {
 
 
 typedef enum STATUSNDFLOW {
-	empty, // dim=0
-	noloop, // it is not a loop
-	loop,
-	draft, // loop, a solution was found
-	undefined, // loop, but rounding did not find any solution
-	tobedefined
+	noloop, // it is not a loop perhaps empty
+	draft, // solution found, accepted
+	refused, // solution found, refused
+	undefined // no solution found, (rounding did not find any solution)
 } STATUSNDFLOW;
 
 typedef struct NDFLOW {
 	int32		vl_len_; /* varlena header (do not touch directly!) */
 	unsigned int dim;
 	STATUSNDFLOW	status;
-	bool	accepted; 
+	int 	iworst; // defined when status=refused, iworst is the index refused
 	BID	x[1];
 } NDFLOW;
 
@@ -69,7 +68,9 @@ extern ob_tGlobales globales; //defined in flow.c
 
 extern bool 	flowc_maximum(NDFLOW *box,bool verify);
 extern double 	flowc_getProdOmega(NDFLOW *box);
+extern double 	flowc_getpOmega(NDFLOW *box);
 extern char *flow_ndboxToStr(NDFLOW *flow,bool internal);
 extern char * flowc_cheminToStr(ob_tChemin *pchemin);
 extern bool flowc_idInBox(NDFLOW *box,int64 id);
-extern int flowc_refused(NDFLOW *box);
+extern bool flowc_isCycle(NDFLOW *box);
+// extern int flowc_refused(NDFLOW *box);

@@ -847,9 +847,10 @@ BEGIN
 		END IF;
 		
 		_commits[_nbcommit][1] = _pivot.id;
-		-- RAISE NOTICE '_commits=%',_commits;
+		RAISE NOTICE '_commits=%',_commits;
 		_worst := flow_refused(_flw);
 		IF( _worst >= 0 ) THEN
+			
 			-- occurs when some omega > qtt_p/qtt_r 
 			-- or when no solution was found
 			
@@ -857,7 +858,7 @@ BEGIN
 			_oid1 := _commits[((_worst-1+_nbcommit)%_nbcommit)+1][1];	
 			-- -1%_nbcommit gives -1, but (-1+_nbcommit)%_nbcommit gives _nbcommit-1 		
 			_oid2 := _commits[_worst+1][1];
-			-- RAISE NOTICE '_worst=%, _oid1=%, _oid2=%',_worst,_oid1,_oid2;
+			RAISE NOTICE 'flow_refused: _worst=%, _oid1=%, _oid2=%, _commits=%, _flw=%',_worst,_oid1,_oid2,_commits,CAST(_flw AS TEXT);
 			BEGIN
 				IF(_restoretime) THEN
 					INSERT INTO trefused (x,y,created) VALUES (_oid1,_oid2,_pivot.created); -- _pivot.id,_created);
@@ -1013,8 +1014,7 @@ BEGIN
 	SELECT id INTO _np FROM tquality WHERE name=_qp;
 	IF(NOT FOUND) THEN RAISE NOTICE 'Quality % unknown',_qp; RAISE EXCEPTION USING ERRCODE='YU001';END IF;
 	
-	_maxDepth := 
-	fcreate_tmp(_nr);
+	_maxDepth := fcreate_tmp(_nr);
 	
 	IF (_maxDepth is NULL or _maxDepth = 0) THEN
 		RAISE INFO 'No results';
@@ -1128,17 +1128,25 @@ $$ LANGUAGE PLPGSQL;
 -------------------------------------------------------------------------------*/
 CREATE FUNCTION fget_flows(_np int8,_maxDepth int) RETURNS SETOF flow AS $$
 DECLARE 
-	_cnt int;
+	_cnt 	int;
 	_cntgraph int :=0; 
-	_flow flow;
+	_flow 	flow;
 	_idPivot int8 := 0;
+	
+	_id	int8;
+	_dim	int;
+	_flowrs	int8[];
+	_ids	int8[];
+	_owns	int8[];
+	_qtt	int8;
+	_lastIgnore bool := false;
 BEGIN
 	-- CREATE INDEX _tmp_idx ON _tmp(valid,nr);
-	LOOP -- repeate as long as a draft is found
+	LOOP -- repeate as long as some draft is found
 		_cntgraph := _cntgraph+1;
-/*******************************************************************************
-the graph is traversed forward to be reduced
-*******************************************************************************/
+/*		******************************************************************************
+		the graph is traversed forward to be reduced
+		*******************************************************************************/
 		-- RAISE NOTICE '_maxDepth=% _np=% _idPivot=% _cntgraph=%',_maxDepth,_np,_idpivot,_cntgraph;
 		WITH RECURSIVE search_forward(id,nr,np,qtt,depth) AS (
 			SELECT src.id,src.nr,src.np,src.qtt,1
@@ -1169,41 +1177,74 @@ the graph is traversed forward to be reduced
 bellman_ford
 
 At the beginning, all sources S are such as S.flow=[S,]
-for t in [1,_obCMAXCYCLE]:
-	for all arcs[X,Y] of the graph:
+for t in [1,_maxDepth]:
+	for all arcs[X,Y] of the graph: UPDATE
 		if X.flow empty continue
-		flow = X.flow followed by Y
-		if flow better than X.flow, then Y.flow <- flow
+		fl = X.flow followed by Y.order
+		if fl is better than X.flow, then Y.flow <- fl
 		
 		
 When it is not empty, a node T contains a path [S,..,T] where S is a source 
-At the end, Each node.flow not empty is the best flow from a source S to this node
-with at most t traits. 
-The pivot contains the best flow from a source to pivot [S,..,pivot] at most _obCMAXCYCLE long
+At the end of UPDATE, Each node.flow not empty is the best flow from a source S to this node
+with at most t arcs. 
+The pivot contains the best flow from a source to pivot [S,..,pivot] that is at most _maxDepth long
 
-the algorithm is usually repeated for all node, but here only
-_obCMAXCYCLE times. 
+the algorithm is normally repeated for all node, but here only
+_maxDepth times. 
 
 *******************************************************************************/	
-/* il reste à prendre en compte _lastIgnore représenté pas sid==0*/
+/*TODO il reste à prendre en compte _lastIgnore représenté pas sid==0*/
+
+/*
+RULE: 
+when pivot is reached, the path is a loop (refused or draft) and omegas are adjusted such as their product becomes 1.
+
+********************************
+update only if X.np=Y.nr AND X.flow IS NOT NULL
+
+Z = X.flow+Y.order, it can be noloop,undefined,refused or draft
+if Y.flow is NULL 	
+	Y.flow <- Z;end
+	
+if Y.flow is noloop (Z should be noloop)
+	if omega(Z.flow) > omega(Y.flow)
+		Y.flow <- Z;end	
+if Z.flow is draft
+	if Y.flow is draft 
+		if omega(Z.flow) > omega(Y.flow)
+			Y.flow <- Z;end
+	else 
+		Y.flow <- Z;end
+*******************************	
+
+since the UPDATE condition is 
+				X.np  = Y.nr  
+				AND X.id != _idPivot -- arcs pivot->sources are not considered
+				AND  X.flow IS NOT NULL 
+				AND ( 	Y.flow IS NULL 
+					OR flow_omegaz(....)
+				);
+and flow_catt is:
+	try
+		Z <- X.flow+Y.order
+		Y.flow <- Z 
+	except Z in error:
+		Y.flow <- empty path
+		
+flow_omegaz should be the rest.
+*/
 
 		FOR _cnt IN 2 .. _maxDepth LOOP
 			UPDATE _tmp Y 
-			SET flow = flow_cat(
-				-- CASE WHEN Y.flow IS NULL THEN '[]'::flow ELSE Y.flow END,
-				   X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.own,Y.qtt,Y.np) 
-
-			-- Y.flow = flow_cat(Y.flow,X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.own,Y.qtt,Y.np)
-			-- Z<-X.flow+Y.bid	
+			SET flow = flow_catt(X.flow,Y.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.own,Y.qtt,Y.np) 
+			-- Y.flow <- X.flow+Y.order	
 			FROM _tmp X WHERE 
 				X.np  = Y.nr  
 				AND X.id != _idPivot -- arcs pivot->sources are not considered
 				AND  X.flow IS NOT NULL 
-				AND ( Y.flow IS NULL 
-					OR flow_omegay(Y.flow,X.flow,Y.qtt_prov,Y.qtt_requ)
+				AND ( 	Y.flow IS NULL 
+					OR flow_omegaz(X.flow,Y.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.own,Y.qtt,Y.np)
 				);
-				-- flow_omegay(Y.flow,X.flow,Y.qtt_prov,Y.qtt_requ)
-				--      omega(Y.flow) < omega(X.flow)*Y.qtt_prov/Y.qtt_requ
 
 		END LOOP;
 
@@ -1215,47 +1256,38 @@ _obCMAXCYCLE times.
 		RETURN NEXT _flow; -- new row returned
 		
 		-- values used by this flow are substracted from _tmp
-		DECLARE
-			_id	int8;
-			_dim	int;
-			_flowrs	int8[];
-			_ids	int8[];
-			_owns	int8[];
-			_qtt	int8;
-			_lastIgnore bool := false;
-		BEGIN
-			_flowrs := flow_proj(_flow,8);
-			_ids	:= flow_proj(_flow,1);
-			_owns	:= flow_proj(_flow,5); 
-			_dim    := flow_dim(_flow); 
-			
-			FOR _cnt IN 1 .. _dim LOOP
-				_id   := _ids[_cnt]; 
-				-- RAISE NOTICE 'flowrs[%]=% ',_cnt,_flowr;
-				IF (_id = 0 AND _owns[_cnt] = 0) THEN
-					_lastIgnore := true; -- it's a price read, the pivot is not decreased
-				ELSE 
-					UPDATE _tmp SET qtt = qtt - _flowrs[_cnt] WHERE id = _id and qtt >= _flowrs[_cnt];
-					IF (NOT FOUND) THEN
-						RAISE WARNING 'order[%] was not found or found with negative value',_id;
-						RAISE EXCEPTION USING ERRCODE='YA003'; 
-					END IF;
-				END IF;
-			END LOOP;
-			
-			IF(fgetconst('EXHAUST') = 1) THEN
-				SELECT count(*) INTO _cnt FROM _tmp WHERE 
-					id = ANY (_ids) 
-					AND qtt=0 
-					AND (NOT _lastIgnore OR (_lastIgnore AND id!=0));
-				IF(_cnt <1) THEN
-					-- when _lastIgnore, some order other than the pivot should be exhausted
-					-- otherwise, some order including the pivot should be exhausted 
-					RAISE WARNING 'the cycle should exhaust some order';
-					RAISE EXCEPTION USING ERRCODE='YA003';
+
+		_flowrs := flow_proj(_flow,8);
+		_ids	:= flow_proj(_flow,1);
+		_owns	:= flow_proj(_flow,5); 
+		_dim    := flow_dim(_flow); 
+		
+		FOR _cnt IN 1 .. _dim LOOP
+			_id   := _ids[_cnt]; 
+			-- RAISE NOTICE 'flowrs[%]=% ',_cnt,_flowr;
+			IF (_id = 0 AND _owns[_cnt] = 0) THEN
+				_lastIgnore := true; -- it's a price read, the pivot is not decreased
+			ELSE 
+				UPDATE _tmp SET qtt = qtt - _flowrs[_cnt] WHERE id = _id and qtt >= _flowrs[_cnt];
+				IF (NOT FOUND) THEN
+					RAISE WARNING 'order[%] was not found or found with negative value',_id;
+					RAISE EXCEPTION USING ERRCODE='YA003'; 
 				END IF;
 			END IF;
-		END;
+		END LOOP;
+		
+		IF(fgetconst('EXHAUST') = 1) THEN
+			SELECT count(*) INTO _cnt FROM _tmp WHERE 
+				id = ANY (_ids) 
+				AND qtt=0 
+				AND (NOT _lastIgnore OR (_lastIgnore AND id!=0));
+			IF(_cnt <1) THEN
+				-- when _lastIgnore, some order other than the pivot should be exhausted
+				-- otherwise, some order including the pivot should be exhausted 
+				RAISE WARNING 'the cycle should exhaust some order';
+				RAISE EXCEPTION USING ERRCODE='YA003';
+			END IF;
+		END IF;
 		
 	END LOOP;
 

@@ -50,10 +50,18 @@ PG_FUNCTION_INFO_V1(flow_refused);
 PG_FUNCTION_INFO_V1(flow_dim);
 PG_FUNCTION_INFO_V1(flow_to_matrix);
 PG_FUNCTION_INFO_V1(flow_cat);
+PG_FUNCTION_INFO_V1(flow_catt);
 PG_FUNCTION_INFO_V1(flow_init);
 PG_FUNCTION_INFO_V1(flow_omegay);
+PG_FUNCTION_INFO_V1(flow_replace);
+PG_FUNCTION_INFO_V1(flow_iscycle);
+PG_FUNCTION_INFO_V1(flow_omegaz);
 PG_FUNCTION_INFO_V1(flow_to_commits);
 PG_FUNCTION_INFO_V1(flow_uuid);
+PG_FUNCTION_INFO_V1(flow_tarr);
+PG_FUNCTION_INFO_V1(flow_isloop);
+PG_FUNCTION_INFO_V1(flow_maxdimrefused);
+PG_FUNCTION_INFO_V1(flow_orderaccepted);
 
 Datum flow_in(PG_FUNCTION_ARGS);
 Datum flow_out(PG_FUNCTION_ARGS);
@@ -65,11 +73,18 @@ Datum flow_refused(PG_FUNCTION_ARGS);
 Datum flow_dim(PG_FUNCTION_ARGS);
 Datum flow_to_matrix(PG_FUNCTION_ARGS);
 Datum flow_cat(PG_FUNCTION_ARGS);
+Datum flow_catt(PG_FUNCTION_ARGS);
 Datum flow_init(PG_FUNCTION_ARGS);
 Datum flow_omegay(PG_FUNCTION_ARGS);
+Datum flow_replace(PG_FUNCTION_ARGS);
+Datum flow_iscycle(PG_FUNCTION_ARGS);
+Datum flow_omegaz(PG_FUNCTION_ARGS);
 Datum flow_to_commits(PG_FUNCTION_ARGS);
 Datum flow_uuid(PG_FUNCTION_ARGS);
-
+Datum flow_tarr(PG_FUNCTION_ARGS);
+Datum flow_isloop(PG_FUNCTION_ARGS);
+Datum flow_maxdimrefused(PG_FUNCTION_ARGS);
+Datum flow_orderaccepted(PG_FUNCTION_ARGS);
 static FTCOMMIT *_flowFtCommit(NDFLOW * flow);
 
 // for internal use
@@ -318,6 +333,287 @@ Datum flow_cat(PG_FUNCTION_ARGS)
 	PG_RETURN_NDFLOW(result);
 }
 /*
+	try
+		Z <- X.flow+Y.order
+		Y.flow <- Z 
+	except Z in error:
+		Y.flow <- X.flow
+*/
+Datum flow_catt(PG_FUNCTION_ARGS)
+{
+	NDFLOW	*X;
+	NDFLOW	*result;
+	BID	*bid;
+	int 	dim;
+	
+	X = PG_GETARG_NDFLOW(0);	
+
+	result = Ndbox_init(FLOW_MAX_DIM);
+
+	dim = X->dim;
+	memcpy(result,X,SIZE_NDFLOW(dim));			
+	dim += 1;	
+	if(dim > FLOW_MAX_DIM)
+    		ereport(ERROR,
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+			errmsg("attempt to extend a flow out of range")));	
+
+	result->dim = dim;
+	bid = &result->x[dim-1];
+
+	bid->id 	= PG_GETARG_INT64(1);
+	bid->nr 	= PG_GETARG_INT64(2);
+	bid->qtt_prov 	= PG_GETARG_INT64(3);
+	bid->qtt_requ 	= PG_GETARG_INT64(4);
+	bid->own 	= PG_GETARG_INT64(5);
+	bid->qtt 	= PG_GETARG_INT64(6);
+	bid->np 	= PG_GETARG_INT64(7);	
+	
+	(void) flowc_maximum(result,globales.verify);
+	
+	PG_FREE_IF_COPY(X, 0);
+
+	result = Ndbox_adjust(result);
+	PG_RETURN_NDFLOW(result);
+}
+Datum flow_replace(PG_FUNCTION_ARGS) {
+	NDFLOW	*X;
+	int64	id;
+	
+	X = PG_GETARG_NDFLOW(0);
+	id = PG_GETARG_INT64(1);
+	PG_RETURN_BOOL(!flowc_idInBox(X,id));
+
+}
+Datum flow_iscycle(PG_FUNCTION_ARGS) {
+	NDFLOW	*X;
+	int64 np;
+	
+	X = PG_GETARG_NDFLOW(0);
+	np = PG_GETARG_INT64(1);
+	
+	PG_RETURN_BOOL(X->x[0].nr == np);
+}
+Datum flow_maxdimrefused(PG_FUNCTION_ARGS) {
+	ArrayType	*a = PG_GETARG_ARRAYTYPE_P_COPY(0); 
+	int32	maxrefused = PG_GETARG_INT32(1);
+	bool res;
+
+	if (ARR_NDIM(a) > 1)
+		ereport(ERROR,
+				(errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
+				 errmsg("wrong number of array subscripts"),
+				 errdetail("Refused array must be one dimensional.")));
+	if(ARR_NDIM(a) == 1)		 
+		res = (maxrefused >= (int32) (ARR_DIMS(a)[0]));
+	else res = true;
+				 	
+	PG_FREE_IF_COPY(a, 0);
+	PG_RETURN_BOOL(res);	
+}
+
+static bool  _checkInArrayInt8(ArrayType *a, int64 val) {
+	bool found = false;
+	/*
+	 * Params checks
+	 */
+	if(ARR_NDIM(a) == 0)
+		return false;
+		
+	if (ARR_NDIM(a) != 1)
+		ereport(ERROR,
+				(errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
+				 errmsg("wrong number of array subscripts"),
+				 errdetail("Refused array must be one dimensional.")));
+	
+	if (ARR_LBOUND(a)[0] != 1)
+		ereport(ERROR,
+				(errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
+				 errmsg("wrong range of array subscripts"),
+				 errdetail("Lower bound of refused array must be one.")));
+
+	if (array_contains_nulls(a))
+		ereport(ERROR,
+				(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+				 errmsg("refused values cannot be null.")));
+	
+	if (INT8OID != ARR_ELEMTYPE(a))
+		ereport(ERROR,
+				(errcode(ERRCODE_DATATYPE_MISMATCH),
+				 errmsg("refused values must be int8.")));
+
+	{
+		Datum		*datums;
+		bool		*nulls;
+		int		count,_i;
+		int16		typlen;
+		bool	typbyval;
+		char	typalign;
+
+		get_typlenbyvalalign(INT8OID, &typlen, &typbyval, &typalign);
+		deconstruct_array(a,
+						  INT8OID,typlen,typbyval,typalign,
+						  &datums, &nulls, &count);
+
+		obMRange(_i,count) {
+
+			if (nulls[_i])
+				ereport(ERROR,
+						(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED),
+						 errmsg("null value not allowed for refused")));
+			if(val == DatumGetInt64(datums[_i])) {
+				found = true;
+				break;
+			}
+		}
+		pfree(datums);pfree(nulls);	
+	}
+	return found;
+}
+
+
+/* returns true if 0 in int8[]*/
+Datum flow_tarr(PG_FUNCTION_ARGS) {
+	ArrayType	*a = PG_GETARG_ARRAYTYPE_P_COPY(0); 
+	bool res;
+	
+	res =  _checkInArrayInt8(a,0);
+	
+	PG_FREE_IF_COPY(a, 0);
+	
+	PG_RETURN_BOOL(res);
+}	
+/*
+in the UPDATE of bellman-ford, returns true when the flow should be replaced
+
+the UPDATE performs Y.flow <- X.flow + Y.order, and this function returns True
+when it should be done
+*/
+Datum flow_omegaz(PG_FUNCTION_ARGS)
+{
+	NDFLOW	*X,*Y,*Z;
+	BID	order;
+	int 	Xdim;
+	
+	bool	update = false;
+	ArrayType	*Xrefused,*Yrefused;
+	bool 	_isCycle;
+		
+	X 	= PG_GETARG_NDFLOW(0);
+	Xdim = X->dim;
+	
+	if(Xdim == 0) { // X.flow cannot be extended
+		PG_FREE_IF_COPY(X, 0);
+		PG_RETURN_BOOL(false);
+	}
+	// X->dim !=0
+	Y 		= PG_GETARG_NDFLOW(1);
+	order.id 	= PG_GETARG_INT64(2);	
+	order.nr 	= PG_GETARG_INT64(3);
+	
+	if(X->x[Xdim-1].np != order.nr) { // no relation X.flow->Y.order
+		PG_FREE_IF_COPY(X, 0);
+		PG_FREE_IF_COPY(Y, 1);
+		PG_RETURN_BOOL(false);
+	}
+	
+	order.qtt_prov	= PG_GETARG_INT64(4);
+	order.qtt_requ	= PG_GETARG_INT64(5);
+	order.own 	= PG_GETARG_INT64(6);
+	order.qtt 	= PG_GETARG_INT64(7);
+	order.np 	= PG_GETARG_INT64(8);
+	Xrefused 	= PG_GETARG_ARRAYTYPE_P_COPY(9); 
+	Yrefused 	= PG_GETARG_ARRAYTYPE_P_COPY(10); 
+	//Zrefused	= PG_GETARG_ARRAYTYPE_P_COPY(11); 
+
+	if(_checkInArrayInt8(Xrefused,order.id)) {
+		// the relation XEND->Y is refused
+		//update = false
+		/*ereport(WARNING,
+				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION), // 38000
+				 errmsg("flow_omegaz(X,id) id=%lli is in Xrefused, cycle:\n%s",
+				 order.id,flow_ndboxToStr(X,true))));*/
+		goto fin;
+	}
+	_isCycle = ( order.np == X->x[0].nr );	
+	if(_isCycle && _checkInArrayInt8(Yrefused,X->x[0].id)) {
+		// the relation Y->XBEGIN refused
+		//update = false
+		/*ereport(WARNING,
+				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION), // 38000
+				 errmsg("flow_omegaz(X,id) id=%lli is in Yrefused, cycle:\n%s",
+				 order.id,flow_ndboxToStr(X,true))));*/
+		goto fin;
+	}
+
+	// at this point, relations are not refused between X.flow and Y.order
+	if(flowc_idInBox(X,order.id)) {
+		// order.id is already in X 
+		// it is an unexpected cycle
+		ereport(WARNING,
+				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION), // 38000
+				 errmsg("flow_omegaz(X,id) while id=%lli in X, it is an unexpected cycle:\n%s",
+				 order.id,flow_ndboxToStr(X,true))));
+		
+		goto fin;
+	}
+			
+	if(Y->dim == 0) {
+		update = true;
+		goto fin;
+	}
+
+	// X->dim !=0,Y->dim != 0
+		
+	//elog(WARNING,"flow_cat: input %s",flow_ndboxToStr(c,true));	
+	
+	if((Xdim+1) > FLOW_MAX_DIM)
+    		ereport(ERROR,
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+			errmsg("flow_omegaz: attempt to extend a flow out of range")));	
+	
+	// Z = X.flow+Y.order			
+	Z = Ndbox_init(FLOW_MAX_DIM);			
+	memcpy(Z,X,SIZE_NDFLOW(Xdim));
+	Z->dim = Xdim+1;
+	memcpy(&Z->x[Xdim],&order,sizeof(BID));	
+	(void) flowc_maximum(Z,globales.verify);
+	/*ereport(WARNING,
+				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION), // 38000
+				 errmsg("flow_omegaz(X,id) Z is:\n%s",
+				 flow_ndboxToStr(Z,true))));*/
+	
+	// a flow can be noloop,undefined,refused or draft
+	if(Y->status == noloop) {
+		if(Z->status != noloop) 
+	    		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				errmsg("flow_omegaz: Y is noloop while Z is NOT noloop")));
+				
+		if (flowc_getProdOmega(Z) > flowc_getProdOmega(Y)) 
+			// for Z the product qtt_prov/qtt_requ is better than for Y
+			update = true;
+			
+	} else if (Y->status == draft) {
+		if ((Z->status == draft) && (flowc_getpOmega(Z) > flowc_getpOmega(Y)))
+				update = true;
+			
+	} else {// Y is refused or undefined
+		if (Z->status == draft) 
+			update = true;
+		
+	}
+	pfree(Z);
+	
+fin:	
+	PG_FREE_IF_COPY(X, 0);
+	PG_FREE_IF_COPY(Y, 1);
+	PG_FREE_IF_COPY(Xrefused, 9);
+	PG_FREE_IF_COPY(Yrefused, 10);
+	
+	PG_RETURN_BOOL(update);
+}
+/*
 FUNCTION flow_init(int64,int64,int64,int64,int64,int64,int64,int64)
 RETURNS flow
 args:
@@ -354,7 +650,6 @@ Datum flow_init(PG_FUNCTION_ARGS)
 	flowc_maximum(result,globales.verify);
 	PG_RETURN_NDFLOW(result);
 }
-
 
 /*
 FUNCTION flow_proj(flow,int arg1) RETURNS int8[]
@@ -435,9 +730,15 @@ flow_proj(PG_FUNCTION_ARGS)
 }
 
 /* FUNCTION flow_omegay(Y.flow flow,X.flow flow,qtt_prov int8,qtt_requ int8) RETURNS bool
-return flow_omega(Y.flow) < flow_omega(X.flow) * qtt_prov/qtt_requ
-	if Y.flow is NULL returns true
-	if X.flow is NULL returns false
+called when Y.flow and X.flow are not NULL
+when it returns true: Y.flow <- X.flow+Y.order
+
+if(Y.status == noloop or flowc_refused(Y)==-1)
+if(Y.flow is draft or noloop)
+	return flow_omega(Y.flow) < flow_omega(X.flow) * qtt_prov/qtt_requ
+else (no solution found or is refused)
+	return true
+
 */
 Datum flow_omegay(PG_FUNCTION_ARGS)
 {
@@ -449,7 +750,7 @@ Datum flow_omegay(PG_FUNCTION_ARGS)
 	if( PG_ARGISNULL(0) ||PG_ARGISNULL(1) ||PG_ARGISNULL(2) || PG_ARGISNULL(3))
 		ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_omegax: called with one argument NULL")));
+				errmsg("flow_omegay: called with one argument NULL")));
 				
 	Y = PG_GETARG_NDFLOW(0);
 	X = PG_GETARG_NDFLOW(1);	
@@ -478,6 +779,8 @@ Datum flow_testb(PG_FUNCTION_ARGS)
 	PG_RETURN_BOOL(b);
 }
 */
+/* flow_refused returns c->iworst
+*/
 Datum flow_refused(PG_FUNCTION_ARGS) {
 	NDFLOW	*c;
 	int	_i;
@@ -488,20 +791,98 @@ Datum flow_refused(PG_FUNCTION_ARGS) {
 				errmsg("flow_refused: called with argument NULL")));		
 	c = PG_GETARG_NDFLOW(0);
 	
-	_i = flowc_refused(c);
+	_i = c->iworst; // defined by flowc_refused() when the flow is built
+	if(!((c->status == refused) || (c->status == draft) || (c->status == undefined))) 
+		ereport(WARNING,
+				(errcode(ERRCODE_EXTERNAL_ROUTINE_EXCEPTION), // 38000
+				 errmsg("flow_refused(box) called while box->status not in (undefined,draft,refused)\n%s",
+				 flow_ndboxToStr(c,true))));	
 	PG_FREE_IF_COPY(c,0);
 	PG_RETURN_INT32(_i);
 }
+
+Datum flow_isloop(PG_FUNCTION_ARGS) {
+	NDFLOW	*c;
+	bool 	res;
+			
+	c = PG_GETARG_NDFLOW(0);
+	
+	res = c->status != noloop; // draft, refused or undefined
+		
+	PG_FREE_IF_COPY(c,0);
+	PG_RETURN_BOOL(res);
+}
+
+Datum flow_orderaccepted(PG_FUNCTION_ARGS) {
+	HeapTupleHeader t = PG_GETARG_HEAPTUPLEHEADER(0);
+	int32 max_refused = PG_GETARG_INT32(1);
+	Datum	d_refused,d_qtt;
+	ArrayType	*refused;
+	int64	qtt;
+	bool	isnull;
+	bool 	res;
+
+	d_qtt = GetAttributeByName(t, "qtt", &isnull);	
+	if (isnull)
+		ereport(ERROR,
+				(errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
+				 errmsg("qtt should not be null"),
+				 errdetail("qtt should not be null.")));
+	qtt = DatumGetInt64(d_qtt);
+	elog(WARNING,"flow_orderaccepted: qtt=%lli",qtt);
+	if(qtt <= 0)
+		PG_RETURN_BOOL(false);
+	
+	d_refused = GetAttributeByName(t, "refused", &isnull);	
+	if (isnull)
+		ereport(ERROR,
+				(errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
+				 errmsg("qtt should not be null"),
+				 errdetail("qtt should not be null.")));
+				 
+	refused = DatumGetArrayTypeP(d_refused);
+
+	if (ARR_NDIM(refused) > 1)
+		ereport(ERROR,
+				(errcode(ERRCODE_ARRAY_SUBSCRIPT_ERROR),
+				 errmsg("wrong number of array subscripts"),
+				 errdetail("Refused array must be one dimensional.")));
+
+	if(ARR_NDIM(refused) == 1) {	
+		elog(WARNING,"flow_orderaccepted: dim=%i",ARR_DIMS(refused)[0]);	 
+		res = (max_refused >= (int32) (ARR_DIMS(refused)[0]));
+	} else res = true;			
+
+	PG_RETURN_BOOL(res);
+} 
+/*
+Datum flow_lastid(PG_FUNCTION_ARGS)
+{
+	NDFLOW	*c;
+	int32 	_dim;
+	int64	_id;
+		
+	if(PG_ARGISNULL(0))
+		ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				errmsg("flow_dim: called with argument NULL")));		
+	c = PG_GETARG_NDFLOW(0);
+	
+	_dim = ((int32)(c->dim));
+	if(_dim) {
+		_id = c->x[_dim-1].id;
+	} else _id = -1;
+	
+	PG_FREE_IF_COPY(c,0);
+	PG_RETURN_INT64(_id);
+}
+*/
 
 Datum flow_dim(PG_FUNCTION_ARGS)
 {
 	NDFLOW	*c;
 	int32 	_dim;
-	
-	if(PG_ARGISNULL(0))
-		ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				errmsg("flow_dim: called with argument NULL")));		
+		
 	c = PG_GETARG_NDFLOW(0);
 	
 	_dim = ((int32)(c->dim));
@@ -605,12 +986,10 @@ static NDFLOW *Ndbox_adjust(NDFLOW *box) {
 /*****************************************************************/
 char * flow_statusBoxToStr (NDFLOW *box){
 	switch(box->status) {
-	case empty: return "empty";
 	case noloop: return "noloop";
-	case loop: return "loop";
 	case draft: return "draft";
+	case refused: return "refused";
 	case undefined: return "undefined";
-	case tobedefined: return "tobedefined";
 	
 	default: return "unknown status!";
 	}

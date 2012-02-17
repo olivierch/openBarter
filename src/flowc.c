@@ -20,46 +20,43 @@ static void _calGains(ob_tChemin *pchemin,double omegaCorrige[]);
 static int _fluxMaximum(const ob_tChemin *pchemin, double *fluxExact) ;
 static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int _iExhausted);
 static void _createChemin(NDFLOW *box, int cflags, ob_tChemin *pchemin );
+static int flowc_refused(NDFLOW *box);
 
-/*
+/* a flow has been found
 checks if the flow is refused.
-	when no solution is found on rounding
 	when some omega > qtt_p/qtt_r
 */
-/* flowc_refused returns -1 when the flow is accepted.
-Else it returns the index with the largest difference between expected and obtained.
+/* flowc_refused returns -1 when the flow is accepted:
+	all omega obtained < omega expected
+Else it returns the index with the largest ratio between omega obtained and omega expected.
 */
-int flowc_refused(NDFLOW *box) {
+static int flowc_refused(NDFLOW *box) {
 	int _dim = box->dim;
 	int _iprev,_i;
-	double _fp,_fr; // expected
+	double _ep,_er; // expected
 	double _op,_or; // obtained
-	int _worst;
-	double _delta,_d;
+	int _worst = -1;
+	double _gamma = 1.0;
+	double _g;
 	
-	_iprev = _dim -1;
-
-	
-	// status == undefined
-	if(box->status != draft) return 0;
-	
-	_worst = -1;
-	_delta = 0;
-	
+	_iprev = _dim -1;	
 	obMRange (_i,_dim) {
 		_or = (double)(box->x[_iprev].flowr);
 		_op = (double)(box->x[_i].flowr);
-		_fr = (double)(box->x[_i].qtt_requ);
-		_fp = (double)(box->x[_i].qtt_prov);
-		if( _or <=0 || _fr <= 0 ) 
+		_er = (double)(box->x[_i].qtt_requ);
+		_ep = (double)(box->x[_i].qtt_prov);
+ 
+		if(_or <= 0 || _op <= 0 || _er <=0 || _ep <= 0)
 			ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("flowc_refused with or<=0 or fr <=0")));
-		_d = (_op/_or) - (_fp/_fr);
-		if(_d >_delta) { // if(_op/_or) > (_fp/_fr)) {
-			_delta = _d;
+				 errmsg("flowc_refused with or<=0 or er <=0 or op<=0 or er<=0")));
+
+		// _op/_or > _ep/_er <=> (_op*_er)/(_or*_ep) > 1
+		_g = (_op*_er)/(_or*_ep);
+		if(_g >_gamma) { 
+			_gamma = _g;
 			_worst = _i;
-		} // return true;) 
+		}  
 
 		_iprev = _i;
 	}
@@ -76,6 +73,14 @@ int flowc_refused(NDFLOW *box) {
 	the flow is verified even if there is no loop
 	
  *****************************************************************************/
+bool flowc_isCycle(NDFLOW *box) {
+	int _dim = box->dim;
+	
+	if(_dim == 0) 
+		return false;
+	return (box->x[0].nr == box->x[_dim-1].np);
+	
+}
 
 bool flowc_maximum(NDFLOW *box,bool verify) {
 	int _dim = box->dim;
@@ -84,10 +89,10 @@ bool flowc_maximum(NDFLOW *box,bool verify) {
 	int _iExhausted;
 	int cflags;
 	
-	if(_dim == 0) {
-		box->status = empty;
+	box->status = noloop;
+	box->iworst = 0;
+	if(_dim == 0) 
 		return true;
-	}
 
 	if(_dim > FLOW_MAX_DIM) 
 		ereport(ERROR,
@@ -103,10 +108,9 @@ bool flowc_maximum(NDFLOW *box,bool verify) {
 	if(verify) cflags |= ob_flux_CVerify;
 	else cflags &= ~(ob_flux_CVerify);	
 	
-	if (box->x[0].nr != box->x[box->dim-1].np) { // box is not a cycle
+	if (!flowc_isCycle(box)) { // box is not a cycle
 		int _k;
 		
-		box->status = noloop;
 		// the flow is undefined
 		obMRange (_k,_dim)
 			box->x[_k].flowr = 0;	
@@ -138,9 +142,18 @@ bool flowc_maximum(NDFLOW *box,bool verify) {
 	/* the floating point vector is rounded 
 	to the nearest vector of positive integers */
 	if (_rounding(pchemin->fluxExact, pchemin,_iExhausted) ) {
-		box->status = draft; 
-		return true;
-	} else {
+		int _i;
+		
+		_i = flowc_refused(box);
+		box->iworst = _i;
+		if(_i!=-1) {
+			box->status = refused;
+			return false;
+		} else {
+			box->status = draft;
+			return true;
+		}
+	} else { // box->iworst = 0
 		box->status = undefined; 
 		return false;
 	}
@@ -551,27 +564,26 @@ static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int _iExhausted) {
 		
 		// All _flowNodes[.] > 0
 		obMRange (_k,_dim) {
-			
-			if(!(_flowNodes[_k] > 0)) {
+			// verify that order>= flow >0
+			if(!((box->x[_k].qtt>=_flowNodes[_k]) && (_flowNodes[_k] > 0))) {
 				_admissible = false; break;
 			}
 		}
 		if (!_admissible) continue; // the vertex is rejected
 		
-		if(!(pchemin->cflags & ob_flux_CLastIgnore)) obMRange (_k,_dim) {
+		if(!(pchemin->cflags & ob_flux_CLastIgnore)) {
+			bool _exhausts = false;
 			
-			if(_k == _iExhausted) {
-				// verify the flow exhausts the order
-				if(_flowNodes[_k] != box->x[_k].qtt ) {
-					_admissible = false; break;
-				}
-			} else {
-				// verify the flow is not greater than the order
-				if ( _flowNodes[_k] > box->x[_k].qtt ) {
-					_admissible = false; break;
-				}
+			obMRange (_k,_dim) {
+				// verify that the flow exhausts some order
+				// it can be _flowNodes[_iexhausted] or an other
+				if(_flowNodes[_k] == box->x[_k].qtt ) {
+					_exhausts = true; break;
+				}		
 			}
+			if(!_exhausts) _admissible = false;
 		}
+		
 		if (!_admissible) continue; // the vertex is rejected
 		
 		/* At this point, each node can provide flowNodes[],
@@ -623,6 +635,32 @@ double flowc_getProdOmega(NDFLOW *box) {
 				 
 		_omega = ((double)(b->qtt_prov)) / ((double)(b->qtt_requ));
 		p *= _omega;
+	}
+	return p;
+}
+
+
+double flowc_getpOmega(NDFLOW *box) {
+	int _dim = box->dim;
+	int _n,_m;
+	double p = 1.;
+	
+	if(box->status != draft) 
+			ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("flowc_getpOmega: should only be called if box is draft")));
+	
+	_m = _dim-1;
+	obMRange(_n,_dim) {
+		double _qp = (double)(box->x[_n].flowr);
+		double _qr = (double)(box->x[_m].flowr);
+
+		if(_qr == 0.) 
+			ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				 errmsg("flowc_getpOmega: flowr is zero for box->x[%i]",_m)));
+		p *= _qp/_qr;
+		_m = _n;
 	}
 	return p;
 }

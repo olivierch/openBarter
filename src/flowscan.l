@@ -38,10 +38,9 @@ n            [0-9]+
 integer      [+-]?{n}
 
 %%
-empty 		yylval.status = empty; return STATUS;
 noloop		yylval.status = noloop; return STATUS;
-loop 		yylval.status = loop; return STATUS;
 draft 		yylval.status = draft; return STATUS;
+refused 	yylval.status = refused; return STATUS;
 undefined 	yylval.status = undefined; return STATUS;
 {integer}    yylval.text = yytext; return FLOWINT;
 \[           yylval.text = "("; return O_BRACKET;
