@@ -154,3 +154,11 @@ CREATE OR REPLACE FUNCTION fcntcycles() RETURNS TABLE(nbCycle int8,cnt int8) AS 
 	) a group by a.cxt order by a.cxt desc $$
 LANGUAGE SQL;
 
+
+-- for each cycle length, gives the number in tmvt
+CREATE OR REPLACE FUNCTION fcntrefused() RETURNS TABLE(nbCycle int8,cnt int8) AS $$ 
+	select a.rl as nbCycle ,count(*) as cnt from (
+		select array_length(refused,1) as rl  from torder 
+	) a group by a.rl order by a.rl desc $$
+LANGUAGE SQL;
+

@@ -1,6 +1,4 @@
 %{
-/* NdBox = [(lowerleft),(upperright)] */
-/* [(xLL(1)...xLL(N)),(xUR(1)...xUR(n))] */
 
 /* contrib/flow/flowparse.y */
 
@@ -46,6 +44,7 @@ static NDFLOW * add_bid(NDFLOW *result, int64 *vals);
     int dim;
   } bnd;
   STATUSNDFLOW status;
+  bool unBool;
   char * text;
 }
 %token <text> O_PAREN
@@ -56,6 +55,7 @@ static NDFLOW * add_bid(NDFLOW *result, int64 *vals);
 %token <text>  FLOWINT
 %token <status> STATUS
 %type  <bnd>  list
+%token <unBool> BOOL
 %start box
 
 /* Grammar follows */
@@ -66,8 +66,8 @@ box:
           	//empty
              }
         |
-             O_BRACKET bid_list C_BRACKET {
-          	//((NDFLOW * )result)->status = $2;
+             O_BRACKET BOOL COMMA bid_list C_BRACKET {
+          	((NDFLOW * )result)->lastRelRefused = $2;
           	//flow_compute((NDFLOW * )result);
              }
       ;

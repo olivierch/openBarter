@@ -17,19 +17,23 @@ typedef struct ob_tNo {
 	int 	stockIndex,ownIndex;
 } ob_tNo;
 
-
+// defines the status of the flow
 typedef enum STATUSNDFLOW {
-	noloop, // it is not a loop perhaps empty
 	draft, // solution found, accepted
 	refused, // solution found, refused
-	undefined // no solution found, (rounding did not find any solution)
+	undefined // no solution found, (rounding did not find any solution, or !iscycle)
 } STATUSNDFLOW;
 
 typedef struct NDFLOW {
 	int32		vl_len_; /* varlena header (do not touch directly!) */
 	unsigned int dim;
-	STATUSNDFLOW	status;
+	bool	lastRelRefused; // relation refused between end and begin
+	
+	// set by set by flowc_maximum
+	bool	isloop; // relation accepted between end and begin, and end.np=begin.nr
+	STATUSNDFLOW	status; 
 	int 	iworst; // defined when status=refused, iworst is the index refused
+	
 	BID	x[1];
 } NDFLOW;
 
@@ -72,5 +76,5 @@ extern double 	flowc_getpOmega(NDFLOW *box);
 extern char *flow_ndboxToStr(NDFLOW *flow,bool internal);
 extern char * flowc_cheminToStr(ob_tChemin *pchemin);
 extern bool flowc_idInBox(NDFLOW *box,int64 id);
-extern bool flowc_isCycle(NDFLOW *box);
+// extern bool flowc_isCycle(NDFLOW *box);
 // extern int flowc_refused(NDFLOW *box);

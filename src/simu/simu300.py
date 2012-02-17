@@ -10,6 +10,8 @@ import sys
 
 #stdscr = curses.initscr()
 cur_user = 'olivier'
+owner_max = 20
+quality_max = 20
 
 def connect():
 	dbcon = psycopg2.connect(
@@ -25,16 +27,16 @@ def connect():
 def boulot(cursor,stop = False):
 	todo = "Undefined";
 	try:
-		owner = 'w'+str(random.randint(1,20))
+		owner = 'w'+str(random.randint(1,owner_max))
 		max_qtt = 10000 #sys.maxint
 		qtt_r = random.randint(1,max_qtt)
 		qtt_p = random.randint(1,max_qtt)
 	
 		# a couple (inr,inp) such as inr != inp
-		inr = random.randint(1,20)
+		inr = random.randint(1,quality_max)
 		inp = inr
 		while inp == inr:
-			inp = random.randint(1,20)
+			inp = random.randint(1,quality_max)
 		nr = cur_user+'/q'+str(inr)
 		np = cur_user+'/q'+str(inp)
 		todo = 'SELECT finsertorder(\'%s\',\'%s\',%i,%i,\'%s\',%i);' % (owner,nr,qtt_r,qtt_p,np,-1)
@@ -95,11 +97,11 @@ def simu(itera):
 					res,done = boulot(cursor)
 					if(res):
 						print '%i agreement found in %.6f' % (res,getDelai(begin))
-					errs = verif(cursor)
+					errs = 0 #verif(cursor)
 					if(errs !=0):
 						print '%i errors'% errs
 						print 'after nbOper=%i:\n%s' % (nbOper,done)
-						break
+						break 
 				else:
 					print 'No error'
 					nbOper -=1

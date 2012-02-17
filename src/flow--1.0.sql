@@ -48,17 +48,9 @@ CREATE TYPE flow (
 	ALIGNMENT = double
 );
 
---COMMENT ON TYPE flow IS 'flow ''[(id,nr,qtt_prov,qtt_requ,sid,own,qtt,np), ...]''';
-COMMENT ON TYPE flow IS 'flow ''[(id,nr,qtt_prov,qtt_requ,own,qtt,np), ...]''';
+COMMENT ON TYPE flow IS 'flow ''[r,(id,nr,qtt_prov,qtt_requ,own,qtt,np), ...]''';
 
--- (Y.flow,X.flow,id,nr,qtt_prov,qtt_requ,own,qtt,np)
---CREATE FUNCTION flow_cat(flow,flow,int8,int8,int8,int8,int8,int8,int8,int8)
-CREATE FUNCTION flow_cat(flow,int8,int8,int8,int8,int8,int8,int8)
-RETURNS flow
-AS 'MODULE_PATHNAME'
-LANGUAGE C IMMUTABLE STRICT;
-
-CREATE FUNCTION flow_catt(flow,int8,int8,int8,int8,int8,int8,int8)
+CREATE FUNCTION flow_catt(flow,int8,int8,int8,int8,int8,int8,int8,int8[])
 RETURNS flow
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
@@ -82,12 +74,6 @@ CREATE FUNCTION flow_maxdimrefused(int8[],int)
 RETURNS bool
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
-
-CREATE FUNCTION flow_iscycle(flow,int8)
-RETURNS bool
-AS 'MODULE_PATHNAME'
-LANGUAGE C IMMUTABLE STRICT;
-
 
 CREATE FUNCTION flow_isloop(flow)
 RETURNS bool

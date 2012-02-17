@@ -277,7 +277,7 @@ when pivot is reached, the path is a loop (refused or draft) and omegas are adju
 		FOR _cnt IN 2 .. _obCMAXCYCLE LOOP
 			UPDATE _tmp Y 
 			SET 
-			flow = flow_catt(X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.own,Y.qtt,Y.np)
+			flow = flow_catt(X.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.own,Y.qtt,Y.np,Y.refused)
 			FROM _tmp X WHERE X.id != _idPivot -- arcs pivot->sources are not considered
 				AND Y.qtt > 0 AND flow_maxdimrefused(Y.refused,_MAX_REFUSED)
 				AND flow_omegaz(X.flow,Y.flow,Y.id,Y.nr,Y.qtt_prov,Y.qtt_requ,Y.own,Y.qtt,Y.np,X.refused,Y.refused);
@@ -351,11 +351,8 @@ BEGIN
 		-- or when no solution was found
 		-- _worst in [0,_nbcommit[, 
 		--	 _oid1 = _commits[worst-1][1],
-		--	 _oid2 = _commits[worst][1] */
-		-- _oid1 := _commits[((_worst-1+_nbcommit)%_nbcommit)+1][1];	
+		--	 _oid2 = _commits[worst][1] */	
 		-- -1%_nbcommit gives -1, but (-1+_nbcommit)%_nbcommit gives _nbcommit-1 		
-		-- _oid2 := _commits[_worst+1][1];
-		-- RAISE NOTICE 'flow_refused: _worst=%, _oid1=%, _oid2=%, _commits=%, _flw=%',_worst,_oid1,_oid2,_commits,CAST(_flw AS TEXT);
 				
 		_oid1 := _commits[((_worst-1+_nbcommit)%_nbcommit)			+1][1];	
 		_oid2 := _commits[  _worst						+1][1];		

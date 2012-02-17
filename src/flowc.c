@@ -73,14 +73,6 @@ static int flowc_refused(NDFLOW *box) {
 	the flow is verified even if there is no loop
 	
  *****************************************************************************/
-bool flowc_isCycle(NDFLOW *box) {
-	int _dim = box->dim;
-	
-	if(_dim == 0) 
-		return false;
-	return (box->x[0].nr == box->x[_dim-1].np);
-	
-}
 
 bool flowc_maximum(NDFLOW *box,bool verify) {
 	int _dim = box->dim;
@@ -89,16 +81,20 @@ bool flowc_maximum(NDFLOW *box,bool verify) {
 	int _iExhausted;
 	int cflags;
 	
-	box->status = noloop;
+	box->status = undefined;
 	box->iworst = 0;
+	box->isloop = false;
 	if(_dim == 0) 
 		return true;
+		
 
 	if(_dim > FLOW_MAX_DIM) 
 		ereport(ERROR,
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			 errmsg("max dimension reached for the flow")));
 
+	if((!box->lastRelRefused) && (box->x[_dim-1].np == box->x[0].nr)) 
+		box->isloop = true;		
 	
 	// computes cflags
 	cflags = 0;
@@ -108,7 +104,7 @@ bool flowc_maximum(NDFLOW *box,bool verify) {
 	if(verify) cflags |= ob_flux_CVerify;
 	else cflags &= ~(ob_flux_CVerify);	
 	
-	if (!flowc_isCycle(box)) { // box is not a cycle
+	if (!box->isloop) { // box is not a cycle
 		int _k;
 		
 		// the flow is undefined
@@ -154,7 +150,7 @@ bool flowc_maximum(NDFLOW *box,bool verify) {
 			return true;
 		}
 	} else { // box->iworst = 0
-		box->status = undefined; 
+		// box->status = undefined; 
 		return false;
 	}
 }
@@ -205,21 +201,25 @@ static void _createChemin(NDFLOW *box, int cflags, ob_tChemin *pchemin ) {
 		n->omega = ((double)(b->qtt_prov)) / ((double)(b->qtt_requ));
 		pchemin->prodOmega *= n->omega;
 		
-		// b.id are unique in box
-		if (_verify ) obMRange(_m,_n) {
-			if(b->id == box->x[_m].id) {
-				ereport(ERROR,
-					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("createChemin: bid[%i].id=%lli found twice",_n,b->id)));
+		if(_verify) {
+			// b.id are unique in box
+			obMRange(_m,_n) {
+				if(b->id == box->x[_m].id) {
+					ereport(ERROR,
+						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+						 errmsg("createChemin: bid[%i].id=%lli found twice",_n,b->id)));
+				}
+			}
+		
+			// successive orders match
+			if(_n != 0 ) {
+				if(box->x[_n-1].np != b->nr) {
+					ereport(ERROR,
+						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+						 errmsg("createChemin: bid[%i].np=%lli != bid[%i].nr=%lli",_n-1,box->x[_n-1].np,_n,b->nr)));		
+				}
 			}
 		}
-		
-		if((_n != 0) &&  _verify ) 
-			if(box->x[_n-1].np != b->nr) {
-				ereport(ERROR,
-					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("createChemin: bid[%i].np=%lli != bid[%i].nr=%lli",_n-1,box->x[_n-1].np,_n,b->nr)));		
-			}
 			
 		// defines ownIndex and updates nbOwn
 		/****************************************************/

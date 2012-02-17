@@ -36,9 +36,7 @@ void flow_scanner_finish(void);
 
 n            [0-9]+
 integer      [+-]?{n}
-
 %%
-noloop		yylval.status = noloop; return STATUS;
 draft 		yylval.status = draft; return STATUS;
 refused 	yylval.status = refused; return STATUS;
 undefined 	yylval.status = undefined; return STATUS;
@@ -48,6 +46,8 @@ undefined 	yylval.status = undefined; return STATUS;
 \(           yylval.text = "("; return O_PAREN;
 \)           yylval.text = ")"; return C_PAREN;
 \,           yylval.text = ")"; return COMMA;
+t		yylval.unBool = true;return BOOL;
+f		yylval.unBool = false;return BOOL;
 [ \t\n\r\f]+ /* discard spaces */
 .            return yytext[0]; /* alert parser of the garbage */
 
