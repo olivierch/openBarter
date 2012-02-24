@@ -354,9 +354,11 @@ $$ LANGUAGE PLPGSQL; */
 --------------------------------------------------------------------------------
 -- ORDER
 --------------------------------------------------------------------------------
-
+-- id,tid,uuid,qtt,nr,np,qtt_prov,qtt_requ,own,refused,created,updated
 create table torder ( 
     id bigserial UNIQUE not NULL,
+    tid int8 DEFAULT NULL,
+    uuid text NOT NULL,
     qtt int8 NOT NULL,
     nr int8 references tquality(id) on update cascade 
 	on delete cascade not NULL ,
@@ -383,28 +385,76 @@ comment on column torder.qtt is 'current quantity remaining';
 comment on column torder.qtt_prov is 'quantity offered';
 comment on column torder.qtt_requ is 'used to express omega=qtt_prov/qtt_req';
 comment on column torder.own is 'owner of the value provided';
+comment on column torder.refused is 'list of order the owner refuse to provide';
 
 alter sequence torder_id_seq owned by torder.id;
 create index torder_nr_idx on torder(nr);
 create index torder_np_idx on torder(np);
 -- SELECT _reference_time('torder');
+-- id,uuid,qtt,nr,np,qtt_prov,qtt_requ,own,refused,created,updated
+
 
 --------------------------------------------------------------------------------
-
+-- id,uuid,owner,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,nbrefused,created,updates,omega
 CREATE VIEW vorder AS 
 	SELECT 	
 		n.id as id,
+		n.uuid as uuid,
 		w.name as owner,
 		qr.name as qua_requ,
 		n.qtt_requ,
 		qp.name as qua_prov,
 		n.qtt_prov,
 		n.qtt,
-		array_upper(n.refused,1) as nbrefused,
+		array_length(n.refused,1) as nbrefused,
 		n.created as created,
 		n.updated as updated,
 		CAST(n.qtt_prov as double precision)/CAST(n.qtt_requ as double precision) as omega
 	FROM torder n
+	INNER JOIN tquality qr ON n.nr = qr.id 
+	INNER JOIN tquality qp ON n.np = qp.id
+	INNER JOIN towner w on n.own = w.id;
+	
+GRANT SELECT ON vorder TO market;
+
+-- uuid,owner,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,created,updated
+-- Columns of torderempty and torder are the same 
+-- id,tid,uuid,qtt,nr,np,qtt_prov,qtt_requ,own,refused,created,updated
+create table torderempty ( 
+    uuid text NOT NULL,
+    qtt int8 NOT NULL,
+    nr int8 references tquality(id) on update cascade 
+	on delete cascade not NULL ,
+    np int8 references tquality(id) on update cascade 
+	on delete cascade not NULL ,
+    qtt_prov dquantity NOT NULL,
+    qtt_requ dquantity NOT NULL, 
+    own int8 references towner(id) on update cascade 
+	on delete cascade, -- when the order is inserted it is NULL until all mvts and refused are inserted
+    refused int8[] NOT NULL DEFAULT array[]::int8[],
+    created timestamp not NULL,
+    updated timestamp default NULL,
+    PRIMARY KEY (uuid),
+    CHECK(	
+    	-- char_length(name)>0 AND 
+    	qtt >=0 
+    )
+);
+
+CREATE VIEW vorderempty AS 
+	SELECT 	
+		n.uuid as uuid,
+		w.name as owner,
+		qr.name as qua_requ,
+		n.qtt_requ,
+		qp.name as qua_prov,
+		n.qtt_prov,
+		n.qtt,
+		array_length(n.refused,1) as nbrefused,
+		n.created as created,
+		n.updated as updated,
+		CAST(n.qtt_prov as double precision)/CAST(n.qtt_requ as double precision) as omega
+	FROM torderempty n
 	INNER JOIN tquality qr ON n.nr = qr.id 
 	INNER JOIN tquality qp ON n.np = qp.id
 	INNER JOIN towner w on n.own = w.id;
@@ -436,9 +486,10 @@ comment on table trefused is 'list of relations refused';
 -- create sequence tmvt_id_seq;
 create table tmvt (
         id bigserial UNIQUE not NULL,
-        orid int8 references torder,
+        orid int8 references torder ON DELETE SET NULL,
         -- references the order
         -- can be NULL
+        oruuid text NOT NULL, -- refers to order uuid
     	grp int8 references tmvt(id), 
     	-- References the first mvt of an exchange.
     	-- can be NULL
@@ -452,12 +503,14 @@ create table tmvt (
 	created timestamp not NULL
 );
 comment on table tmvt is 'records a change of ownership';
-comment on column tmvt.orid is 
-	'order creating this movement';
+-- comment on column tmvt.orid is 
+--	'order.id creating this movement';
+comment on column tmvt.oruuid is 
+	'order.uuid creating this movement';
 comment on column tmvt.grp is 
 	'refers to an exchange cycle that created this movement';
 comment on column tmvt.own_src is 
-	'old owner';
+	'previous owner';
 comment on column tmvt.own_dst is 
 	'new owner';
 comment on column tmvt.qtt is 
@@ -491,7 +544,7 @@ create index tmvt_own_dst_idx on tmvt(own_dst);
 --------------------------------------------------------------------------------
 CREATE VIEW vmvt AS 
 	SELECT 	m.id as id,
-		m.orid as orid,
+		m.oruuid as oruuid,
 		m.grp as grp,
 		w_src.name as provider,
 		q.name as nat,

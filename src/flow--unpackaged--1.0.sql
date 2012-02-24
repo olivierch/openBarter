@@ -5,7 +5,7 @@ ALTER EXTENSION flow ADD function flow_out(flow);
 
 ALTER EXTENSION flow ADD function flow_omegay(flow,flow,int8,int8);
 ALTER EXTENSION flow ADD function flow_omegaz(flow,flow,int8,int8,int8,int8,int8,int8,int8,int8[],int8[]);
-ALTER EXTENSION flow ADD function flow_replace(flow,int8);
+ALTER EXTENSION flow ADD function flow_show(flow);
 ALTER EXTENSION flow ADD function flow_proj(flow,int);
 ALTER EXTENSION flow ADD function flow_refused(flow);
 ALTER EXTENSION flow ADD function flow_dim(flow);

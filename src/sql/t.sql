@@ -7,9 +7,9 @@ set search_path='t';
 
 insert into tuser(name) values (current_user);
 
-select finsertorder('o1',current_user || '/q1',1,3,current_user || '/q3');
-select finsertorder('o2',current_user || '/q2',2,1,current_user || '/q1');
-select finsertorder('o3',current_user || '/q3',3,2,current_user || '/q2');
+select finsertorder('o1',current_user || '/q1',1,3,current_user || '/q3',-1);
+select finsertorder('o2',current_user || '/q2',2,1,current_user || '/q1',-1);
+select finsertorder('o3',current_user || '/q3',3,2,current_user || '/q2',-1);
 
 -- 2 owners
 -- update tconst set value=0 where name='VERIFY';

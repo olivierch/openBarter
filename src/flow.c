@@ -52,7 +52,7 @@ PG_FUNCTION_INFO_V1(flow_to_matrix);
 PG_FUNCTION_INFO_V1(flow_catt);
 PG_FUNCTION_INFO_V1(flow_init);
 PG_FUNCTION_INFO_V1(flow_omegay);
-PG_FUNCTION_INFO_V1(flow_replace);
+PG_FUNCTION_INFO_V1(flow_show);
 PG_FUNCTION_INFO_V1(flow_iscycle);
 PG_FUNCTION_INFO_V1(flow_omegaz);
 PG_FUNCTION_INFO_V1(flow_to_commits);
@@ -74,7 +74,7 @@ Datum flow_to_matrix(PG_FUNCTION_ARGS);
 Datum flow_catt(PG_FUNCTION_ARGS);
 Datum flow_init(PG_FUNCTION_ARGS);
 Datum flow_omegay(PG_FUNCTION_ARGS);
-Datum flow_replace(PG_FUNCTION_ARGS);
+Datum flow_show(PG_FUNCTION_ARGS);
 Datum flow_iscycle(PG_FUNCTION_ARGS);
 Datum flow_omegaz(PG_FUNCTION_ARGS);
 Datum flow_to_commits(PG_FUNCTION_ARGS);
@@ -150,7 +150,13 @@ char *flow_ndboxToStr(NDFLOW *flow,bool internal) {
 	}
 	appendStringInfoChar(&buf, '[');
 	if(dim >0) {
-		appendStringInfo(&buf, "%c,",(flow->isloop)?'f':'t');
+		if(internal) {
+			appendStringInfo(&buf, "lastRelRefused=%c, ",(flow->lastRelRefused)?'t':'f');
+			appendStringInfo(&buf, "isloop=%c, ",(flow->isloop)?'t':'f');
+			appendStringInfo(&buf, "iworst=%i, ",flow->iworst);
+		} else 
+			// appendStringInfo(&buf, "%c,",(flow->isloop)?'f':'t'); 
+			appendStringInfo(&buf, "%c,",(flow->lastRelRefused)?'t':'f');
 		for (i = 0; i < dim; i++)
 		{	
 			BID *s = &flow->x[i];
@@ -287,13 +293,12 @@ Datum flow_catt(PG_FUNCTION_ARGS)
 	result = Ndbox_adjust(result);
 	PG_RETURN_NDFLOW(result);
 }
-Datum flow_replace(PG_FUNCTION_ARGS) {
+Datum flow_show(PG_FUNCTION_ARGS) {
 	NDFLOW	*X;
-	int64	id;
 	
 	X = PG_GETARG_NDFLOW(0);
-	id = PG_GETARG_INT64(1);
-	PG_RETURN_BOOL(!flowc_idInBox(X,id));
+	elog(WARNING,"flow_show: %s",flow_ndboxToStr(X,true));
+	PG_RETURN_BOOL(true);
 
 }
 
@@ -455,8 +460,7 @@ Datum flow_omegaz(PG_FUNCTION_ARGS)
 	if((Xdim+1) > FLOW_MAX_DIM)
     		ereport(ERROR,
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-			errmsg("flow_omegaz: attempt to extend a flow out of range")));			
-	//elog(WARNING,"flow_cat: input %s",flow_ndboxToStr(c,true));	
+			errmsg("flow_omegaz: attempt to extend a flow out of range")));				
 	
 	// Z = X.flow+Y.order			
 	Z = Ndbox_init(FLOW_MAX_DIM);			

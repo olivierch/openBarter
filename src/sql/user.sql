@@ -2,7 +2,7 @@
 --------------------------------------------------------------------------------
 -- error reported to the client only
 -- OK tested
-create function fuser(_she text,_quota int8) RETURNS void AS $$
+create or replace function fuser(_she text,_quota int8) RETURNS void AS $$
 BEGIN
 	LOOP
 		UPDATE tuser SET quota = _quota WHERE name = _she;

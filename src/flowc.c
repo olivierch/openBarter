@@ -94,7 +94,9 @@ bool flowc_maximum(NDFLOW *box,bool verify) {
 			 errmsg("max dimension reached for the flow")));
 
 	if((!box->lastRelRefused) && (box->x[_dim-1].np == box->x[0].nr)) 
-		box->isloop = true;		
+		box->isloop = true;
+		
+	// elog(WARNING,"flowc_maximum: isloop=%c",box->isloop?'t':'f');		
 	
 	// computes cflags
 	cflags = 0;
@@ -140,6 +142,7 @@ bool flowc_maximum(NDFLOW *box,bool verify) {
 	if (_rounding(pchemin->fluxExact, pchemin,_iExhausted) ) {
 		int _i;
 		
+		//elog(WARNING,"flowc_maximum: _rounding()=t");
 		_i = flowc_refused(box);
 		box->iworst = _i;
 		if(_i!=-1) {
@@ -151,6 +154,7 @@ bool flowc_maximum(NDFLOW *box,bool verify) {
 		}
 	} else { // box->iworst = 0
 		// box->status = undefined; 
+		//elog(WARNING,"flowc_maximum: _rounding()=f");
 		return false;
 	}
 }
@@ -237,39 +241,6 @@ static void _createChemin(NDFLOW *box, int cflags, ob_tChemin *pchemin ) {
 		occOwn[_ownIndex] += 1;
 		n->ownIndex = _ownIndex;
 		
-		// defines stockIndex and updates nbStock
-		/****************************************************/
-		/*
-		_stockIndex = pchemin->nbStock;
-		obMRange(_m,pchemin->nbStock) {
-			if (b->sid == box->x[_m].sid) {
-				_stockIndex = _m;
-				break;// found
-			}
-		}
-		if (_stockIndex == pchemin->nbStock) { // not found
-			occStock[_stockIndex] = 0;
-			pchemin->nbStock += 1;
-		} else if (_verify ) { // found
-			if(b->own != box->x[_stockIndex].own) {
-				ereport(ERROR,
-					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("createChemin: the stock[%lli] has several owners!",b->sid)));
-			}
-			if(b->np != box->x[_stockIndex].np) {
-				ereport(ERROR,
-					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("createChemin: the stock[%lli] has several np!",b->sid)));
-			}
-			if(b->qtt != box->x[_stockIndex].qtt) {
-				ereport(ERROR,
-					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("createChemin: the stock[%lli] has several qtt!",b->sid)));
-			}
-		}
-		occStock[_stockIndex] += 1;
-		n->stockIndex = _stockIndex;
-		*/
 	} 
 	
 	if(pchemin->nbOwn == 0) { // || pchemin->nbStock == 0) {
@@ -278,22 +249,6 @@ static void _createChemin(NDFLOW *box, int cflags, ob_tChemin *pchemin ) {
 			 errmsg("createChemin: nbOwn equals zero")));		
 	}
 	
-	//if (pchemin->cflags & ob_flux_CLastIgnore) {
-		/* the stock of the pivot should not be used by any other node when ob_flux_CLastIgnore
-		=> index of stocks used by nodes other than the pivot should be in [0,_lonStockl[ */
-		/*int _m = pchemin->no[_dim-1].stockIndex;
-		
-		if( occStock[_m]!= 1) {
-			ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("createChemin: when ob_flux_CLastIgnore, the last stock is not only used by the last bid")));
-		}
-		if(box->x[_m].sid != 0) {
-			ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("createChemin: when ob_flux_CLastIgnore, the last stock is with sid != 0")));
-		}
-	}*/
 	return;	
 }
 
@@ -548,17 +503,6 @@ static bool _rounding(double *fluxExact, ob_tChemin *pchemin,int _iExhausted) {
 		/******************************/
 		_obtain_vertex(_dim,_matcour,_floor,_flowNodes);
 
-		// obtain _flowStocks
-		/********************/
-		/*
-		obMRange (_k,_lonStock)
-			_flowStocks[_k] = 0;
-
-		obMRange (_j,_dim) {
-			_k = pchemin->no[_j].stockIndex;
-			_flowStocks[_k] += _flowNodes[_j];
-		} */
-
 		// several checkings
 		/*******************/
 		
@@ -667,31 +611,21 @@ double flowc_getpOmega(NDFLOW *box) {
 
 char * flowc_cheminToStr(ob_tChemin *pchemin) {
 	StringInfoData buf;
+	//NDFLOW *flow = pchemin->box;
 	int _dim = pchemin->box->dim;
 	int _n,_o;
 	
 	
 	initStringInfo(&buf);
 	
-	appendStringInfo(&buf, "CHEMIN cflags=%x nbOwn=%i gain=%f prodOmega=%f", 
+	appendStringInfo(&buf, "CHEMIN cflags=%x nbOwn=%i gain=%f prodOmega=%f ", 
 		pchemin->cflags,pchemin->nbOwn,pchemin->gain,pchemin->prodOmega);
-	/*
-	appendStringInfo(&buf, "\noccStock[.]=[");
-	_o = pchemin->nbStock;
-	obMRange(_n,_o) {
-		appendStringInfo(&buf, "%i, ", pchemin->occStock[_n]);
-	}*/
 	
 	appendStringInfo(&buf, "\noccOwn[.]=[");
 	_o = pchemin->nbOwn;
 	obMRange(_n,_o) {
 		appendStringInfo(&buf, "%i, ", pchemin->occOwn[_n]);
 	}
-	/*
-	appendStringInfo(&buf, "]\nno[.].stockIndex[");
-	obMRange(_n,_dim) {
-		appendStringInfo(&buf, "%i, ", pchemin->no[_n].stockIndex);
-	}*/
 	
 	appendStringInfo(&buf, "]\nno[.].ownIndex[");
 	obMRange(_n,_dim) {
@@ -711,12 +645,7 @@ char * flowc_cheminToStr(ob_tChemin *pchemin) {
 	appendStringInfo(&buf, "]\npiom[.]=[");
 	obMRange(_n,_dim) {
 		appendStringInfo(&buf, "%f, ", pchemin->piom[_n]);
-	}	
-	/*
-	appendStringInfo(&buf, "],spiom[.]=[");
-	obMRange(_n,_dim) {
-		appendStringInfo(&buf, "%f, ", pchemin->spiom[_n]);
-	}*/	
+	}		
 	
 	appendStringInfo(&buf, "]\nfluxExact[.]=[");
 	obMRange(_n,_dim) {

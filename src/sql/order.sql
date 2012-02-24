@@ -1,14 +1,12 @@
 set schema 't';
+
 drop extension if exists flow cascade;
 create extension flow;
 
 INSERT INTO tconst (name,value) VALUES 
 -- The following can be changed
 ('VERIFY',1), -- if 1, verifies accounting each time it is changed
-('REMOVE_CYCLES',0), -- 1, remove unexpected cycles 0 -- stop on unexpected cycles
-('DELETE_GRAPH',0); -- 1 delete graph unused. TODO Should test if it is faster with 0
-
-
+('REMOVE_CYCLES',0); -- 1, remove unexpected cycles 0 -- stop on unexpected cycles
 
 --------------------------------------------------------------------------------
 -- finsert_order
@@ -27,12 +25,11 @@ INSERT INTO tconst (name,value) VALUES
 
 */
 --------------------------------------------------------------------------------
-CREATE FUNCTION 
-	finsertorder(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text,_phase int) 
-	RETURNS int AS $$
+CREATE OR REPLACE FUNCTION 
+	finsertorder(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text,_debugPhase int) 
+	RETURNS TABLE(_uuid text,_cnt int) AS $$
 	
 DECLARE
-	_cnt int;
 	_user text;
 	_np	int8;
 	_nr	int8;
@@ -73,7 +70,9 @@ BEGIN
 	_pivot.qtt_prov := _qttprovided;
 	_pivot.qtt_requ := _qttrequired;
 	
-	_cnt := finsert_order_int(_pivot,_phase);
+	FOR _uuid,_cnt IN SELECT * FROM finsert_order_int(_pivot,_debugPhase) LOOP
+		RETURN NEXT;
+	END LOOP;
 	
 	perform fspendquota(_time_begin);
 		
@@ -81,35 +80,42 @@ BEGIN
 		perform fverify();
 	END IF;
 	
-	RETURN _cnt;
+	RETURN;
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RAISE INFO 'ABORTED';
-	RETURN 0;
+	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION finsertorder(text,text,int8,int8,text,int) TO market;
+
+
+CREATE OR REPLACE FUNCTION fgetuuid(_id int8) RETURNS text AS $$ 
+	select current_date::text || '-' || lpad($1::text,8,'0'); $$
+LANGUAGE SQL;
 
 --------------------------------------------------------------------------------
 -- finsert_order_int
 
 --------------------------------------------------------------------------------
-CREATE FUNCTION 
-	finsert_order_int(_pivot torder,_phase int) 
-	RETURNS int AS $$
+CREATE OR REPLACE FUNCTION 
+	finsert_order_int(_pivot torder,_debugPhase int) RETURNS TABLE(_uuid text,_cnt int) AS $$
 DECLARE
 	_lidpivots	int8[];
 	_xpivots	int8[];
 	_idpivot	int8;
-	_cnt		int:=0;
-	_cntd		int;
+	_cnt		int;
 	_cntl		int := 0;
+	_uuid		text;
 BEGIN
 	------------------------------------------------------------------------
 	_pivot.qtt := _pivot.qtt_prov;
 
-	INSERT INTO torder (qtt,nr,np,qtt_prov,qtt_requ,own,created,updated) 
-		VALUES (_pivot.qtt,_pivot.nr,_pivot.np,_pivot.qtt_prov,_pivot.qtt_requ,_pivot.own,statement_timestamp(),NULL)
+	-- _uuid := CAST(flow_uuid() AS text);
+	INSERT INTO torder (uuid,qtt,nr,np,qtt_prov,qtt_requ,own,created,updated) 
+		VALUES ('',_pivot.qtt,_pivot.nr,_pivot.np,_pivot.qtt_prov,_pivot.qtt_requ,_pivot.own,statement_timestamp(),NULL)
 		RETURNING id INTO _idpivot;
+	_uuid := fgetuuid(_idpivot);
+	UPDATE torder SET uuid = _uuid WHERE id=_idpivot;
 		-- _idpivot makes cycles
 		
 	_lidpivots := ARRAY[_idpivot];
@@ -121,15 +127,12 @@ BEGIN
 		
 		IF(_cntl > 1) THEN
 			RAISE WARNING 'ftraversal(%) unexpected cycle correction for %', _idpivot,_lidpivots;
+			SELECT uuid INTO _uuid FROM torder WHERE id = idpivot; 
 		END IF;
 		
-		SELECT * INTO _lidpivots,_cntd FROM ftraversal(_idpivot,_phase); -- find and execute contracts
-		_cnt := _cnt + _cntd;
-/*		
-		IF(array_length(_lidpivots,1) != 0) THEN
-			RAISE WARNING 'ftraversal found some unexpected cycles on %',_lidpivots;
-		END IF;
-*/		
+		SELECT * INTO _lidpivots,_cnt FROM ftraversal(_idpivot,_debugPhase); -- find and execute contracts
+		RETURN NEXT; --_cnt := _cnt + _cntd;
+		
 		-- adds new unexpected pivots found to the list to be processed
 		-- it is a union of _lidpivots and _xpivots
 		SELECT _lidpivots || array_agg(xpivot) INTO _lidpivots FROM (
@@ -140,14 +143,14 @@ BEGIN
 		_lidpivots := _lidpivots[2:array_length(_lidpivots,1)];  -- pop _idpivot
 	END LOOP;
 	
- 	RETURN _cnt;
+ 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL; 
-/* if _phase = -1, never stop
-if _phase = 0 stop after backward traversal
-else if _phase = _cntgraph stops after forward traversal */
+/* if _debugPhase = -1, never stop
+if _debugPhase = 0 stop after backward traversal
+else if _debugPhase = _cntgraph stops after forward traversal */
 -------------------------------------------------------------------------------
-CREATE FUNCTION ftraversal(_idPivot int8,_phase int,OUT _lidpivots int8[],OUT _cntd int) AS $$
+CREATE OR REPLACE FUNCTION ftraversal(_idPivot int8,_debugPhase int,OUT _lidpivots int8[],OUT _cntd int) AS $$
 DECLARE 
 	_obCMAXCYCLE int := fgetconst('obCMAXCYCLE');
 	_maxDepth int;
@@ -156,7 +159,6 @@ DECLARE
 	_i int;
 	_pivotReached bool;
 	_loopFound bool;
-	_DELETE_GRAPH int := fgetconst('DELETE_GRAPH');
 	_MAX_REFUSED int := fgetconst('MAX_REFUSED');
 BEGIN
 	_lidpivots := ARRAY[]::int8[];
@@ -164,7 +166,7 @@ BEGIN
 	-- RAISE INFO 'ftraversal called for pivot=%',_idPivot;
 	
 	DROP TABLE IF EXISTS _tmp;
-	CREATE TEMP TABLE _tmp /* ON COMMIT DROP */ AS (
+	CREATE TEMP TABLE _tmp ON COMMIT DROP AS (
 		WITH RECURSIVE search_backward(id,nr,qtt_prov,qtt_requ,refused,
 						own,qtt,np,
 						pat,loop,
@@ -198,7 +200,7 @@ BEGIN
 		FROM search_backward group by id
 	);
 	-- depthb in [1,_obCMAXCYCLE]
-	IF ( _phase = 0 ) THEN
+	IF ( _debugPhase = 0 ) THEN
 		-- RAISE NOTICE 'ftraversal(%) stopped before fexecute_flow(flow) with flow=%',_idPivot,_flow;
 		RETURN;
 	END IF;
@@ -255,9 +257,7 @@ BEGIN
 			Zrefused = t.refused
 		FROM (SELECT min(depthx) as depthx,id FROM search_forward group by id ) sf WHERE t.id = sf.id ;
 		
---		UPDATE _tmp SET flow = flow_init(t.id,t.nr,t.qtt_prov,t.qtt_requ,t.own,t.qtt,t.np),Zrefused=refused WHERE depthf=2;
-		
-		IF ( _phase = 1 ) THEN
+		IF ( _debugPhase = 1 ) THEN
 			-- RAISE NOTICE 'ftraversal(%) stopped before fexecute_flow(flow) with flow=%',_idPivot,_flow;
 			RETURN;
 		END IF;
@@ -272,7 +272,7 @@ BEGIN
 			RETURN;
 		END IF;				
 /*
-when pivot is reached, the path is a loop (refused or draft) and omegas are adjusted such as their product becomes 1.
+		when pivot is reached, the path is a loop (refused or draft) and omegas are adjusted such as their product becomes 1.
 */	
 		FOR _cnt IN 2 .. _obCMAXCYCLE LOOP
 			UPDATE _tmp Y 
@@ -288,20 +288,20 @@ when pivot is reached, the path is a loop (refused or draft) and omegas are adju
 		IF(NOT FOUND) THEN
 			RAISE EXCEPTION 'The _tmp[_idPivot=%] should be found',_idPivot USING ERRCODE='YA003';
 		END IF;
-		IF ( _phase = 2 ) THEN
+		IF ( _debugPhase = 2 ) THEN
 			-- RAISE NOTICE 'ftraversal(%) stopped before fexecute_flow(flow) with flow=%',_idPivot,_flow;
 			RETURN;
 		END IF;
-		RAISE NOTICE 'flow:%',_flow;
+		-- RAISE NOTICE 'flow:%',_flow;
 		IF(flow_isloop(_flow)) THEN 
 			-- RAISE NOTICE 'fexecute_flow(flow) with flow=%',_flow;
-			_cntd := _cntd + fexecute_flow(_flow,_phase);
+			_cntd := _cntd + fexecute_flow(_flow,_debugPhase);
 		ELSE 
 			RETURN;
 		END IF;
 		
-		IF (_phase>2) THEN
-			-- RAISE NOTICE 'stop on phase=% with _cntd=%',_phase,_cntd;
+		IF (_debugPhase>2) THEN
+			-- RAISE NOTICE 'stop on phase=% with _cntd=%',_debugPhase,_cntd;
 			RETURN;
 		END IF;
 			
@@ -313,7 +313,7 @@ $$ LANGUAGE PLPGSQL;
 -- fexecute_flow
 --------------------------------------------------------------------------------
 
-CREATE FUNCTION fexecute_flow(_flw flow,_phase int) RETURNS int AS $$
+CREATE OR REPLACE FUNCTION fexecute_flow(_flw flow,_debugPhase int) RETURNS int AS $$
 DECLARE
 	_commits	int8[][];
 	_i		int;
@@ -335,6 +335,7 @@ DECLARE
 	_refused	int8[];
 	_cnt 		int;
 	_todel		bool;
+	_uuid		text;
 BEGIN
 	_commits := flow_to_matrix(_flw);
 	
@@ -361,7 +362,8 @@ BEGIN
 			RETURNING refused,NOT flow_maxdimrefused(refused,_MAX_REFUSED) INTO _refused,_todel;
 		-- we accept that _oid2 is found in torder[_oid1].refused 
 		IF( FOUND AND _todel) THEN
-			perform fdeleteorder(_oid1);
+			-- perform fdeleteorder(_oid1);
+			_i := fcheckorder(_oid1);
 		END IF;
 		
 		UPDATE _tmp   SET refused = refused || _oid2 WHERE id = _oid1 AND NOT(ARRAY[_oid2] <@ refused);
@@ -379,7 +381,7 @@ BEGIN
 			END IF;
 		END IF;
 		
-		IF _phase>0 THEN
+		IF _debugPhase>0 THEN
 			RAISE NOTICE 'relation %->% refused',_oid1,_oid2;
 		END IF;
 		RETURN 0; 
@@ -395,30 +397,34 @@ BEGIN
 		-- _commits[_next_i] follows _commits[_i]
 		_w_src	:= _commits[_i][5];
 		_w_dst	:= _commits[_next_i][5];
-		_flowr	:= _commits[_i][6];
+		_flowr	:= _commits[_i][8];
 		
-		INSERT INTO tmvt (orid,grp,own_src,own_dst,qtt,nat,created) 
-			VALUES(_oid,_first_mvt,_w_src,_w_dst,_flowr,_commits[_i][7],statement_timestamp())
+		UPDATE torder set qtt = qtt - _flowr ,updated = statement_timestamp()
+			WHERE id = _oid AND _flowr <= qtt RETURNING uuid,qtt INTO _uuid,_qtt;
+		IF(NOT FOUND) THEN
+			RAISE EXCEPTION 'the flow is not in sync with the databasetorder[%].qtt does not exist or < %',_oid,_flowr 
+				USING ERRCODE='YU001';
+		END IF;
+	
+				
+		INSERT INTO tmvt (orid,oruuid,grp,own_src,own_dst,qtt,nat,created) 
+			VALUES(_oid,_uuid,_first_mvt,_w_src,_w_dst,_flowr,_commits[_i][7],statement_timestamp())
 			RETURNING id INTO _mvt_id;
 					
 		IF(_first_mvt IS NULL) THEN
 			_first_mvt := _mvt_id;
 		END IF;
 		
+		IF(_qtt=0) THEN
+			_i := fcheckorder(_oid);
+		END IF;
+		
 		_i := _next_i;
 		-----------------------------------------------------
 		-- values used by this flow are substracted from _tmp
-		
-		UPDATE torder set qtt = qtt - _flowr ,updated = statement_timestamp()
-			WHERE id = _oid AND _flowr <= qtt;
-		IF(NOT FOUND) THEN
-			RAISE EXCEPTION 'the flow is not in sync with the databasetorder[%].qtt does not exist or < %',_oid,_flowr 
-				USING ERRCODE='YU001';
-		END IF;	
-		
 		SELECT count(*) INTO _cnt FROM _tmp WHERE id = _oid;
 		IF(_cnt >1) THEN
-			RAISE EXCEPTION 'error with %',_commits 
+			RAISE EXCEPTION 'the flow contains id while _tmp[id] does not exist %',_commits 
 				USING ERRCODE='YA003';
 		END IF;
 
@@ -439,6 +445,11 @@ BEGIN
 		RAISE EXCEPTION 'the movement % does not exist',_first_mvt 
 			USING ERRCODE='YA003';
 	END IF;
+
+	-- empty orders are moved to torderempty
+	FOR _oid IN SELECT orid FROM tmvt WHERE grp = _first_mvt GROUP BY orid LOOP
+		
+	END LOOP;
 	
 	IF(NOT _exhausted) THEN
 		--  some order should be exhausted 
@@ -446,11 +457,41 @@ BEGIN
 			USING ERRCODE='YA003';
 	END IF;
 	
-	IF _phase>0 THEN
+	IF _debugPhase>0 THEN
 		RAISE NOTICE 'agreement % inserted with % mvts',_first_mvt,_nbcommit;
 	END IF;
 	
 	RETURN 1;
+END;
+$$ LANGUAGE PLPGSQL;
+
+/* if the order is not valid, it is moved into orderempty */ 
+CREATE OR REPLACE FUNCTION fcheckorder(_oid int8) RETURNS int AS $$
+DECLARE
+	_o 		torder%rowtype;
+	_MAX_REFUSED 	int := fgetconst('MAX_REFUSED');
+	_first_mvt	int8 := NULL;
+BEGIN
+	SELECT 		o.* INTO 	_o 
+		FROM torder o WHERE
+		 	o.id=_oid AND (o.qtt=0 OR NOT flow_maxdimrefused(o.refused,_MAX_REFUSED));
+	IF FOUND THEN
+		-- RAISE WARNING 'order to del: %',_o;
+		-- uuid,owner,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,created,updated
+
+		INSERT INTO torderempty (uuid,qtt,nr,np,qtt_prov,qtt_requ,own,refused,created,updated) 
+		VALUES (_o.uuid,_o.qtt,_o.nr,_o.np,_o.qtt_prov,_o.qtt_requ,_o.own,_o.refused,_o.created,_o.updated);
+		IF(_o.qtt != 0) THEN
+			INSERT INTO tmvt (orid,oruuid,own_src,own_dst,qtt,nat,created) -- grp undefined
+				VALUES(_o.id,_o.uuid,_o.own,_o.own,_q.qtt,_o.np,statement_timestamp())
+				RETURNING id INTO _first_mvt;
+			UPDATE tmvt SET grp = _first_mvt WHERE _id = first_mvt;
+		END IF;
+		DELETE FROM torder WHERE id=_oid;
+
+		RETURN 1;
+	END IF;
+	RETURN 0;
 END;
 $$ LANGUAGE PLPGSQL;
 

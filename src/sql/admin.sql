@@ -1,130 +1,137 @@
+set schema 't';
+-- uuid,owner,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,created,updated
 
-INSERT INTO tconst (name,value) VALUES 
-('NB_BACKUP',7); -- number of backups before rotation
+create table torderempty ( 
+    --uuid text NOT NULL,
+    uuid text,
+    owner text NOT NULL,
+    qua_requ text NOT NULL,
+    qtt_requ int8 not NULL,
+    qua_prov text not NULL,
+    qtt_prov int8 not NULL,
+    qtt int8 not NULL,
+    created timestamp not NULL,
+    updated timestamp
+);
 
+ALTER TABLE torder ADD COLUMN tid int8 DEFAULT NULL;
+ALTER TABLE torder ADD COLUMN uuid text DEFAULT NULL;
 
-CREATE TABLE tmarket  (
- 	id 	serial UNIQUE,
-	ph0  	timestamp not NULL,
-	ph1  	timestamp,
-	ph2  	timestamp,
-	backup	int,
-	diag	int	
-);-- CHECK(ph2>ph1 and ph1>ph0 ) NULL values
+ALTER TABLE tmvt ADD COLUMN oruuid text DEFAULT NULL;
 
-INSERT INTO tmarket (ph0,ph1,ph2,backup,diag) VALUES (statement_timestamp(),statement_timestamp(),statement_timestamp(),NULL,NULL);
-
-CREATE VIEW vmarket AS SELECT
- 	CASE WHEN ph1 IS NULL THEN 'OPENED' ELSE 
- 		CASE WHEN ph2 IS NULL THEN 'CLOSING' ELSE 'CLOSED' END
-	END AS state,
-	ph0,ph1,ph2,backup,
-	CASE WHEN diag=0 THEN 'OK' ELSE diag || ' ERRORS' END as diagnostic
-	FROM tmarket ORDER BY ID DESC LIMIT 1; -- fgetconst('NB_BACKUP')
-		
-GRANT SELECT ON vorder TO market;
+DROP VIEW vmvt;
+CREATE VIEW vmvt AS 
+	SELECT 	m.id as id,
+		m.oruuid as oruuid,
+		m.grp as grp,
+		w_src.name as provider,
+		q.name as nat,
+		m.qtt as qtt,
+		w_dst.name as receiver,
+		m.created as created
+	FROM tmvt m
+	INNER JOIN towner w_src ON (m.own_src = w_src.id)
+	INNER JOIN towner w_dst ON (m.own_dst = w_dst.id) 
+	INNER JOIN tquality q ON (m.nat = q.id); 
+	
+-- ALTER TABLE tmvt DROP COLUMN orid;
 
 --------------------------------------------------------------------------------
-/* phase of market
-0	closed
-1	opened
-2	ended
-*/
-CREATE FUNCTION fadmin() RETURNS bool AS $$
-DECLARE
-	_b	bool;
-	_phase	int;
-	_market tmarket%rowtype;
-BEGIN
-	SELECT * INTO _market FROM tmarket ORDER BY ID DESC LIMIT 1;
-	IF(_market.ph1 is NULL) THEN
-		_phase := 1;
-	ELSE 
-		IF(_market.ph2 is NULL) THEN
-			_phase := 2;
-		ELSE
-			_phase := 0;
-		END IF;
-	END IF;
+-- id,uuid,owner,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,nbrefused,created,updates,omega
+DROP VIEW vorder;
+CREATE VIEW vorder AS 
+	SELECT 	
+		n.id as id,
+		n.uuid as uuid,
+		w.name as owner,
+		qr.name as qua_requ,
+		n.qtt_requ,
+		qp.name as qua_prov,
+		n.qtt_prov,
+		n.qtt,
+		array_length(n.refused,1) as nbrefused,
+		n.created as created,
+		n.updated as updated,
+		CAST(n.qtt_prov as double precision)/CAST(n.qtt_requ as double precision) as omega
+	FROM torder n
+	INNER JOIN tquality qr ON n.nr = qr.id 
+	INNER JOIN tquality qp ON n.np = qp.id
+	INNER JOIN towner w on n.own = w.id;
 
-	IF (_phase = 0) THEN -- was closed, opening
-		GRANT market TO client;
-		INSERT INTO tmarket (ph0) VALUES (statement_timestamp());
-		RAISE NOTICE '[1] The market is now OPENED';
-		RETURN true;
-	END IF;
-	IF (_phase = 1) THEN -- was opened, ending
-		REVOKE market FROM client;
-		UPDATE tmarket SET ph1=statement_timestamp() WHERE ph1 IS NULL;		
-		RAISE NOTICE '[2] The market is now CLOSING';
-		RETURN true;
-	END IF;
-	IF (_phase = 2) THEN -- was ended, closing
-		-- REVOKE market FROM client;
-		UPDATE tmarket SET ph2=statement_timestamp() WHERE ph2 IS NULL;
-		RAISE NOTICE 'The closing starts ...';
-		_b := fclose_market();
-		RAISE NOTICE '[0] The market is now CLOSED';
-		RETURN _b;
-	END IF;
-END;
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fadmin()  TO admin;
+/* removes from refused orders that do not exist */ 
 
-CREATE FUNCTION fclose_market() RETURNS bool AS $$
+CREATE OR REPLACE FUNCTION fcleanorders(_reindex bool) RETURNS TABLE(name text,cnt int8)  AS $$
 DECLARE
-	_backup int;
-	_suf text;
-	_sql text;
-	_cnt int;
-	_nbb 	int;
-	_pivot torder%rowtype;
-	_cnn	int8;
+	_vo 		vorder%rowtype;
+	_MAX_REFUSED 	int := fgetconst('MAX_REFUSED');
+	_refused	int8[];
+	_nrefused	int8[];
+	_oid		int8;
+	_tid		int8;
+	_oid2		int8;
+	_oid3		int8;
+	_cnt 		int := 0;
+	_cnt1		int;
+	_changed	bool;
 BEGIN
+	LOCK TABLE torder IN EXCLUSIVE MODE NOWAIT;
 	
-	_nbb := fgetconst('NB_BACKUP');
-	-- rotation of backups
-	SELECT max(id) INTO _cnt FROM tmarket;
-	UPDATE tmarket SET backup= ((_cnt-2) % _nbb) +1 WHERE id=_cnt RETURNING backup INTO _backup;
-	_suf := CAST(_backup AS text);
+	-- useless orders moved out
+	FOR _vo IN SELECT * FROM vorder WHERE qtt=0 OR nbrefused >_MAX_REFUSED LOOP
+		INSERT INTO torderempty (uuid,owner,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,created,updated) 
+		VALUES (_vo.uuid,_vo.owner,_vo.qua_requ,_vo.qtt_requ,_vo.qua_prov,_vo.qtt_prov,_vo.qtt,_vo.created,_vo.updated);
+		DELETE FROM torder WHERE id=_vo.id;
+	END LOOP;
 	
-	EXECUTE 'DROP TABLE IF EXISTS torder_back_' || _suf;
-	EXECUTE 'DROP TABLE IF EXISTS tmvt_back_' || _suf;
-	EXECUTE 'CREATE TABLE torder_back_' || _suf || ' AS SELECT * FROM torder';
-	EXECUTE 'CREATE TABLE tmvt_back_' || _suf || ' AS SELECT * FROM tmvt';
+	IF(_reindex) THEN
+		_cnt := 0;_cnt1 := 0;
+		FOR _oid IN SELECT id FROM torder ORDER BY id ASC LOOP
+			_cnt := _cnt +1;
+			UPDATE torder SET tid = _cnt WHERE id = _oid;
+			IF(_oid != _cnt) THEN
+				_cnt1 := _cnt1 + 1;
+			END IF;
+		END LOOP;
+		-- TODO serial reinit
 	
-	RAISE NOTICE 'TMVT and TORDER saved into backups *_BACK_% among %',_backup,_nbb;
-	
-	TRUNCATE tmvt,trefused,torder;
-	UPDATE tquality set qtt=0 ;
-	
-	-- reinsertion of orders
-/*
-	_sql := 'FOR _pivot IN SELECT * FROM torder_back_' || _suf || ' WHERE qtt != 0 ORDER BY created ASC LOOP 
-			_cnt := finsert_order_int(_pivot,true);
-		END LOOP';
-	EXECUTE _sql;
-*/
-	-- RETURN false;
- 
-	EXECUTE 'SELECT finsert_order_int(row(id,qtt,nr,np,qtt_prov,qtt_requ,own,created,updated)::torder ,true) 
-	FROM torder_back_' || _suf || ' 
-	 WHERE qtt != 0 ORDER BY created ASC';
-	
-	-- diagnostic
-	perform fverify();	
-	SELECT count(*) INTO _cnn FROM tmvt;
-	UPDATE tmarket SET diag=_cnn WHERE id=_cnt;
-	IF(_cnn != 0) THEN
-		RAISE NOTICE 'Abnormal termination of market closing';
-		RAISE NOTICE '0 != % movement where found when orders where re-inserted',_cnn;
-		
-		RETURN false;
+		name := 'number of orders reindexed';
+		cnt := _cnt1;
+		RETURN NEXT;
 	ELSE
-		RAISE NOTICE 'Normal termination of closing.';
-		RETURN true;
+		UPDATE torder SET tid = id;
 	END IF;
+	-- new index is in tid
+
+	_cnt := 0;
+	FOR _oid,_refused,_changed IN SELECT id,refused,id!=tid FROM torder LOOP
+		_nrefused := ARRAY[]::int8[];
+		
+		-- foreach _oid2 in torder[_oid].refused:
+		FOR _oid2 IN SELECT _refused[i] FROM generate_subscripts(_refused,1) g(i) LOOP
+			SELECT tid INTO _tid FROM torder WHERE id=_oid2;
+			IF(NOT FOUND) THEN
+				_changed := true;
+			ELSE
+				_nrefused := _nrefused || _tid;
+				IF(_tid != _oid2) THEN
+					_changed := true;
+				END IF;
+			END IF;
+		END LOOP;
+		
+		IF(_changed) THEN
+			UPDATE torder SET refused = _nrefused WHERE id = _oid;
+			_cnt := _cnt + 1;
+		END IF;
+	END LOOP;
+	UPDATE torder SET id = tid, tid = NULL;
 	
+	name := 'number of torder.refused changed';
+	cnt := _cnt;
+	RETURN NEXT;
+	
+	RETURN;
 END;
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+$$ LANGUAGE PLPGSQL;
+
 

@@ -68,11 +68,15 @@ model2.sql
 flow_0.sql
 t.sql	
 
+		\i sql/model2.sql
+		simu/simu300.py 10000
+
 TODO:
 	pb sur flow_orderaccepted(__tmp,int)
-	test:
-		\i sql/model2.sql
-		simu/simu300.py 166
+	finsertorder() retourne une ligne qd le retour devrait retourner vide
+	définir les messages fix
+	
+	
 
 
 		

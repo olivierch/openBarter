@@ -15,7 +15,7 @@ quality_max = 20
 
 def connect():
 	dbcon = psycopg2.connect(
-				database  = 'test2',
+				database  = 'test5',
 				password  = '',
 				user = cur_user,
 				host = 'localhost',
@@ -52,7 +52,7 @@ def boulot(cursor,stop = False):
 		raise e
 	
 def verif(cursor):
-	cursor.callproc('fgetconnected',[])
+	cursor.callproc('fgetconnected',[1])
 	res = [e[0] for e in cursor]
 	l = len(res)
 	if(l !=0):
@@ -78,8 +78,9 @@ def simu(itera):
 	cursor = dbcon.cursor()
 	cursor.execute("SET search_path='t' ")
 	cursor.execute("TRUNCATE torder RESTART IDENTITY CASCADE")
+	cursor.execute("TRUNCATE torderempty RESTART IDENTITY CASCADE")
 	cursor.execute("UPDATE tquality SET qtt=0")
-	print "torder truncated"
+	print "torder and torderempty truncated"
 	phase = -1
 	if(False): #not isOpened(cursor)):
 		print "Market not opened"		
@@ -103,7 +104,11 @@ def simu(itera):
 						print 'after nbOper=%i:\n%s' % (nbOper,done)
 						break 
 				else:
-					print 'No error'
+					errs = verif(cursor)
+					if(errs == 0):
+						print 'No error'
+					else:
+						print '%i Errors' %(errs,) 
 					nbOper -=1
 					res,todo = boulot(cursor,stop=True)
 					print 'Terminated just before nbOper=%i:\n%s'% (nbOper,todo)
@@ -122,12 +127,12 @@ def simu(itera):
 		print "Mean %.6f seconds" % (secs/nbOper,)
 	try:
 		cursor.close()
-		print "cursor closed"
+		# print "cursor closed"
 	except Exception,e:
 		print "Exception while trying to close the cursor"
 	try:
 		dbcon.close()
-		print "DB close"
+		# print "DB close"
 	except Exception,e:
 		print "Exception while trying to close the connexion"
 	
