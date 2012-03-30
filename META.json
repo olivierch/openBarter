@@ -2,7 +2,7 @@
    "name": "openbarter",
    "abstract": "Multilateral agreement production engine.",
    "description": "openBarter is a postgreSQL extension defining a barter market. It implements the economic mechanisms of a regular market and allows cyclic exchange between more than two partners (buyer and seller) in a single transaction. Even if competition is performed between offers, it does not require any central monetary standard to express prices to be compared. It provides a liquidity equivalent to that of a regular market place.",
-   "version": "0.3",
+   "version": "0.3.0",
    "maintainer": [
       "Olivier Chaussavoine <olivier.chaussavoine@gmail.com>"
    ],
@@ -20,7 +20,7 @@
      "openbarter": {
        "file": "src/sql/model.sql",
        "docfile": "doc/doc-ob.pdf",
-       "version": "0.2.2",
+       "version": "0.3.0",
        "abstract": "Multilateral agreement production engine."
      }
    },
