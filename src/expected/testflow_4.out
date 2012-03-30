@@ -1,0 +1,114 @@
+-- set schema 't';
+select * from finsertorder('x','b',160,40,'a');
+INFO:  owner x created
+CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+ _yuuid | _ydim | _ygrp 
+--------+-------+-------
+(0 rows)
+
+select * from finsertorder('y','c',160,80,'b');
+INFO:  owner y created
+CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+ _yuuid | _ydim | _ygrp 
+--------+-------+-------
+(0 rows)
+
+select * from finsertorder('t','c',100,100,'a');
+INFO:  owner t created
+CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+ _yuuid | _ydim | _ygrp 
+--------+-------+-------
+(0 rows)
+
+select * from fgetquote('z','a','c'); -- expected (dim,qtt_prov,qtt_requ)= (3,20,160)
+ _dim | _qtt_prov | _qtt_requ 
+------+-----------+-----------
+    3 |        20 |       160
+    2 |       100 |       100
+(2 rows)
+
+select * from finsertorder('z','a',20,160,'c'); -- one agreements
+INFO:  owner z created
+CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+ _yuuid | _ydim | _ygrp 
+--------+-------+-------
+ 1-11   |     3 |     9
+(1 row)
+
+select * from fgetagr(9) where _own='z'; -- expected as first quote
+ _own | _natp | _qtt_prov | _qtt_requ | _natr 
+------+-------+-----------+-----------+-------
+ z    | a     |        20 |       160 | c
+(1 row)
+
+select * from fgetquote('z','a','c'); -- expected (dim,qtt_prov,qtt_requ)= (2,100,100)
+ _dim | _qtt_prov | _qtt_requ 
+------+-----------+-----------
+    2 |       100 |       100
+(1 row)
+
+select * from finsertorder('z','a',100,100,'c'); -- one agreements
+ _yuuid | _ydim | _ygrp 
+--------+-------+-------
+ 1-12   |     2 |    12
+(1 row)
+
+select * from fgetagr(12) where _own='z'; -- expected as first quote
+ _own | _natp | _qtt_prov | _qtt_requ | _natr 
+------+-------+-----------+-----------+-------
+ z    | a     |       100 |       100 | c
+(1 row)
+
+select * from finsertorder('x','b2',160,40,'a2');
+ _yuuid | _ydim | _ygrp 
+--------+-------+-------
+(0 rows)
+
+select * from finsertorder('y','c2',160,80,'b2');
+ _yuuid | _ydim | _ygrp 
+--------+-------+-------
+(0 rows)
+
+select * from finsertorder('t','c2',90,10,'a2');
+ _yuuid | _ydim | _ygrp 
+--------+-------+-------
+(0 rows)
+
+select * from fgetquote('z','a2','c2'); -- expected (dim,qtt_prov,qtt_requ)= (2,10,90)
+ _dim | _qtt_prov | _qtt_requ 
+------+-----------+-----------
+    2 |        10 |        90
+    3 |        20 |       160
+(2 rows)
+
+select * from finsertorder('z','a2',10,90,'c2'); 
+ _yuuid | _ydim | _ygrp 
+--------+-------+-------
+ 1-16   |     2 |    14
+(1 row)
+
+select * from fgetagr(14) where _own='z'; -- expected as first quote
+ _own | _natp | _qtt_prov | _qtt_requ | _natr 
+------+-------+-----------+-----------+-------
+ z    | a2    |        10 |        90 | c2
+(1 row)
+
+select * from fgetquote('z','a2','c2'); -- expected (dim,qtt_prov,qtt_requ)= (3,20,160)
+ _dim | _qtt_prov | _qtt_requ 
+------+-----------+-----------
+    3 |        20 |       160
+(1 row)
+
+select * from finsertorder('z','a2',20,160,'c2');
+ _yuuid | _ydim | _ygrp 
+--------+-------+-------
+ 1-17   |     3 |    16
+(1 row)
+
+select * from fgetagr(16) where _own='z'; -- expected as first quote
+ _own | _natp | _qtt_prov | _qtt_requ | _natr 
+------+-------+-----------+-----------+-------
+ z    | a2    |        20 |       160 | c2
+(1 row)
+
+-- select * from vmvt;

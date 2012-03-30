@@ -1,0 +1,157 @@
+CREATE FUNCTION 
+	fq(_quality_name text) 
+	RETURNS text AS $$
+BEGIN
+	RETURN session_user || '/' || _quality_name;
+END;
+$$ LANGUAGE PLPGSQL;
+CREATE FUNCTION 
+	fs(_quality_name text) 
+	RETURNS text AS $$
+BEGIN
+	RETURN substring(_quality_name from position ('/' in _quality_name)+1);
+END;
+$$ LANGUAGE PLPGSQL;
+select fcreateuser(session_user);
+INFO:  The role olivier is a super user: unchanged.
+ fcreateuser 
+-------------
+ 
+(1 row)
+
+-- own,qual_prov,qtt_prov,qtt_requ,qual_requ
+select finsertorder('u',fq('b'),1000,1000,fq('a'));
+INFO:  owner u created
+CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+ finsertorder 
+--------------
+(0 rows)
+
+select finsertorder('v',fq('c'),1000,1000,fq('b'));
+INFO:  owner v created
+CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+ finsertorder 
+--------------
+(0 rows)
+
+select fgetquote('w',fq('a'),fq('c'));
+   fgetquote   
+---------------
+ (3,1000,1000)
+(1 row)
+
+select finsertorder('w',fq('a'),1000,1000,fq('c'));
+INFO:  owner w created
+CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+ finsertorder 
+--------------
+ (1-3,3,1)
+(1 row)
+
+select id,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt;
+ id | nb | oruuid | grp | provider | fs | qtt  | receiver 
+----+----+--------+-----+----------+----+------+----------
+  2 |  3 | 1-1    |   1 | u        | b  | 1000 | v
+  3 |  3 | 1-2    |   1 | v        | c  | 1000 | w
+  1 |  3 | 1-3    |   1 | w        | a  | 1000 | u
+(3 rows)
+
+select fremoveagreement(1);
+ fremoveagreement 
+------------------
+                3
+(1 row)
+
+select id,qtt from tquality;
+ id | qtt 
+----+-----
+  1 |   0
+  2 |   0
+  3 |   0
+(3 rows)
+
+select finsertorder('u',fq('b'),2000,1000,fq('a'));
+ finsertorder 
+--------------
+(0 rows)
+
+select finsertorder('v',fq('c'),2000,1000,fq('b'));
+ finsertorder 
+--------------
+(0 rows)
+
+select fgetquote('w',fq('a'),fq('c'));
+  fgetquote   
+--------------
+ (3,500,2000)
+(1 row)
+
+select finsertorder('w',fq('a'),500,2000,fq('c'));
+ finsertorder 
+--------------
+ (1-6,3,4)
+(1 row)
+
+select id,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt;
+ id | nb | oruuid | grp | provider | fs | qtt  | receiver 
+----+----+--------+-----+----------+----+------+----------
+  5 |  3 | 1-4    |   4 | u        | b  | 1000 | v
+  6 |  3 | 1-5    |   4 | v        | c  | 2000 | w
+  4 |  3 | 1-6    |   4 | w        | a  |  500 | u
+(3 rows)
+
+select fremoveagreement(4);
+ fremoveagreement 
+------------------
+                3
+(1 row)
+
+select fgetquote('w',fq('a'),fq('b'));
+  fgetquote   
+--------------
+ (2,500,1000)
+(1 row)
+
+select finsertorder('w',fq('a'),500,1000,fq('b'));
+ finsertorder 
+--------------
+ (1-7,2,7)
+(1 row)
+
+select fremoveagreement(7);
+ fremoveagreement 
+------------------
+                2
+(1 row)
+
+select id,qtt from tquality;
+ id | qtt 
+----+-----
+  3 |   0
+  2 |   0
+  1 |   0
+(3 rows)
+
+select * from fgetstats(true);
+            _name             | cnt 
+------------------------------+-----
+ number of qualities          |   3
+ number of owners             |   3
+ number of orders             |   7
+ number of movements          |   8
+ number of orders removed     |   7
+ number of movements removed  |   8
+ total number of agreements   |   3
+ errors on quantities in mvts |   0
+ errors on agreements in mvts |   0
+ MAXCYCLE                     |   8
+ VERSION                      |   3
+ INSERT_OWN_UNKNOWN           |   1
+ CHECK_QUALITY_OWNERSHIP      |   0
+ MAXORDERFETCH                | 100
+ MARKET_OPENED                |   1
+ MARKET_SESSION               |   1
+ agreements with 2 partners   |   1
+ agreements with 3 partners   |   2
+(18 rows)
+
