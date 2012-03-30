@@ -1,7 +1,0 @@
-A FAIRE
-
-faire un repalloc à la fin du yyparse pour ajuster la taille mémoire,
-ne faire les calculs de flux qu'au moment ou les données sont demandées.
-
-
-
