@@ -8,9 +8,24 @@ SET client_min_messages = warning;
              0
 (1 row)
 
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
  _reference_time 
 -----------------
                0
+(1 row)
+
+ _grant_read 
+-------------
+ 
 (1 row)
 
  _reference_time 
@@ -21,6 +36,71 @@ SET client_min_messages = warning;
  _reference_time 
 -----------------
                0
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
+(1 row)
+
+ _grant_read 
+-------------
+ 
 (1 row)
 
  id | sess | action 
@@ -28,6 +108,9 @@ SET client_min_messages = warning;
   1 |    1 | init
 (1 row)
 
+ RESET client_min_messages;
+-- set search_path='t';
+\set ECHO all
  RESET client_min_messages;
  
 select '(1,2,3,4,5,6,7)'::yorder;

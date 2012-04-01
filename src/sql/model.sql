@@ -1,23 +1,66 @@
+SET client_min_messages = warning;
+\set ECHO none
 /*
 drop schema if exists t cascade;
 create schema t;
 set schema 't';
-drop extension if exists flow cascade;
 */
+drop extension if exists flow cascade;
 create extension flow;
+
+
 --------------------------------------------------------------------------------
--- init
+-- main constants of the model
+--------------------------------------------------------------------------------
+create table tconst(
+	name text UNIQUE not NULL,
+	value	int,
+	PRIMARY KEY (name)
+);
+--------------------------------------------------------------------------------
+INSERT INTO tconst (name,value) VALUES 
+	('MAXCYCLE',8),
+	('VERSION',31),
+	('INSERT_OWN_UNKNOWN',1), 
+	-- 1, insert an owner when it is unknown
+	-- 0, raise an error when the owner is unknown
+	('CHECK_QUALITY_OWNERSHIP',0), 
+	-- 1, quality = user_name/quality_name prefix must match session_user
+	-- 0, the name of quality can be any string
+	('MAXORDERFETCH',100);
+	-- maximum number of agreements of the set on which the competition occurs
+--------------------------------------------------------------------------------
+-- fetch a constant, and verify consistancy
+CREATE FUNCTION fgetconst(_name text) RETURNS int AS $$
+DECLARE
+	_ret int;
+BEGIN
+	SELECT value INTO _ret FROM tconst WHERE name=_name;
+	IF(NOT FOUND) THEN
+		RAISE 'the const % should be found',_name;
+		RAISE EXCEPTION USING ERRCODE='YA003';
+	END IF;
+	IF(_name = 'MAXCYCLE' AND _ret >8) THEN
+		RAISE EXCEPTION 'obCMAXVALUE must be <=8' USING ERRCODE='YA002';
+	END IF;
+	RETURN _ret;
+END; 
+$$ LANGUAGE PLPGSQL STABLE;
+--------------------------------------------------------------------------------
+-- definition of roles
+--	admin market administrator -- cannot act as client
+--	client -- can act as client only when it inherits from market_role 
 --------------------------------------------------------------------------------
 CREATE FUNCTION _create_roles() RETURNS int AS $$
 DECLARE
 	_rol text;
 BEGIN
 	BEGIN 
-		CREATE ROLE market; 
+		CREATE ROLE market_role; 
 	EXCEPTION WHEN duplicate_object THEN
 		NULL;	
 	END;
-	ALTER ROLE market NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+	ALTER ROLE market_role NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
 	
 	BEGIN 
 		CREATE ROLE client;
@@ -33,6 +76,7 @@ BEGIN
 	END;
 	ALTER ROLE admin NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION; 
 	ALTER ROLE admin LOGIN CONNECTION LIMIT 1;
+	-- a single connection is allowed
 	RETURN 0;
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -40,47 +84,9 @@ $$ LANGUAGE PLPGSQL;
 SELECT _create_roles();
 DROP FUNCTION _create_roles();
 
---------------------------------------------------------------------------------
--- 
---------------------------------------------------------------------------------
-create table tconst(
-	name text UNIQUE not NULL,
-	value	int,
-	PRIMARY KEY (name)
-);
-INSERT INTO tconst (name,value) VALUES 
-('MAXCYCLE',8),
-('VERSION',3),
-('INSERT_OWN_UNKNOWN',1), 
--- 1, insert an owner when it is unknown
--- 0, raise an error when the owner is unknown
-('CHECK_QUALITY_OWNERSHIP',0), 
--- 1, quality = user_name/quality_name prefix must match session_user
--- 0, the name of quality can be any string
-('MAXORDERFETCH',100);
--- maximum number of agreements of the set on which the competition occurs
-
-CREATE FUNCTION fgetconst(_name text) RETURNS int AS $$
-DECLARE
-	_ret int;
-BEGIN
-	SELECT value INTO _ret FROM tconst WHERE name=_name;
-	IF(NOT FOUND) THEN
-		RAISE 'the const % should be found',_name;
-		RAISE EXCEPTION USING ERRCODE='YA003';
-	END IF;
-	IF(_name = 'MAXCYCLE' AND _ret >8) THEN
-		RAISE EXCEPTION 'obCMAXVALUE must be <=8' USING ERRCODE='YA002';
-	END IF;
-	RETURN _ret;
-END; 
-$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
--- ob_ftime_updated 
---	trigger before insert on tables
+-- trigger before insert on some tables
 --------------------------------------------------------------------------------
 CREATE FUNCTION ftime_updated() 
 	RETURNS trigger AS $$
@@ -92,12 +98,12 @@ BEGIN
 	END IF;
 	RETURN NEW;
 END;
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+$$ LANGUAGE PLPGSQL;
 comment on FUNCTION ftime_updated() is 
 'trigger updating fields created and updated';
 
 --------------------------------------------------------------------------------
--- 
+-- add the trigger ftime_updated to a table
 --------------------------------------------------------------------------------
 CREATE FUNCTION _reference_time_trig(_table text) RETURNS int AS $$
 DECLARE
@@ -107,27 +113,39 @@ BEGIN
 	EXECUTE 'CREATE TRIGGER ' || _trigg || ' BEFORE INSERT
 		OR UPDATE ON ' || _table || ' FOR EACH ROW
 		EXECUTE PROCEDURE ftime_updated()' ; 
-	EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO market';
-	-- EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ' || _table || ' TO MARKET';
+	-- EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO market_role';
+	-- EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ' || _table || ' TO market_role';
 	RETURN 0;
 END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-/*
+$$ LANGUAGE PLPGSQL;
+
 --------------------------------------------------------------------------------
 -- 
 --------------------------------------------------------------------------------
-CREATE FUNCTION _grant_exec(_public bool,_funct text) RETURNS int AS $$
+CREATE FUNCTION _grant_exec(_funct text,_admin bool) RETURNS int AS $$
 
 BEGIN
 	EXECUTE 'REVOKE ALL ON FUNCTION ' || _funct || ' FROM public' ; 
-	IF(_public) THEN
-		EXECUTE 'GRANT EXECUTE ON FUNCTION ' || _funct || ' TO market';
+	IF(_admin) THEN
+		EXECUTE 'GRANT EXECUTE ON FUNCTION ' || _funct || ' TO market_role';
+	ELSE 
+		EXECUTE 'GRANT EXECUTE ON FUNCTION ' || _funct || ' TO admin';
 	END IF;
 	RETURN 0;
 END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-*/
+$$ LANGUAGE PLPGSQL;
+--------------------------------------------------------------------------------
+CREATE FUNCTION _grant_read(_table text) RETURNS void AS $$
 
+BEGIN
+	EXECUTE 'REVOKE ALL ON TABLE ' || _table || ' FROM public' ; 
+	EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO market_role';
+	EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO admin';
+	RETURN;
+END; 
+$$ LANGUAGE PLPGSQL;
+SELECT _grant_read('tconst');
+--------------------------------------------------------------------------------
 CREATE FUNCTION _reference_time(_table text) RETURNS int AS $$
 DECLARE
 	_res int;
@@ -138,9 +156,7 @@ BEGIN
 	select _reference_time_trig(_table) into _res;
 	RETURN 0;
 END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-
-
+$$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 create domain dquantity AS int8 check( VALUE>0);
 --------------------------------------------------------------------------------
@@ -157,15 +173,14 @@ create table tuser (
     	quota >=0
     )
 );
-
+SELECT _grant_read('tuser');
 comment on table tuser is 'users that have been connected';
 SELECT _reference_time('tuser');
-
+alter sequence tuser_id_seq owned by tuser.id;
 
 --------------------------------------------------------------------------------
 -- TQUALITY
 --------------------------------------------------------------------------------
--- create sequence tquality_id_seq;
 create table tquality (
     id serial UNIQUE not NULL,
     name text not NULL,
@@ -180,12 +195,15 @@ create table tquality (
     	qtt >=0 
     )
 );
+SELECT _grant_read('tquality');
 comment on table tquality is 'description of qualities';
 comment on column tquality.name is 'name of depository/name of quality ';
-comment on column tquality.qtt is 'total quantity delegated';
+comment on column tquality.depository is 'name of depository (user)';
+comment on column tquality.qtt is 'total quantity on the market for this quality';
 alter sequence tquality_id_seq owned by tquality.id;
 create index tquality_name_idx on tquality(name);
 SELECT _reference_time('tquality');
+
 -- \copy tquality (depository,name) from data/ISO4217.data with delimiter '-'
 
 --------------------------------------------------------------------------------
@@ -231,7 +249,6 @@ DECLARE
 	_qtta int8;
 BEGIN
 	LOOP
-		-- RAISE NOTICE 'fupdate_quality(%,%)',_quality_name,_qtt;
 		UPDATE tquality SET id=id,qtt = qtt + _qtt 
 			WHERE name = _quality_name RETURNING id,qtt INTO _id,_qtta;
 
@@ -262,12 +279,11 @@ BEGIN
 		END;
 	END LOOP;
 END;
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+$$ LANGUAGE PLPGSQL;
 	
 --------------------------------------------------------------------------------
 -- TOWNER
 --------------------------------------------------------------------------------
--- create sequence towner_id_seq;
 create table towner (
     id serial UNIQUE not NULL,
     name text not NULL,
@@ -277,16 +293,17 @@ create table towner (
     	char_length(name)>0 
     )
 );
-comment on table towner is 
-'description of owners of values';
+comment on table towner is 'owners of values exchanged';
 alter sequence towner_id_seq owned by towner.id;
 create index towner_name_idx on towner(name);
 SELECT _reference_time('towner');
+SELECT _grant_read('towner');
 --------------------------------------------------------------------------------
 /*
 returns the id of an owner.
 If the owner does'nt exist, it is created
 */
+--------------------------------------------------------------------------------
 CREATE FUNCTION fowner(_name text) RETURNS int8 AS $$
 DECLARE
 	_wid int;
@@ -302,6 +319,10 @@ BEGIN
 			END IF;
 		END IF;
 		BEGIN
+			if(char_length(_name)<1) THEN
+				RAISE NOTICE 'Owner s name empty';
+				RAISE EXCEPTION USING ERRCODE='YU001';
+			END IF;
 			INSERT INTO towner (name) VALUES (_name) RETURNING id INTO _wid;
 			RAISE INFO 'owner % created',_name;
 			return _wid;
@@ -312,50 +333,10 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
-/*
-If the owner exists, it is updated, else it is inserted
-*/
-/*
-CREATE FUNCTION faddowner(_name text,_pass text) RETURNS int8 AS $$
-DECLARE
-	_wid int8;
-BEGIN
-	LOOP
-		UPDATE towner SET pass=_pass WHERE name=_name RETURNING id INTO _wid;
-		IF found THEN
-			RAISE NOTICE 'owner % updated',_name;
-			return _wid;
-		END IF;
-		BEGIN
-			INSERT INTO towner (name,pass) VALUES (_name,_pass) RETURNING id INTO _wid;
-			RAISE INFO 'owner % inserted',_name;
-			return _wid;
-		EXCEPTION WHEN unique_violation THEN
-			--
-		END;
-	END LOOP;
-END;
-$$ LANGUAGE PLPGSQL; */
---------------------------------------------------------------------------------
-/*
-CREATE FUNCTION fchecktowner(_name text,_pass text) RETURNS bool AS $$
-DECLARE
-	_w towner%rowtype;
-BEGIN
-	SELECT * INTO _w FROM towner where name =_name;
-	IF(FOUND AND _w.pass = _pass) THEN
-		RETURN TRUE;
-	ELSE 
-		RETURN FALSE;
-	END IF;
-END;
-$$ LANGUAGE PLPGSQL; */
---------------------------------------------------------------------------------
 -- ORDER
 --------------------------------------------------------------------------------
 -- id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt,created,updated
 create table torder ( 
-
     id serial UNIQUE not NULL,
     uuid text NOT NULL,
     own int references towner(id) NOT NULL, 
@@ -368,33 +349,29 @@ create table torder (
     qtt int NOT NULL,     
 
     created timestamp not NULL,
-    updated timestamp default NULL,
-    
+    updated timestamp default NULL,    
     PRIMARY KEY (id),
     CHECK(	
     	qtt >=0 AND qtt_prov >= qtt
     )
 );
+SELECT _grant_read('torder');
 
 comment on table torder is 'description of orders';
 comment on column torder.id is 'unique id for the session of the market';
 comment on column torder.uuid is 'unique id for all sessions';
 comment on column torder.own is 'owner of the value provided';
 comment on column torder.nr is 'quality required';
-comment on column torder.qtt_requ is 'used to express omega=qtt_prov/qtt_req';
+comment on column torder.qtt_requ is 'quantity required; used to express omega=qtt_prov/qtt_req';
 comment on column torder.np is 'quality provided';
 comment on column torder.qtt_prov is 'quantity offered';
-comment on column torder.qtt is 'current quantity remaining';
+comment on column torder.qtt is 'current quantity remaining (<= quantity offered)';
 
 alter sequence torder_id_seq owned by torder.id;
 create index torder_nr_idx on torder(nr);
 create index torder_np_idx on torder(np);
--- SELECT _reference_time('torder');
--- id,uuid,qtt,nr,np,qtt_prov,qtt_requ,own,refused,created,updated
-
 
 --------------------------------------------------------------------------------
--- id,uuid,owner,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,nbrefused,created,updates,omega
 CREATE VIEW vorder AS 
 	SELECT 	
 		n.id as id,
@@ -411,12 +388,11 @@ CREATE VIEW vorder AS
 	INNER JOIN tquality qr ON n.nr = qr.id 
 	INNER JOIN tquality qp ON n.np = qp.id
 	INNER JOIN towner w on n.own = w.id;
-	
-GRANT SELECT ON vorder TO market;
 
--- uuid,owner,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,created,updated
+SELECT _grant_read('vorder');
+
+
 -- Columns of torderremoved and torder are the same 
--- id,tid,uuid,qtt,nr,np,qtt_prov,qtt_requ,own,refused,created,updated
 create table torderremoved ( 
     id int NOT NULL,
     uuid text NOT NULL,
@@ -430,6 +406,7 @@ create table torderremoved (
     updated timestamp default NULL,
     PRIMARY KEY (uuid)
 );
+SELECT _grant_read('torderremoved');
 
 CREATE VIEW vorderremoved AS 
 	SELECT 	
@@ -448,34 +425,19 @@ CREATE VIEW vorderremoved AS
 	INNER JOIN tquality qp ON n.np = qp.id
 	INNER JOIN towner w on n.own = w.id;
 	
-GRANT SELECT ON vorderremoved TO market;
-
+SELECT _grant_read('vorderremoved');
 --------------------------------------------------------------------------------
--- TREFUSED
---------------------------------------------------------------------------------
--- create sequence trefused_id_seq;
-/*
-create table trefused ( -- bid
-    x int8 references torder(id) on update cascade 
-	on delete cascade not NULL,
-    y int8 references torder(id) on update cascade 
-	on delete cascade,
-    created timestamp,
-    PRIMARY KEY (x,y),UNIQUE(x,y)
-    -- when y is NULL (x,NULL) should also be unique
-);
+CREATE VIEW vorderverif AS
+	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt FROM torder
+	UNION
+	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt FROM torderremoved;
+SELECT _grant_read('vorderverif');
 
-comment on table trefused is 'list of relations refused';
-*/
 --------------------------------------------------------------------------------
 -- TMVT
---	An owner can be deleted only if he owns no stocks.
---	When it is deleted, it's movements are deleted
 --------------------------------------------------------------------------------
--- create sequence tmvt_id_seq;
--- create type ymvt AS ENUM ('dummy','agreement');
 create table tmvt (
-        id bigserial UNIQUE not NULL,
+        id serial UNIQUE not NULL,
         nb int not null,
         oruuid text NOT NULL, -- refers to order uuid
     	grp int references tmvt(id), 
@@ -487,43 +449,25 @@ create table tmvt (
 	nat int references tquality(id) not null,
 	created timestamp not NULL
 );
-comment on table tmvt is 'records a change of ownership';
--- comment on column tmvt.orid is 
---	'order.id creating this movement';
-comment on column tmvt.oruuid is 
-	'order.uuid creating this movement';
-comment on column tmvt.grp is 
-	'refers to an exchange cycle that created this movement';
-comment on column tmvt.own_src is 
-	'previous owner';
-comment on column tmvt.own_dst is 
-	'new owner';
-comment on column tmvt.qtt is 
-	'quantity of the value';
-comment on column tmvt.nat is 
-	'quality of the value';
+SELECT _grant_read('tmvt');
 
+comment on table tmvt is 'records a change of ownership';
+comment on column tmvt.nb is 'number of movements of the exchange';
+comment on column tmvt.oruuid is 'order.uuid producing  this movement';
+comment on column tmvt.grp is 'first movement of the exchange';
+comment on column tmvt.own_src is 'owner provider';
+comment on column tmvt.own_dst is 'owner receiver';
+comment on column tmvt.qtt is 'quantity of the value moved';
+comment on column tmvt.nat is 'quality of the value moved';
+
+alter sequence tmvt_id_seq owned by tmvt.id;
 create index tmvt_did_idx on tmvt(grp);
 create index tmvt_nat_idx on tmvt(nat);
 create index tmvt_own_src_idx on tmvt(own_src);
 create index tmvt_own_dst_idx on tmvt(own_dst);
 
 --------------------------------------------------------------------------------
--- vmvt R
---------------------------------------------------------------------------------
--- view PUBLIC
-/* 
-		returns a list of movements.
-			id		tmvt.id
-			orid		reference to the order
-			grp:		exchange cycle
-			provider
-			nat:		quality moved
-			qtt:		quantity moved, 
-			receiver
-			created:	timestamp
-
-*/
+-- vmvt 
 --------------------------------------------------------------------------------
 CREATE VIEW vmvt AS 
 	SELECT 	m.id as id,
@@ -538,9 +482,41 @@ CREATE VIEW vmvt AS
 	FROM tmvt m
 	INNER JOIN towner w_src ON (m.own_src = w_src.id)
 	INNER JOIN towner w_dst ON (m.own_dst = w_dst.id) 
-	INNER JOIN tquality q ON (m.nat = q.id); 
-	
-GRANT SELECT ON vmvt TO market;	
+	INNER JOIN tquality q ON (m.nat = q.id); 	
+SELECT _grant_read('vmvt');
+COMMENT ON VIEW vmvt IS 'List of movements';
+COMMENT ON COLUMN vmvt.nb IS 'number of movements of the exchange';
+COMMENT ON COLUMN vmvt.oruuid IS 'reference to the exchange';
+COMMENT ON COLUMN vmvt.grp IS 'id of the first movement of the exchange';
+COMMENT ON COLUMN vmvt.provider IS 'name of the provider of the movement';
+COMMENT ON COLUMN vmvt.quality IS 'name of the quality moved';
+COMMENT ON COLUMN vmvt.qtt IS 'quantity moved';
+COMMENT ON COLUMN vmvt.receiver IS 'name of the receiver of the movement';
+COMMENT ON COLUMN vmvt.created IS 'time of the transaction';
+
+--------------------------------------------------------------------------------
+create table tmvtremoved (
+        id int UNIQUE not NULL,
+        nb int not null,
+        oruuid text NOT NULL, -- refers to order uuid
+    	grp int NOT NULL, 
+    	-- References the first mvt of an exchange.
+    	-- can be NULL
+	own_src int references towner(id)  not null, 
+	own_dst int  references towner(id) not null,
+	qtt dquantity not NULL,
+	nat int references tquality(id) not null,
+	created timestamp not NULL,
+	deleted timestamp not NULL
+);
+SELECT _grant_read('tmvtremoved');
+--------------------------------------------------------------------------------
+CREATE VIEW vmvtverif AS
+	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvt
+	UNION ALL
+	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvtremoved;
+SELECT _grant_read('vmvtverif');
+
 --------------------------------------------------------------------------------
 CREATE VIEW vstat AS 
 	SELECT 	q.name as name,
@@ -548,30 +524,22 @@ CREATE VIEW vstat AS
 		q.qtt as qtt_quality,
 		sum(d.qtt) as qtt_detail
 	FROM (
-		SELECT np as nat,qtt FROM torder
+		SELECT np as nat,qtt FROM vorderverif
 		UNION ALL
-		SELECT nat,qtt FROM tmvt
+		SELECT nat,qtt FROM vmvtverif
 	) AS d
 	INNER JOIN tquality AS q ON (d.nat=q.id)
 	GROUP BY q.id ORDER BY q.name; 
-	
-GRANT SELECT ON vstat TO market;	
 
-/* select count(*) from vstat where delta!=0;
-should return 0 */
+SELECT _grant_read('vstat');	
 
---------------------------------------------------------------------------------
-DROP FUNCTION _reference_time(text);
-DROP FUNCTION _reference_time_trig(text);
-
+/* examples:
+	 select count(*) from vstat where delta!=0;
+		should return 0 
+*/
 --------------------------------------------------------------------------------
 -- order
 --------------------------------------------------------------------------------
--- set schema 't';
-
-
--------------------------------------------------------------------------------
--- 
 CREATE function fremoveorder(_uuid text) RETURNS vorder AS $$
 DECLARE
 	_qtt		int8;
@@ -580,7 +548,8 @@ DECLARE
 	_qlt		tquality%rowtype;
 BEGIN
 	_vo.id = NULL;
-	SELECT o.* INTO _o FROM torder o,tquality q,tuser u WHERE o.np=q.id AND q.idd=u.id AND u.name=session_user AND uuid = _uuid;
+	SELECT o.* INTO _o FROM torder o,tquality q,tuser u 
+		WHERE o.np=q.id AND q.idd=u.id AND u.name=session_user AND uuid = _uuid;
 	IF NOT FOUND THEN
 		RAISE WARNING 'the order % belonging to % was not found',_uuid,session_user;
 		RAISE EXCEPTION USING ERRCODE='YU001';
@@ -603,23 +572,17 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN _vo; 
 END;		
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fremoveorder(text) TO market;
+GRANT EXECUTE ON FUNCTION fremoveorder(text) TO market_role;
 
 --------------------------------------------------------------------------------
 -- finsert_order
 --------------------------------------------------------------------------------
--- PUBLIC
 /* usage: 
 	nb_draft int = finsertorder(_owner text,_qualityprovided text,qttprovided int8,_qttrequired int8,_qualityrequired text)
 		
 	action:
 		inserts the order.
 		if _owner,_qualityprovided or _qualityrequired do not exist, they are created
-	
-	returns nb_draft:
-		the number of draft inserted.
-		or error returned by ob_finsert_order_int
-
 */
 --------------------------------------------------------------------------------
 -- torder id,uuid,yorder,created,updated
@@ -685,7 +648,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION finsertorder(text,text,int8,int8,text) TO market;
+GRANT EXECUTE ON FUNCTION finsertorder(text,text,int8,int8,text) TO market_role;
 
 CREATE VIEW vorderinsert AS
 	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
@@ -693,10 +656,10 @@ CREATE VIEW vorderinsert AS
 	
 --------------------------------------------------------------------------------
 -- finsert_order_int
-
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	finsert_order_int(_pivot torder,_insert bool) RETURNS TABLE (_zuuid text, _zdim int, _zgrp int,_zqtt_prov int8,_zqtt_requ int8) AS $$
+	finsert_order_int(_pivot torder,_insert bool) 
+	RETURNS TABLE (_zuuid text, _zdim int, _zgrp int,_zqtt_prov int8,_zqtt_requ int8) AS $$
 DECLARE
 
 	_idpivot 	int;
@@ -714,7 +677,9 @@ BEGIN
 			RETURNING id INTO _idpivot;
 		_zuuid := fgetuuid(_idpivot);
 		UPDATE torder SET uuid = _zuuid WHERE id=_idpivot RETURNING * INTO _o;
-		_cnt := fcreate_tmp(_o.id,yorder_get(_o.id,_o.own,_o.nr,_o.qtt_requ,_o.np,_o.qtt_prov,_o.qtt),_o.np,_o.nr);
+		_cnt := fcreate_tmp(_o.id,
+				yorder_get(_o.id,_o.own,_o.nr,_o.qtt_requ,_o.np,_o.qtt_prov,_o.qtt),
+				_o.np,_o.nr);
 	ELSE
 		select max(id)+1 INTO _pivot.id FROM torder;
 		-- _pivot.id!=0 and from all id inserted => lastignore=false 
@@ -738,8 +703,6 @@ BEGIN
 			EXIT; -- from LOOP
 		END IF;
 
-		-- RAISE NOTICE 'get max = %',yflow_show(_patmax);
-		-- RETURN;
 /*
 		IF(_cnt = 1) THEN
 			RAISE NOTICE 'get max = %',yflow_show(_patmax);
@@ -766,7 +729,8 @@ BEGIN
  	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL; 
-
+--------------------------------------------------------------------------------
+/*
 create table tsave_tmp(
 	n	int,
 	id 	int,
@@ -775,7 +739,7 @@ create table tsave_tmp(
 	pat	yflow
 );
 --------------------------------------------------------------------------------
-/* common to insertorder() and getquote() */
+-- common to insertorder() and getquote() 
 CREATE FUNCTION fcreate_tmp_mod(_id int,_ord yorder,_np int,_nr int) RETURNS int AS $$
 DECLARE 
 	_MAXORDERFETCH	 int := fgetconst('MAXORDERFETCH'); 
@@ -816,7 +780,7 @@ BEGIN
 	RETURN _cnt;
 END;
 $$ LANGUAGE PLPGSQL;
-
+*/
 CREATE FUNCTION fcreate_tmp(_id int,_ord yorder,_np int,_nr int) RETURNS int AS $$
 DECLARE 
 	_MAXORDERFETCH	 int := fgetconst('MAXORDERFETCH'); 
@@ -936,9 +900,7 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- quote
 --------------------------------------------------------------------------------
--- set schema 't';
 
---------------------------------------------------------------------------------
 CREATE FUNCTION 
 	fget_quality(_quality_name text) 
 	RETURNS int AS $$
@@ -957,7 +919,6 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- fgetquote
 --------------------------------------------------------------------------------
--- PUBLIC
 /* usage: 
 	nb_draft int = fgetquote(_qualityprovided text,_qualityrequired text)
 		
@@ -1006,12 +967,14 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fgetquote(text,text,text) TO market;
+GRANT EXECUTE ON FUNCTION fgetquote(text,text,text) TO market_role;
 /*
 CREATE VIEW vorder_int AS
 	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr FROM torder;
 */
-CREATE FUNCTION fgetquote_int(_wid int,_np int,_nr int) RETURNS TABLE(_dim int,_qtt_prov int8,_qtt_requ int8) AS $$
+--------------------------------------------------------------------------------
+CREATE FUNCTION fgetquote_int(_wid int,_np int,_nr int) 
+	RETURNS TABLE(_dim int,_qtt_prov int8,_qtt_requ int8) AS $$
 DECLARE 
 	_patmax	yflow;
 	_res	int8[];
@@ -1032,14 +995,12 @@ BEGIN
 		SELECT yflow_max(pat) INTO _patmax FROM _tmp;
 		IF (yflow_status(_patmax)!=3) THEN
 			EXIT; -- from LOOP
-		END IF;
+		END IF;		
 /*
 		IF(_cnt = 1) THEN
 			RAISE NOTICE 'get max = %',yflow_show(_patmax);
 		END IF;
 */
-		-- RAISE NOTICE 'get max = %',yflow_show(_patmax);
-		-- RETURN;
 		----------------------------------------------------------------
 		_res := yflow_qtts(_patmax);
 		_qtt_prov := _res[1];
@@ -1056,12 +1017,10 @@ BEGIN
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL;
-
 	
 --------------------------------------------------------------------------------
--- fgetquote
+-- fgetquoteorder
 --------------------------------------------------------------------------------
--- PUBLIC
 /* usage: 
 	nb_draft int = fgetquoteorder(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text)
 		
@@ -1116,20 +1075,11 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fgetquoteorder(text,text,int8,int8,text) TO market;
-/*
-select sum(_qtt_prov),sum(_qtt_requ),sum(_qtt_prov)/sum(_qtt_requ) from fgetquote('1','q3','q2');
-select sum(_qtt_prov),sum(_qtt_requ),sum(_qtt_prov)/sum(_qtt_requ) from fgetquoteorder('1','q3',5429898,4904876,'q2');
-
-sum_qtt_prov(path)
-sum_qtt_requ(path)
-*/
+GRANT EXECUTE ON FUNCTION fgetquoteorder(text,text,int8,int8,text) TO market_role;
 
 --------------------------------------------------------------------------------
 -- admin
 --------------------------------------------------------------------------------
--- set schema 't';
-
 -- init->close->prepare->open->close->prepare->open ...
 create type ymarketaction AS ENUM ('init','close','prepare','open');
 create table tmarket ( 
@@ -1138,15 +1088,16 @@ create table tmarket (
     action ymarketaction NOT NULL,
     created timestamp not NULL
 );
--- a sequence tmarket_id_seq created
-
+alter sequence tmarket_id_seq owned by tmarket.id;
+SELECT _grant_read('tmarket');
+--------------------------------------------------------------------------------
 CREATE VIEW vmarket AS SELECT
  	sess AS market_session,
  	created,
  	CASE WHEN action IN ('init','open') THEN 'OPENED' ELSE  'CLOSED' 
 	END AS state
 	FROM tmarket ORDER BY ID DESC LIMIT 1; 
-	
+SELECT _grant_read('vmarket');	
 --------------------------------------------------------------------------------
 CREATE FUNCTION fcreateuser(_name text) RETURNS void AS $$
 DECLARE
@@ -1197,11 +1148,7 @@ BEGIN
 		RAISE WARNING 'The last action on the market is % ; it should be open or init',_hm.action;
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
-	
-	-- revoke insertion and quotation from client
-	REVOKE EXECUTE ON FUNCTION finsertorder(text,text,int8,int8,text,int) FROM market;
-	REVOKE EXECUTE ON FUNCTION fgetquote(text,text) FROM market;
-		
+	-- TODO quotes and insert execution revoked
 	SELECT * INTO _hm FROM fchangestatemarket('close');
 	RETURN _hm;
 	
@@ -1280,8 +1227,8 @@ BEGIN
 	
 	_hm := fchangestatemarket('open');
 	
-	GRANT EXECUTE ON FUNCTION finsertorder(text,text,int8,int8,text,int) TO market;
-	GRANT EXECUTE ON FUNCTION fgetquote(text,text) TO market;
+	GRANT EXECUTE ON FUNCTION finsertorder(text,text,int8,int8,text,int) TO market_role;
+	GRANT EXECUTE ON FUNCTION fgetquote(text,text) TO market_role;
 	GRANT market TO client;
 	RETURN _hm;
 	
@@ -1333,30 +1280,12 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL;
 
-
-
-
 --------------------------------------------------------------------------------
 -- user
 --------------------------------------------------------------------------------
--- set schema 't';
 
-create table tmvtremoved (
-        id bigserial UNIQUE not NULL,
-        nb int not null,
-        oruuid text NOT NULL, -- refers to order uuid
-    	grp int NOT NULL, 
-    	-- References the first mvt of an exchange.
-    	-- can be NULL
-	own_src int references towner(id)  not null, 
-	own_dst int  references towner(id) not null,
-	qtt dquantity not NULL,
-	nat int references tquality(id) not null,
-	created timestamp not NULL,
-	deleted timestamp not NULL
-);
 --------------------------------------------------------------------------------
--- moves all movements of an agreement belonging to the user into tmvtremoved 
+-- moves all movements of an exchange belonging to the user into tmvtremoved 
 CREATE FUNCTION 
 	fremoveagreement(_grp int) 
 	RETURNS int AS $$
@@ -1393,7 +1322,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN 0; 
 END;
 $$ LANGUAGE PLPGSQL;
-GRANT EXECUTE ON FUNCTION fremoveagreement(int) TO market;
+GRANT EXECUTE ON FUNCTION fremoveagreement(int) TO market_role;
 
 --------------------------------------------------------------------------------
 -- 
@@ -1435,26 +1364,14 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- stat
 --------------------------------------------------------------------------------
--- set schema 't';
-
-CREATE VIEW vorderverif AS
-	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt FROM torder
-	UNION
-	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt FROM torderremoved;
-CREATE VIEW vmvtverif AS
-	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvt
-	UNION
-	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvtremoved;
-
+	
+--------------------------------------------------------------------------------
 CREATE FUNCTION fgetstats(_extra bool) RETURNS TABLE(_name text,cnt int8) AS $$
 DECLARE 
 	_i 		int;
 	_cnt 		int;
 BEGIN
-/*	_name := 'with MAXCYCLE=' || fgetconst('obCMAXCYCLE') || ';MAXORDERFETCH=' || fgetconst('MAXORDERFETCH');
-	cnt :=0;
-	RETURN NEXT;
-*/	
+
 	_name := 'number of qualities';
 	select count(*) INTO cnt FROM tquality;
 	RETURN NEXT;
@@ -1482,14 +1399,6 @@ BEGIN
 	_name := 'total number of agreements';
 	select count(distinct grp) INTO cnt FROM vmvtverif;	
 	RETURN NEXT;
-/*
-	-- too long
-	IF(_extra) THEN				
-		_name := 'number of connections between orders';
-		cnt := fgetcntcon();
-		RETURN NEXT;
-	END IF;
-*/	
 	
 
 	IF(_extra) THEN
@@ -1521,18 +1430,6 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL;
 GRANT EXECUTE ON FUNCTION fgetstats(bool)  TO admin;
-
---------------------------------------------------------------------------------
-/* number of connections between orders */
-CREATE FUNCTION fgetcntcon() RETURNS int AS $$
-DECLARE 
-	_cntrel int;
-BEGIN
-	SELECT count(*) INTO _cntrel FROM torder X,torder Y
-		WHERE X.np = Y.nr ;
-	RETURN _cntrel;
-END;
-$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 /* agreement 
@@ -1584,9 +1481,6 @@ CREATE FUNCTION fcntcycles() RETURNS TABLE(nbCycle int,cnt int) AS $$
 		select count(*)::int as cxt from vmvtverif group by grp
 	) a group by a.cxt order by a.cxt asc $$
 LANGUAGE SQL;
-
---------------------------------------------------------------------------------
-
 	
 --------------------------------------------------------------------------------
 CREATE FUNCTION fverifmvt() RETURNS int AS $$
@@ -1820,15 +1714,12 @@ END;
 $$ LANGUAGE PLPGSQL;
 
 
-/* By default, public has no access to the schema t
-roles market and admin can only read tables and views
-they can only execute functions when specified by previous scripts.
-*/
-/*
-GRANT USAGE ON SCHEMA t TO market,admin;
-REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA t FROM public;
-REVOKE ALL ON ALL TABLES IN SCHEMA t FROM public;
-GRANT SELECT ON ALL TABLES IN SCHEMA t TO market,admin;
-*/
-GRANT market TO client; -- market is opened
+DROP FUNCTION _grant_read(_table text);
+DROP FUNCTION _grant_exec(_funct text,_admin bool);
+DROP FUNCTION _reference_time(text);
+DROP FUNCTION _reference_time_trig(text);
+--------------------------------------------------------------------------------
+GRANT market_role TO client; -- market is opened
+\set ECHO all
+ RESET client_min_messages;
 

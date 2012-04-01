@@ -145,7 +145,7 @@ select * from fgetstats(true);
  errors on quantities in mvts |   0
  errors on agreements in mvts |   0
  MAXCYCLE                     |   8
- VERSION                      |   3
+ VERSION                      |  31
  INSERT_OWN_UNKNOWN           |   1
  CHECK_QUALITY_OWNERSHIP      |   0
  MAXORDERFETCH                | 100
