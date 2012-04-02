@@ -1050,31 +1050,32 @@ BEGIN
 	END IF;
 	
 	SELECT * INTO _user FROM tuser WHERE name=_name;
-	IF NOT FOUND THEN
-		SELECT rolsuper INTO _super FROM pg_authid where rolname=_name;
-		IF NOT FOUND THEN
-			EXECUTE 'CREATE ROLE ' || _name;
-			EXECUTE 'ALTER ROLE ' || _name || ' NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION'; 
-			EXECUTE 'ALTER ROLE ' || _name || ' LOGIN CONNECTION LIMIT 1';
-		ELSE
-			IF(_super) THEN
-				RAISE INFO 'The role % is a super user.',_name;
-			ELSE
-				RAISE WARNING 'The user is not found but a role % already exists - unchanged.',_name;
-				RAISE EXCEPTION USING ERRCODE='YU001';				
-			END IF;
-		END IF;
-		
-		INSERT INTO tuser (name) VALUES (_name);
-		SELECT state INTO _statemarket FROM vmarket;
-		IF(_statemarket = 'OPENED') THEN
-			RAISE INFO 'The market is opened for this user';
-			EXECUTE 'GRANT market_open_role TO ' || _name;
-		END IF;
-	ELSE
+	IF FOUND THEN
 		RAISE WARNING 'The user % exists',_name;
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
+	
+	SELECT rolsuper INTO _super FROM pg_authid where rolname=_name;
+	IF NOT FOUND THEN
+		EXECUTE 'CREATE ROLE ' || _name;
+		EXECUTE 'ALTER ROLE ' || _name || ' NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION'; 
+		EXECUTE 'ALTER ROLE ' || _name || ' LOGIN CONNECTION LIMIT 1';
+	ELSE
+		IF(_super) THEN
+			RAISE INFO 'The role % is a super user.',_name;
+		ELSE
+			RAISE WARNING 'The user is not found but a role % already exists - unchanged.',_name;
+			RAISE EXCEPTION USING ERRCODE='YU001';				
+		END IF;
+	END IF;
+	
+	INSERT INTO tuser (name) VALUES (_name);
+	SELECT state INTO _statemarket FROM vmarket;
+	IF(_statemarket = 'OPENED') THEN
+		RAISE INFO 'The market is opened for this user %', _name;
+		EXECUTE 'GRANT market_open_role TO ' || _name;
+	END IF;
+	
 	RETURN;
 		
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
@@ -1082,23 +1083,24 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fcreateuser(text) TO admin;
+GRANT EXECUTE ON FUNCTION fcreateuser(text) TO admin;
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION fclose() RETURNS tmarket AS $$
 DECLARE
 	_hm tmarket%rowtype;
 BEGIN
-	SELECT * INTO _hm FROM tmarket ORDER BY id DESC LIMIT 1;
-	IF(NOT _hm.action IN ('init','open') ) THEN
-		RAISE WARNING 'The last action on the market is % ; it should be open or init',_hm.action;
-		RAISE EXCEPTION USING ERRCODE='YU001';
-	END IF;
 	
 	REVOKE market_open_role FROM client;
 	GRANT  market_close_role TO client;
 	
 	SELECT * INTO _hm FROM fchangestatemarket('close');
+	
+	REVOKE EXECUTE ON FUNCTION fclose() FROM admin;
+	GRANT EXECUTE ON FUNCTION  fprepare() TO admin;
+	RAISE INFO 'The market is now closed';
+	RAISE INFO 'The function fprepare() is enabled.';
+	RAISE INFO 'It will succeed only when tables tmvt and torder are empty.';
 	RETURN _hm;
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
@@ -1106,7 +1108,6 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN _hm; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fclose() TO admin;
 
 --
 -- close client access 
@@ -1117,11 +1118,6 @@ DECLARE
 	_hm tmarket%rowtype;
 	_cnt int;
 BEGIN
-	SELECT * INTO _hm FROM tmarket ORDER BY id DESC LIMIT 1;
-	IF(NOT _hm.action ='close' ) THEN
-		RAISE WARNING 'The state of the market is % ; it should be closed',_hm.action;
-		RAISE EXCEPTION USING ERRCODE='YU001';
-	END IF;
 	
 	SELECT count(*) INTO _cnt FROM tmvt;
 	IF(_cnt != 0) THEN
@@ -1136,8 +1132,13 @@ BEGIN
 	END IF;
 	
 	SELECT * INTO _hm FROM fchangestatemarket('prepare');
+			
+	REVOKE EXECUTE ON FUNCTION fprepare() FROM admin;
+	GRANT EXECUTE ON FUNCTION fopen() TO admin;
 		
 	REVOKE market_close_role FROM client;
+	RAISE INFO 'fopen() is enabled';
+	RAISE INFO 'All market tables will be truncated when you will execute it';
 	RETURN _hm;
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
@@ -1145,8 +1146,6 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN _hm; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fprepare() TO admin;
-
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION fopen() RETURNS tmarket AS $$
@@ -1154,11 +1153,31 @@ DECLARE
 	_hm tmarket%rowtype;
 	_cnt int;
 BEGIN
-	SELECT * INTO _hm FROM tmarket ORDER BY id DESC LIMIT 1;
-	IF(NOT _hm.action ='prepare' ) THEN
-		RAISE WARNING 'The state of the market is % ; it should be prepare',_hm.action;
-		RAISE EXCEPTION USING ERRCODE='YU001';
-	END IF;
+	
+	perform ftruncatetables();
+	
+	_hm := fchangestatemarket('open');
+	
+	REVOKE EXECUTE ON FUNCTION fopen() FROM admin;
+	GRANT EXECUTE ON FUNCTION  fclose() TO admin;
+	 
+	GRANT market_open_role TO client;
+	RAISE INFO 'fclose() is enabled';
+	RAISE INFO 'The market is now opened';
+	RETURN _hm;
+	
+EXCEPTION WHEN SQLSTATE 'YU001' THEN
+	RAISE INFO 'ABORTED';
+	RETURN _hm; 
+END;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+
+--------------------------------------------------------------------------------
+CREATE FUNCTION ftruncatetables() RETURNS void AS $$
+DECLARE
+	_hm tmarket%rowtype;
+	_cnt int;
+BEGIN
 	
 	TRUNCATE tmvt;
 	PERFORM setval('tmvt_id_seq',1,false);	
@@ -1173,18 +1192,12 @@ BEGIN
 	TRUNCATE tmvtremoved;
 	
 	VACUUM FULL ANALYZE;
-	
-	_hm := fchangestatemarket('open');
+	RAISE INFO 'All market tables have been truncated';
+	RETURN;
 	 
-	GRANT market_open_role TO client;
-	RETURN _hm;
-	
-EXCEPTION WHEN SQLSTATE 'YU001' THEN
-	RAISE INFO 'ABORTED';
-	RETURN _hm; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fopen() TO admin;
+
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION fchangestatemarket(action ymarketaction) RETURNS tmarket AS $$
@@ -1197,6 +1210,7 @@ BEGIN
 		_session = 1;
 		INSERT INTO tconst (name,value) VALUES ('MARKET_SESSION',1);
 		INSERT INTO tconst (name,value) VALUES ('MARKET_OPENED',1);
+		GRANT EXECUTE ON FUNCTION  fclose() TO admin;
 	ELSE
 		IF(action = 'open') THEN
 			_session := _session +1;
@@ -1214,7 +1228,7 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL;
 SELECT id,sess,action from fchangestatemarket('init'); 
--- not the field created
+-- execution of fclose() is granted to admin
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION fgetuuid(_id int) RETURNS text AS $$ 

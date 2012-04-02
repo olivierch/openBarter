@@ -14,7 +14,7 @@ END;
 $$ LANGUAGE PLPGSQL;
 select fcreateuser(session_user);
 INFO:  The role olivier is a super user.
-INFO:  The market is opened for this user
+INFO:  The market is opened for this user olivier
  fcreateuser 
 -------------
  
