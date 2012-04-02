@@ -24,8 +24,8 @@ INSERT INTO tconst (name,value) VALUES
 	-- 1, insert an owner when it is unknown
 	-- 0, raise an error when the owner is unknown
 	('CHECK_QUALITY_OWNERSHIP',0), 
-	-- 1, quality = user_name/quality_name prefix must match session_user
-	-- 0, the name of quality can be any string
+	-- !=0, quality = user_name/quality_name prefix must match session_user
+	-- ==0, the name of quality can be any string
 	('MAXORDERFETCH',100);
 	-- maximum number of agreements of the set on which the competition occurs
 --------------------------------------------------------------------------------
@@ -172,8 +172,8 @@ SELECT _reference_time('tuser');
 create table tquality (
     id serial UNIQUE not NULL,
     name text not NULL,
-    idd int references tuser(id) not NULL,
-    depository text not NULL,
+    idd int references tuser(id), -- can be NULL
+    depository text,
     qtt bigint default 0,
     PRIMARY KEY (id),
     UNIQUE(name),
@@ -195,8 +195,11 @@ SELECT _reference_time('tquality');
 -- \copy tquality (depository,name) from data/ISO4217.data with delimiter '-'
 
 --------------------------------------------------------------------------------
--- quality.name == depository/quality
--- the length of depository >=1
+-- IF _CHECK_QUALITY_OWNERSHIP=0
+--	quality.name = quality
+-- ELSE
+--	quality.name == depository/quality
+-- 	the length of depository >=1
 --------------------------------------------------------------------------------
 CREATE FUNCTION fexplodequality(_quality_name text) RETURNS text[] AS $$
 DECLARE
@@ -204,9 +207,13 @@ DECLARE
 	_q text[];
 	_CHECK_QUALITY_OWNERSHIP int := fgetconst('CHECK_QUALITY_OWNERSHIP');
 BEGIN
+	IF(char_length(_quality_name) <1) THEN
+		RAISE NOTICE 'Quality name "%" incorrect',_quality_name;
+		RAISE EXCEPTION USING ERRCODE='YU001';
+	END IF;
 	IF(_CHECK_QUALITY_OWNERSHIP = 0) THEN
-		_q[0] := _quality_name;
-		_q[1] := session_user;
+		_q[1] := NULL;
+		_q[2] := _quality_name;
 		RETURN _q;
 	END IF;
 	
@@ -241,7 +248,7 @@ BEGIN
 			WHERE name = _quality_name RETURNING id,qtt INTO _id,_qtta;
 
 		IF FOUND THEN
-			IF (((_qtt >0) AND (_qtta < _qtt)) OR (_qtta<0) ) THEN 
+			IF (((_qtt > 0) AND (_qtta < _qtt)) OR (_qtta < 0) ) THEN 
 				RAISE WARNING 'Quality "%" owerflows',_quality_name;
 				RAISE EXCEPTION USING ERRCODE='YA001';
 			END IF;
@@ -250,12 +257,16 @@ BEGIN
 		END IF;
 		
 		BEGIN
-			_q := fexplodequality(_quality_name);	
-			
-			SELECT id INTO _idd FROM tuser WHERE name=_q[1];
-			IF(NOT FOUND) THEN -- user should exists
-				RAISE NOTICE 'The depository "%" is undefined',_q[1] ;
-				RAISE EXCEPTION USING ERRCODE='YU001';
+			_q := fexplodequality(_quality_name);
+			IF(_q[1] IS NOT NULL) THEN 	
+				-- _CHECK_QUALITY_OWNERSHIP =1
+				SELECT id INTO _idd FROM tuser WHERE name=_q[1];
+				IF(NOT FOUND) THEN -- user should exists
+					RAISE NOTICE 'The depository "%" is undefined',_q[1] ;
+					RAISE EXCEPTION USING ERRCODE='YU001';
+				END IF;
+			ELSE
+				_idd := NULL;
 			END IF;
 		
 			INSERT INTO tquality (name,idd,depository,qtt) VALUES (_quality_name,_idd,_q[1],_qtt)
@@ -535,13 +546,23 @@ DECLARE
 	_o 		torder%rowtype;
 	_vo		vorder%rowtype;
 	_qlt		tquality%rowtype;
+	_CHECK_QUALITY_OWNERSHIP int := fgetconst('CHECK_QUALITY_OWNERSHIP');
 BEGIN
 	_vo.id = NULL;
-	SELECT o.* INTO _o FROM torder o,tquality q,tuser u 
-		WHERE o.np=q.id AND q.idd=u.id AND u.name=session_user AND o.uuid = _uuid;
-	IF NOT FOUND THEN
-		RAISE WARNING 'the order % on a quality belonging to % was not found',_uuid,session_user;
-		RAISE EXCEPTION USING ERRCODE='YU001';
+	IF(_CHECK_QUALITY_OWNERSHIP != 0) THEN
+		SELECT o.* INTO _o FROM torder o,tquality q,tuser u 
+			WHERE 	o.np=q.id AND q.idd=u.id AND u.name=session_user AND o.uuid = _uuid;
+		IF NOT FOUND THEN
+			RAISE WARNING 'the order % on a quality belonging to % was not found',_uuid,session_user;
+			RAISE EXCEPTION USING ERRCODE='YU001';
+		END IF;
+	ELSE
+		SELECT o.* INTO _o FROM torder o,tquality q,tuser u 
+			WHERE 	o.np=q.id AND o.uuid = _uuid;
+		IF NOT FOUND THEN
+			RAISE WARNING 'the order % on a quality was not found',_uuid;
+			RAISE EXCEPTION USING ERRCODE='YU001';
+		END IF;
 	END IF;
 	
 	UPDATE tquality SET qtt = qtt - _o.qtt WHERE id = _o.np RETURNING qtt INTO _qlt;	
@@ -589,13 +610,14 @@ DECLARE
 	_q	text[];
 	_time_begin timestamp;
 	_uid	int;
+	_CHECK_QUALITY_OWNERSHIP int := fgetconst('CHECK_QUALITY_OWNERSHIP');
 BEGIN
 	_uid := fconnect(true);
 	_time_begin := clock_timestamp();
 	
 	-- order is rejected if the depository is not the user
 	_q := fexplodequality(_qualityprovided);
-	IF (_q[1] != session_user) THEN
+	IF ((_q[1] IS NOT NULL) AND (_q[1] != session_user)) THEN
 		RAISE NOTICE 'depository % of quality is not the user %',_q[1],session_user;
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
@@ -1254,10 +1276,13 @@ DECLARE
 	_cnt int8;
 	_qtt int8;
 	_qlt tquality%rowtype;
+	_CHECK_QUALITY_OWNERSHIP int := fgetconst('CHECK_QUALITY_OWNERSHIP');
 BEGIN
 	_cnt := 0;
 	FOR _nat,_qtt IN SELECT m.nat,sum(m.qtt) FROM tmvt m, tquality q,tuser u 
-		WHERE m.nat=q.id AND q.idd=u.id AND u.name=session_user AND m.grp=_grp GROUP BY m.nat LOOP
+		WHERE m.nat=q.id AND 
+		((q.idd=u.id AND u.name=session_user) OR (_CHECK_QUALITY_OWNERSHIP = 0)) AND 
+		m.grp=_grp GROUP BY m.nat LOOP
 		
 		_cnt := _cnt +1;
 		UPDATE tquality SET qtt = qtt - _qtt WHERE id = _nat RETURNING qtt INTO _qlt;
@@ -1272,7 +1297,9 @@ BEGIN
 	END IF;
 	
 	
-	WITH a AS (DELETE FROM tmvt m USING tquality q,tuser u WHERE m.nat=q.id AND q.idd=u.id AND u.name=session_user AND m.grp=_grp RETURNING m.*) 
+	WITH a AS (DELETE FROM tmvt m USING tquality q,tuser u WHERE m.nat=q.id AND 
+		((q.idd=u.id AND u.name=session_user) OR (_CHECK_QUALITY_OWNERSHIP = 0)) 
+		AND m.grp=_grp RETURNING m.*) 
 	INSERT INTO tmvtremoved SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,statement_timestamp() as deleted FROM a;
 
 	RETURN _cnt::int;
