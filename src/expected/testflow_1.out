@@ -93,6 +93,26 @@ SET client_min_messages = warning;
  
 (1 row)
 
+ _grant_exec 
+-------------
+           0
+(1 row)
+
+ _grant_exec 
+-------------
+           0
+(1 row)
+
+ _grant_exec 
+-------------
+           0
+(1 row)
+
+ _grant_exec 
+-------------
+           0
+(1 row)
+
  _grant_read 
 -------------
  
@@ -101,11 +121,41 @@ SET client_min_messages = warning;
  _grant_read 
 -------------
  
+(1 row)
+
+ _grant_exec 
+-------------
+           0
+(1 row)
+
+ _grant_exec 
+-------------
+           0
+(1 row)
+
+ _grant_exec 
+-------------
+           0
+(1 row)
+
+ _grant_exec 
+-------------
+           0
 (1 row)
 
  id | sess | action 
 ----+------+--------
   1 |    1 | init
+(1 row)
+
+ _grant_exec 
+-------------
+           0
+(1 row)
+
+ _grant_exec 
+-------------
+           0
 (1 row)
 
  RESET client_min_messages;

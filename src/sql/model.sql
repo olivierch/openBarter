@@ -8,7 +8,6 @@ set schema 't';
 drop extension if exists flow cascade;
 create extension flow;
 
-
 --------------------------------------------------------------------------------
 -- main constants of the model
 --------------------------------------------------------------------------------
@@ -56,11 +55,18 @@ DECLARE
 	_rol text;
 BEGIN
 	BEGIN 
-		CREATE ROLE market_role; 
+		CREATE ROLE market_open_role; 
 	EXCEPTION WHEN duplicate_object THEN
 		NULL;	
 	END;
-	ALTER ROLE market_role NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+	ALTER ROLE market_open_role NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+	
+	BEGIN 
+		CREATE ROLE market_close_role; 
+	EXCEPTION WHEN duplicate_object THEN
+		NULL;	
+	END;
+	ALTER ROLE market_close_role NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
 	
 	BEGIN 
 		CREATE ROLE client;
@@ -113,8 +119,6 @@ BEGIN
 	EXECUTE 'CREATE TRIGGER ' || _trigg || ' BEFORE INSERT
 		OR UPDATE ON ' || _table || ' FOR EACH ROW
 		EXECUTE PROCEDURE ftime_updated()' ; 
-	-- EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO market_role';
-	-- EXECUTE 'GRANT SELECT, INSERT, UPDATE, DELETE ON ' || _table || ' TO market_role';
 	RETURN 0;
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -122,15 +126,11 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- 
 --------------------------------------------------------------------------------
-CREATE FUNCTION _grant_exec(_funct text,_admin bool) RETURNS int AS $$
+CREATE FUNCTION _grant_exec(_funct text,_role text) RETURNS int AS $$
 
 BEGIN
 	EXECUTE 'REVOKE ALL ON FUNCTION ' || _funct || ' FROM public' ; 
-	IF(_admin) THEN
-		EXECUTE 'GRANT EXECUTE ON FUNCTION ' || _funct || ' TO market_role';
-	ELSE 
-		EXECUTE 'GRANT EXECUTE ON FUNCTION ' || _funct || ' TO admin';
-	END IF;
+	EXECUTE 'GRANT EXECUTE ON FUNCTION ' || _funct || ' TO ' || _role;
 	RETURN 0;
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -139,8 +139,8 @@ CREATE FUNCTION _grant_read(_table text) RETURNS void AS $$
 
 BEGIN
 	EXECUTE 'REVOKE ALL ON TABLE ' || _table || ' FROM public' ; 
-	EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO market_role';
-	EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO admin';
+	EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO market_open_role,market_close_role,admin';
+	-- EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO admin';
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -174,9 +174,10 @@ create table tuser (
     )
 );
 SELECT _grant_read('tuser');
+alter sequence tuser_id_seq owned by tuser.id;
 comment on table tuser is 'users that have been connected';
 SELECT _reference_time('tuser');
-alter sequence tuser_id_seq owned by tuser.id;
+
 
 --------------------------------------------------------------------------------
 -- TQUALITY
@@ -219,7 +220,7 @@ BEGIN
 	IF(_CHECK_QUALITY_OWNERSHIP = 0) THEN
 		_q[0] := _quality_name;
 		_q[1] := session_user;
-		return _q;
+		RETURN _q;
 	END IF;
 	
 	_e =position('/' in _quality_name);
@@ -549,9 +550,9 @@ DECLARE
 BEGIN
 	_vo.id = NULL;
 	SELECT o.* INTO _o FROM torder o,tquality q,tuser u 
-		WHERE o.np=q.id AND q.idd=u.id AND u.name=session_user AND uuid = _uuid;
+		WHERE o.np=q.id AND q.idd=u.id AND u.name=session_user AND o.uuid = _uuid;
 	IF NOT FOUND THEN
-		RAISE WARNING 'the order % belonging to % was not found',_uuid,session_user;
+		RAISE WARNING 'the order % on a quality belonging to % was not found',_uuid,session_user;
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
 	
@@ -572,7 +573,8 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN _vo; 
 END;		
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fremoveorder(text) TO market_role;
+SELECT _grant_exec('fremoveorder(text)','market_open_role');
+GRANT EXECUTE ON FUNCTION fremoveorder(text) TO market_close_role;
 
 --------------------------------------------------------------------------------
 -- finsert_order
@@ -648,7 +650,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION finsertorder(text,text,int8,int8,text) TO market_role;
+SELECT _grant_exec('finsertorder(text,text,int8,int8,text)','market_open_role');
 
 CREATE VIEW vorderinsert AS
 	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
@@ -730,57 +732,6 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL; 
 --------------------------------------------------------------------------------
-/*
-create table tsave_tmp(
-	n	int,
-	id 	int,
-	ord	yorder,
-	nr	int,
-	pat	yflow
-);
---------------------------------------------------------------------------------
--- common to insertorder() and getquote() 
-CREATE FUNCTION fcreate_tmp_mod(_id int,_ord yorder,_np int,_nr int) RETURNS int AS $$
-DECLARE 
-	_MAXORDERFETCH	 int := fgetconst('MAXORDERFETCH'); 
-	_MAXCYCLE 	int := fgetconst('MAXCYCLE');
-	_cnt int;
-	_idx  int;
-BEGIN
-	-- DROP TABLE IF EXISTS _tmp;
-	-- RAISE INFO 'pivot: id=% ord=%, np=%, nr=%',_id,_ord,_np,_nr;
-	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
-		WITH RECURSIVE search_backward(id,ord,pat,np,nr) AS (
-			SELECT 	_id,_ord,yflow_get(_ord),_np,_nr
-			UNION ALL
-			SELECT 	X.id,X.ord,
-				yflow_get(X.ord,Y.pat), -- add the order at the begin of the yflow
-				X.np,X.nr
-				FROM vorderinsert X, search_backward Y
-				WHERE  X.np = yorder_nr(Y.ord) -- use of indexe 
-					AND yflow_follow(_MAXCYCLE,X.ord,Y.pat) 
-					-- X->Y === X.qtt>0 and X.np=Y[0].nr
-					-- Y.pat does not contain X.ord 
-					-- len(X.ord+Y.path) <= _MAXCYCLE	
-					-- Y[!=-1]|->X === Y[i].np != X.nr with i!= -1
-		)
-		SELECT id,ord,nr,pat 
-		FROM search_backward  --draft
-	);
-
-	SELECT COUNT(*) INTO _cnt FROM _tmp;
-		
-	SELECT max(n) INTO _idx FROM tsave_tmp;
-	IF(_idx IS NULL) THEN _idx := 0; END IF;
-	WITH a AS (SELECT * FROM _tmp) 
-	INSERT INTO tsave_tmp SELECT _idx+1 as n,a.id,a.ord,a.nr,a.pat FROM a;
-	
-	DELETE FROM _tmp WHERE yflow_status(pat)!=3;
-	
-	RETURN _cnt;
-END;
-$$ LANGUAGE PLPGSQL;
-*/
 CREATE FUNCTION fcreate_tmp(_id int,_ord yorder,_np int,_nr int) RETURNS int AS $$
 DECLARE 
 	_MAXORDERFETCH	 int := fgetconst('MAXORDERFETCH'); 
@@ -967,7 +918,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fgetquote(text,text,text) TO market_role;
+SELECT _grant_exec('fgetquote(text,text,text)','market_open_role');
 /*
 CREATE VIEW vorder_int AS
 	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr FROM torder;
@@ -1075,7 +1026,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fgetquoteorder(text,text,int8,int8,text) TO market_role;
+SELECT _grant_exec('fgetquoteorder(text,text,int8,int8,text)','market_open_role');
 
 --------------------------------------------------------------------------------
 -- admin
@@ -1104,6 +1055,7 @@ DECLARE
 	_user	tuser%rowtype;
 	_super	bool;
 BEGIN
+-- TODO give a role depending on market phase
 	IF( _name IN ('admin','market','client')) THEN
 		RAISE WARNING 'The name % is not allowed',_name;
 		RAISE EXCEPTION USING ERRCODE='YU001';
@@ -1136,7 +1088,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fcreateuser(text)  TO admin;
+SELECT _grant_exec('fcreateuser(text)','admin');
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION fclose() RETURNS tmarket AS $$
@@ -1148,7 +1100,10 @@ BEGIN
 		RAISE WARNING 'The last action on the market is % ; it should be open or init',_hm.action;
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
-	-- TODO quotes and insert execution revoked
+	
+	REVOKE market_open_role FROM client;
+	GRANT  market_close_role TO client;
+	
 	SELECT * INTO _hm FROM fchangestatemarket('close');
 	RETURN _hm;
 	
@@ -1157,7 +1112,8 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN _hm; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fclose()  TO admin;
+SELECT _grant_exec('fclose()','admin');
+
 --
 -- close client access 
 -- aborts when some tables are not empty
@@ -1187,7 +1143,7 @@ BEGIN
 	
 	SELECT * INTO _hm FROM fchangestatemarket('prepare');
 		
-	REVOKE market FROM client;
+	REVOKE market_close_role FROM client;
 	RETURN _hm;
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
@@ -1195,7 +1151,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN _hm; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fprepare()  TO admin;
+SELECT _grant_exec('fprepare()','admin');
 
 
 --------------------------------------------------------------------------------
@@ -1214,22 +1170,19 @@ BEGIN
 	PERFORM setval('tmvt_id_seq',1,false);	
 	TRUNCATE torder CASCADE;
 	PERFORM setval('torder_id_seq',1,false);
-	TRUNCATE towner CASCADE;
-	PERFORM setval('towner_id_seq',1,false);
 	TRUNCATE tquality CASCADE;
 	PERFORM setval('tquality_id_seq',1,false);
 	TRUNCATE towner CASCADE;
 	PERFORM setval('towner_id_seq',1,false);
 		
-	TRUNCATE torderempty;
+	TRUNCATE torderemoved;
+	TRUNCATE tmvtremoved;
 	
 	VACUUM FULL ANALYZE;
 	
 	_hm := fchangestatemarket('open');
-	
-	GRANT EXECUTE ON FUNCTION finsertorder(text,text,int8,int8,text,int) TO market_role;
-	GRANT EXECUTE ON FUNCTION fgetquote(text,text) TO market_role;
-	GRANT market TO client;
+	 
+	GRANT market_open_role TO client;
 	RETURN _hm;
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
@@ -1237,8 +1190,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN _hm; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fopen()  TO admin;
-
+SELECT _grant_exec('fopen()','admin');
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION fchangestatemarket(action ymarketaction) RETURNS tmarket AS $$
@@ -1322,7 +1274,8 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN 0; 
 END;
 $$ LANGUAGE PLPGSQL;
-GRANT EXECUTE ON FUNCTION fremoveagreement(int) TO market_role;
+SELECT _grant_exec('fremoveagreement(int)','market_open_role');
+GRANT EXECUTE ON FUNCTION fremoveagreement(int) TO market_close_role;
 
 --------------------------------------------------------------------------------
 -- 
@@ -1429,53 +1382,10 @@ BEGIN
 	RETURN;
 END;
 $$ LANGUAGE PLPGSQL;
-GRANT EXECUTE ON FUNCTION fgetstats(bool)  TO admin;
+SELECT _grant_exec('fgetstats(bool)','admin');
 
 --------------------------------------------------------------------------------
-/* agreement 
-for all owners : select * from fgetagr(1);
-for a given owner: select * from fgetagr(1) where _own='1';
-*/
-CREATE FUNCTION fgetagr(_grp int) RETURNS TABLE(_own text,_natp text,_qtt_prov int8,_qtt_requ int8,_natr text) AS $$
-DECLARE 
-	_fnat	 text;
-	_fqtt	 int8;
-	_fown	 text;
-	_m	 vmvtverif%rowtype;
-BEGIN
-		_qtt_requ := NULL;
-		FOR _m IN SELECT * FROM vmvtverif WHERE grp=_grp ORDER BY id ASC LOOP
-			IF(_qtt_requ IS NULL) THEN
-				_qtt_requ := _m.qtt;
-				SELECT name INTO _natr FROM tquality WHERE _m.nat=id;
-				SELECT name INTO _fown FROM towner WHERE _m.own_src=id;
-				_fqtt := _m.qtt;
-				_fnat := _natr;
-			ELSE
-				SELECT name INTO _natp FROM tquality WHERE _m.nat=id;
-				SELECT name INTO _own FROM towner WHERE _m.own_src=id;
-				_qtt_prov := _m.qtt;
-				
-				RETURN NEXT;
-				_qtt_requ := _qtt_prov;
-				_natr := _natp;
-			END IF;
-		END LOOP;
-		IF(_qtt_requ IS NOT NULL) THEN
-			_own := _fown;
-			_natp := _fnat;
-			_qtt_prov := _fqtt;
-			--_qtt_requ := _qtt_requ;
-			--_natr :=  _natr;
-			RETURN NEXT;
-		END IF;
-	RETURN;
-END;
-$$ LANGUAGE PLPGSQL;
-
-
---------------------------------------------------------------------------------
--- for each cycle length, gives the number in tmvt
+-- for each cycle length, gives the number of agreements
 CREATE FUNCTION fcntcycles() RETURNS TABLE(nbCycle int,cnt int) AS $$ 
 	select a.cxt as nbCycle ,count(*)::int as cnt from (
 		select count(*)::int as cxt from vmvtverif group by grp
@@ -1610,116 +1520,55 @@ BEGIN
 	RETURN 0;
 END;
 $$ LANGUAGE PLPGSQL;
+
 --------------------------------------------------------------------------------
-/* gives the flow representation of a group of movements */
-CREATE FUNCTION fgetflow(_grp int8) RETURNS text AS $$
-DECLARE
-	_o	torder%rowtype;
-	_res	text;
-	_begin	bool;
+/* agreement 
+for all owners : select * from fgetagr(1);
+for a given owner: select * from fgetagr(1) where _own='1';
+*/
+CREATE FUNCTION fgetagr(_grp int) RETURNS TABLE(_own text,_natp text,_qtt_prov int8,_qtt_requ int8,_natr text) AS $$
+DECLARE 
+	_fnat	 text;
+	_fqtt	 int8;
+	_fown	 text;
+	_m	 vmvtverif%rowtype;
 BEGIN
-	_res := '[';
-	_begin := true;
-	FOR _o IN SELECT o.* FROM torder o,tmvt m WHERE m.grp=_grp AND m.oruuid=o.uuid ORDER BY m.id ASC LOOP
-		IF(NOT _begin) THEN
-			_res := _res || ',';
+		_qtt_requ := NULL;
+		FOR _m IN SELECT * FROM vmvtverif WHERE grp=_grp ORDER BY id ASC LOOP
+			IF(_qtt_requ IS NULL) THEN
+				_qtt_requ := _m.qtt;
+				SELECT name INTO _natr FROM tquality WHERE _m.nat=id;
+				SELECT name INTO _fown FROM towner WHERE _m.own_src=id;
+				_fqtt := _m.qtt;
+				_fnat := _natr;
+			ELSE
+				SELECT name INTO _natp FROM tquality WHERE _m.nat=id;
+				SELECT name INTO _own FROM towner WHERE _m.own_src=id;
+				_qtt_prov := _m.qtt;
+				
+				RETURN NEXT;
+				_qtt_requ := _qtt_prov;
+				_natr := _natp;
+			END IF;
+		END LOOP;
+		IF(_qtt_requ IS NOT NULL) THEN
+			_own := _fown;
+			_natp := _fnat;
+			_qtt_prov := _fqtt;
+			--_qtt_requ := _qtt_requ;
+			--_natr :=  _natr;
+			RETURN NEXT;
 		END IF;
-		_begin := false;
-		_res :=   _res || '(' || _o.id || ',' || _o.own  || ',' || _o.nr || ',' || _o.qtt_requ || ',' || _o.np || ',' || _o.qtt_requ  || ',' || _o.np || ')';
-	END LOOP; 
-	_res := _res || ']';
-	RAISE NOTICE 'flow_to_matrix(flow)=%',yflow_to_matrix(_res::yflow);
-	RETURN _res;
-END;
-$$ LANGUAGE PLPGSQL;
---------------------------------------------------------------------------------
-/* usage:
-_t timestamp := current_timestamp;
-action to measure
-perform frec('action_name',_t);
-then execute getdelays.py
- */
-CREATE FUNCTION frectime(_name text,_start timestamp) RETURNS VOID AS $$
-DECLARE
-	_x	int8;
-	_dn	text;
-BEGIN
-	_dn := 'perf_delay_' || _name;
-	_x := extract(microsecond from (current_timestamp - _start)); 
-	UPDATE tconst SET value = value + _x WHERE name = _dn;
-	IF(NOT FOUND) THEN
-		INSERT INTO tconst (name,value) VALUES (_dn,_x);
-	END IF;
-	_dn := 'perf_count_' || _name;
-	UPDATE tconst SET value = value + 1 WHERE name = _dn;
-	IF(NOT FOUND) THEN
-		INSERT INTO tconst (name,value) VALUES (_dn,1);
-	END IF;
 	RETURN;
 END;
 $$ LANGUAGE PLPGSQL;
-
-CREATE OR REPLACE FUNCTION fomega(pat yflow) RETURNS float8 AS $$
-DECLARE
-	_f float8[];
-BEGIN
-	_f := yflow_qtts(pat)::float8[];
-	-- qtt_prov/qtt_requ
-	RETURN (_f[1])/(_f[2]);
-END;
-$$ LANGUAGE PLPGSQL;
-
-
-CREATE OR REPLACE FUNCTION fnpnr(pat yflow) RETURNS int8[] AS $$
-DECLARE
-	_vi int8[];
-	_dim int;
-BEGIN
-	_vi := yflow_to_matrix(pat);
-	_dim := yflow_dim(pat);
-	-- qlt_prov,qlt_requ
-	RETURN array[_vi[_dim][5],_vi[1][3]];
-END;
-$$ LANGUAGE PLPGSQL;
-
-CREATE OR REPLACE FUNCTION fpopulate(nbq int,nbo int) RETURNS int AS $$
-DECLARE
-	_f float8[];
-	_i int;
-	_range float :=1000;
-BEGIN
-	with t as (select i from generate_series(1,nbq) g(i))
-	insert into tquality select t.i,'q' || t.i::text,1,session_user,0 from t;
-	select setval('tquality_id_seq',nbq+1,false) INTO _i;
-
-	with t as (select i from generate_series(1,nbo) g(i))
-	insert into towner select t.i,t.i::text from t;
-	select setval('towner_id_seq',nbo+1,false) INTO _i;
-
-	with t as(select i from generate_series(1,nbo) g(i))
-	INSERT INTO torder select --(id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt,created,updated) 
-		t.i as id,t.i::text as uuid,t.i as own,round(random()*(nbq-1))::int+1 as nr,(round(random()*_range)::int+1)*100 as qtt_requ,
-		round(random()*(nbq-1))::int+1 as np,(round(random()*_range)::int+1)*100 as qtt_prov,1 as qtt,
-		statement_timestamp() as created,NULL as updated from t;
-	select setval('torder_id_seq',nbo+1,false) INTO _i;
-
-	update torder set np=np-1 where np=nr and np>2; -- all must be different
-	update torder set np=2 where np=nr and np=1;
-	update torder set qtt=qtt_prov;
-
-	WITH t as (select np, sum(qtt) as qtt from torder group by np)
-	update tquality set qtt = t.qtt from t where id=t.np ;
-	RETURN 1;
-END;
-$$ LANGUAGE PLPGSQL;
-
-
+--------------------------------------------------------------------------------
 DROP FUNCTION _grant_read(_table text);
-DROP FUNCTION _grant_exec(_funct text,_admin bool);
+DROP FUNCTION _grant_exec(_funct text,_role text);
 DROP FUNCTION _reference_time(text);
 DROP FUNCTION _reference_time_trig(text);
 --------------------------------------------------------------------------------
-GRANT market_role TO client; -- market is opened
+GRANT market_open_role TO client; -- market is opened
 \set ECHO all
  RESET client_min_messages;
 
