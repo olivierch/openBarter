@@ -1,5 +1,24 @@
 SET client_min_messages = warning;
 \set ECHO none
+/*
+NOTES ON ROLES:
+if a superuser executes:
+grant execute on f1() to admin;
+grant admin to client;
+then f1() can be executed by admin and client
+revoke admin from client;
+then f1() can only be executed by admin.
+
+if a superuser toto executes:
+grant execute on f2() to toto;
+then f2() can be executed by public!!
+
+select * from information_schema.enabled_roles;
+	list of roles enabled
+
+select * from information_schema.role_routine_grants;
+	list of grantees for execution of routines
+*/
 
 --------------------------------------------------------------------------------
 /*

@@ -124,23 +124,10 @@ END;
 $$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
--- 
---------------------------------------------------------------------------------
-CREATE FUNCTION _grant_exec(_funct text,_role text) RETURNS int AS $$
-
-BEGIN
-	EXECUTE 'REVOKE ALL ON FUNCTION ' || _funct || ' FROM public' ; 
-	EXECUTE 'GRANT EXECUTE ON FUNCTION ' || _funct || ' TO ' || _role;
-	RETURN 0;
-END; 
-$$ LANGUAGE PLPGSQL;
---------------------------------------------------------------------------------
 CREATE FUNCTION _grant_read(_table text) RETURNS void AS $$
 
-BEGIN
-	EXECUTE 'REVOKE ALL ON TABLE ' || _table || ' FROM public' ; 
+BEGIN 
 	EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO market_open_role,market_close_role,admin';
-	-- EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO admin';
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -432,6 +419,7 @@ CREATE VIEW vorderverif AS
 	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt FROM torder
 	UNION
 	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt FROM torderremoved;
+	
 SELECT _grant_read('vorderverif');
 
 --------------------------------------------------------------------------------
@@ -573,8 +561,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN _vo; 
 END;		
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-SELECT _grant_exec('fremoveorder(text)','market_open_role');
-GRANT EXECUTE ON FUNCTION fremoveorder(text) TO market_close_role;
+GRANT EXECUTE ON FUNCTION  fremoveorder(text) TO market_open_role,market_close_role;
 
 --------------------------------------------------------------------------------
 -- finsert_order
@@ -650,7 +637,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-SELECT _grant_exec('finsertorder(text,text,int8,int8,text)','market_open_role');
+GRANT EXECUTE ON FUNCTION  finsertorder(text,text,int8,int8,text) TO market_open_role;
 
 CREATE VIEW vorderinsert AS
 	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
@@ -918,7 +905,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-SELECT _grant_exec('fgetquote(text,text,text)','market_open_role');
+GRANT EXECUTE ON FUNCTION  fgetquote(text,text,text) TO market_open_role;
 /*
 CREATE VIEW vorder_int AS
 	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr FROM torder;
@@ -1026,7 +1013,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-SELECT _grant_exec('fgetquoteorder(text,text,int8,int8,text)','market_open_role');
+GRANT EXECUTE ON FUNCTION  fgetquoteorder(text,text,int8,int8,text) TO market_open_role;
 
 --------------------------------------------------------------------------------
 -- admin
@@ -1054,16 +1041,16 @@ CREATE FUNCTION fcreateuser(_name text) RETURNS void AS $$
 DECLARE
 	_user	tuser%rowtype;
 	_super	bool;
+	_statemarket	text;
 BEGIN
 -- TODO give a role depending on market phase
-	IF( _name IN ('admin','market','client')) THEN
+	IF( _name IN ('admin','client','market_open_role','market_close_role')) THEN
 		RAISE WARNING 'The name % is not allowed',_name;
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
 	
 	SELECT * INTO _user FROM tuser WHERE name=_name;
 	IF NOT FOUND THEN
-		INSERT INTO tuser (name) VALUES (_name);
 		SELECT rolsuper INTO _super FROM pg_authid where rolname=_name;
 		IF NOT FOUND THEN
 			EXECUTE 'CREATE ROLE ' || _name;
@@ -1071,14 +1058,21 @@ BEGIN
 			EXECUTE 'ALTER ROLE ' || _name || ' LOGIN CONNECTION LIMIT 1';
 		ELSE
 			IF(_super) THEN
-				RAISE INFO 'The role % is a super user: unchanged.',_name;
+				RAISE INFO 'The role % is a super user.',_name;
 			ELSE
-				RAISE WARNING 'The user is not found but a role % already exists.',_name;
+				RAISE WARNING 'The user is not found but a role % already exists - unchanged.',_name;
 				RAISE EXCEPTION USING ERRCODE='YU001';				
 			END IF;
 		END IF;
+		
+		INSERT INTO tuser (name) VALUES (_name);
+		SELECT state INTO _statemarket FROM vmarket;
+		IF(_statemarket = 'OPENED') THEN
+			RAISE INFO 'The market is opened for this user';
+			EXECUTE 'GRANT market_open_role TO ' || _name;
+		END IF;
 	ELSE
-		RAISE WARNING 'The user % exists.',_name;
+		RAISE WARNING 'The user % exists',_name;
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
 	RETURN;
@@ -1088,7 +1082,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-SELECT _grant_exec('fcreateuser(text)','admin');
+GRANT EXECUTE ON FUNCTION  fcreateuser(text) TO admin;
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION fclose() RETURNS tmarket AS $$
@@ -1112,7 +1106,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN _hm; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-SELECT _grant_exec('fclose()','admin');
+GRANT EXECUTE ON FUNCTION  fclose() TO admin;
 
 --
 -- close client access 
@@ -1151,7 +1145,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN _hm; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-SELECT _grant_exec('fprepare()','admin');
+GRANT EXECUTE ON FUNCTION  fprepare() TO admin;
 
 
 --------------------------------------------------------------------------------
@@ -1190,7 +1184,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN _hm; 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-SELECT _grant_exec('fopen()','admin');
+GRANT EXECUTE ON FUNCTION  fopen() TO admin;
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION fchangestatemarket(action ymarketaction) RETURNS tmarket AS $$
@@ -1274,8 +1268,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RETURN 0; 
 END;
 $$ LANGUAGE PLPGSQL;
-SELECT _grant_exec('fremoveagreement(int)','market_open_role');
-GRANT EXECUTE ON FUNCTION fremoveagreement(int) TO market_close_role;
+GRANT EXECUTE ON FUNCTION  fremoveagreement(int) TO market_open_role,market_close_role;
 
 --------------------------------------------------------------------------------
 -- 
@@ -1382,7 +1375,7 @@ BEGIN
 	RETURN;
 END;
 $$ LANGUAGE PLPGSQL;
-SELECT _grant_exec('fgetstats(bool)','admin');
+GRANT EXECUTE ON FUNCTION  fgetstats(bool) TO admin;
 
 --------------------------------------------------------------------------------
 -- for each cycle length, gives the number of agreements
@@ -1564,7 +1557,6 @@ END;
 $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 DROP FUNCTION _grant_read(_table text);
-DROP FUNCTION _grant_exec(_funct text,_role text);
 DROP FUNCTION _reference_time(text);
 DROP FUNCTION _reference_time_trig(text);
 --------------------------------------------------------------------------------
