@@ -1,21 +1,21 @@
 -- set schema 't';
 select * from finsertorder('x','b',160,40,'a');
 INFO:  owner x created
-CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
  _yuuid | _ydim | _ygrp 
 --------+-------+-------
 (0 rows)
 
 select * from finsertorder('y','c',160,80,'b');
 INFO:  owner y created
-CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
  _yuuid | _ydim | _ygrp 
 --------+-------+-------
 (0 rows)
 
 select * from finsertorder('t','c',100,100,'a');
 INFO:  owner t created
-CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
  _yuuid | _ydim | _ygrp 
 --------+-------+-------
 (0 rows)
@@ -29,7 +29,7 @@ select * from fgetquote('z','a','c'); -- expected (dim,qtt_prov,qtt_requ)= (3,20
 
 select * from finsertorder('z','a',20,160,'c'); -- one agreements
 INFO:  owner z created
-CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
  _yuuid | _ydim | _ygrp 
 --------+-------+-------
  1-11   |     3 |     9

@@ -23,14 +23,14 @@ INFO:  The market is opened for this user olivier
 -- own,qual_prov,qtt_prov,qtt_requ,qual_requ
 select finsertorder('u',fq('b'),1000,1000,fq('a'));
 INFO:  owner u created
-CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
  finsertorder 
 --------------
 (0 rows)
 
 select finsertorder('v',fq('c'),1000,1000,fq('b'));
 INFO:  owner v created
-CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
  finsertorder 
 --------------
 (0 rows)
@@ -43,7 +43,7 @@ select fgetquote('w',fq('a'),fq('c'));
 
 select finsertorder('w',fq('a'),1000,1000,fq('c'));
 INFO:  owner w created
-CONTEXT:  PL/pgSQL function "finsertorder" line 34 at assignment
+CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
  finsertorder 
 --------------
  (1-3,3,1)

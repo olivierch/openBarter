@@ -21,8 +21,8 @@ INSERT INTO tconst (name,value) VALUES
 	('MAXCYCLE',8),
 	('VERSION',31),
 	('INSERT_OWN_UNKNOWN',1), 
-	-- 1, insert an owner when it is unknown
-	-- 0, raise an error when the owner is unknown
+	-- !=0, insert an owner when it is unknown
+	-- ==0, raise an error when the owner is unknown
 	('CHECK_QUALITY_OWNERSHIP',0), 
 	-- !=0, quality = user_name/quality_name prefix must match session_user
 	-- ==0, the name of quality can be any string
@@ -1210,16 +1210,15 @@ BEGIN
 	TRUNCATE towner CASCADE;
 	PERFORM setval('towner_id_seq',1,false);
 		
-	TRUNCATE torderemoved;
+	TRUNCATE torderremoved;
 	TRUNCATE tmvtremoved;
 	
-	VACUUM FULL ANALYZE;
+	RAISE INFO 'The command: VACUUM FULL ANALYZE is recommended';
 	RAISE INFO 'All market tables have been truncated';
 	RETURN;
 	 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION fchangestatemarket(action ymarketaction) RETURNS tmarket AS $$
