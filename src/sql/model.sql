@@ -688,6 +688,7 @@ BEGIN
 			RETURNING id INTO _idpivot;
 		_zuuid := fgetuuid(_idpivot);
 		UPDATE torder SET uuid = _zuuid WHERE id=_idpivot RETURNING * INTO _o;
+
 		_cnt := fcreate_tmp(_o.id,
 				yorder_get(_o.id,_o.own,_o.nr,_o.qtt_requ,_o.np,_o.qtt_prov,_o.qtt),
 				_o.np,_o.nr);
@@ -747,8 +748,10 @@ DECLARE
 	_MAXCYCLE 	int := fgetconst('MAXCYCLE');
 	_cnt int;
 BEGIN
-	-- DROP TABLE IF EXISTS _tmp;
-	-- RAISE INFO 'pivot: id=% ord=%, np=%, nr=%',_id,_ord,_np,_nr;
+/*	DROP TABLE IF EXISTS _tmp;
+	RAISE INFO 'select * from fcreate_tmp(%,yorder_get%,%,%)',_id,_ord,_np,_nr;
+	CREATE TEMPORARY TABLE _tmp /* ON COMMIT DROP */ AS (
+*/	
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
 		WITH RECURSIVE search_backward(id,ord,pat,np,nr) AS (
 			SELECT 	_id,_ord,yflow_get(_ord),_np,_nr
@@ -1122,7 +1125,7 @@ BEGIN
 	GRANT EXECUTE ON FUNCTION  fprepare() TO admin;
 	RAISE INFO 'The market is now closed';
 	RAISE INFO 'The function fprepare() is enabled.';
-	RAISE INFO 'It will succeed only when tables tmvt and torder are empty.';
+	RAISE INFO 'It will succeed only if tables tmvt and torder are empty.';
 	RETURN _hm;
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
@@ -1307,7 +1310,7 @@ EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RAISE INFO 'ABORTED';
 	RETURN 0; 
 END;
-$$ LANGUAGE PLPGSQL;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fremoveagreement(int) TO market_open_role,market_close_role;
 
 --------------------------------------------------------------------------------
@@ -1599,6 +1602,15 @@ $$ LANGUAGE PLPGSQL;
 DROP FUNCTION _grant_read(_table text);
 DROP FUNCTION _reference_time(text);
 DROP FUNCTION _reference_time_trig(text);
+CREATE FUNCTION _removePublic() RETURNS void AS $$
+BEGIN
+	EXECUTE 'REVOKE ALL ON DATABASE ' || current_catalog || ' FROM PUBLIC';
+	RETURN;
+END; 
+$$ LANGUAGE PLPGSQL;
+SELECT _removePublic();
+DROP FUNCTION _removePublic();
+
 --------------------------------------------------------------------------------
 GRANT market_open_role TO client; -- market is opened
 \set ECHO all

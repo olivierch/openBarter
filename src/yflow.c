@@ -69,6 +69,7 @@ Datum yflow_qtts(PG_FUNCTION_ARGS);
 
 
 char *yflow_statusBoxToStr (Tflow *box);
+char *yflow_pathToStr(Tflow *yflow);
 
 // memory allocation of Tflow
 #define Ndbox_init(dim) ((Tflow *) palloc(sizeof(Tflow))) 
@@ -80,7 +81,9 @@ void		_PG_fini(void);
 begin and end functions called when flow.so is loaded
 ******************************************************************************/
 void		_PG_init(void) {
-	globales.verify = true;	
+	globales.verify = true;
+	globales.warning_follow = false;
+	globales.warning_get = false;	
 	return;
 }
 void		_PG_fini(void) {
@@ -156,6 +159,38 @@ char *yflow_ndboxToStr(Tflow *yflow,bool internal) {
 	
 	return buf.data;
 }
+
+/*****************************************************************************/
+char *yflow_pathToStr(Tflow *yflow) {
+	StringInfoData 	buf;
+	int	dim = yflow->dim;
+	int	i;
+
+	initStringInfo(&buf);
+
+
+	appendStringInfo(&buf, "@[");
+	if(dim >0) {
+		for (i = 0; i < dim; i++)
+		{	
+			Torder *s = &yflow->x[i];
+		
+			if(i != 0) appendStringInfoChar(&buf, ',');
+
+			// id,own,nr,qtt_requ,np,qtt_prov,qtt,flow
+			appendStringInfo(&buf, "[%i, ", s->id);
+			appendStringInfo(&buf, "%i, ", s->own);
+			appendStringInfo(&buf, "%i, ", s->nr);
+			appendStringInfo(&buf, "%lli, ", s->qtt_requ);
+			appendStringInfo(&buf, "%i, ", s->np);
+			appendStringInfo(&buf, "%lli, ", s->qtt_prov);
+			appendStringInfo(&buf, "%lli,%lli]",s->qtt, yflow->flowr[i]);
+		}
+	}
+	appendStringInfoChar(&buf, ']');
+	
+	return buf.data;
+}
 /******************************************************************************
 ******************************************************************************/
 Datum yflow_out(PG_FUNCTION_ARGS)
@@ -216,7 +251,7 @@ static Tflow* _yflow_get(Torder *o,Tflow *f, bool before) {
 		}
 		
 	result = Ndbox_init(FLOW_MAX_DIM);
-	if(inflow) { // the flow is unchanged
+	if(inflow) { // the order already belongs to the flow: flow is unchanged
 		memcpy(result,f,sizeof(Tflow));
 	} else {
 		if(before) {
@@ -229,6 +264,8 @@ static Tflow* _yflow_get(Torder *o,Tflow *f, bool before) {
 		result->dim = dim+1;
 		(void) flowc_maximum(result);
 	}
+	if(globales.warning_get) 
+		elog(WARNING,"_yflow_get %s",yflow_pathToStr(result));
 	return result;	
 	
 }
@@ -273,6 +310,9 @@ static bool _yflow_follow(int32 maxlen,Torder *o,Tflow *f, bool before) {
 
 	short 	dim = f->dim,i;
 	// bool	inflow,cycle;
+	
+	if(globales.warning_follow)
+		elog(WARNING,"_yflow_follow %s",yflow_pathToStr(f));
 	
 	if((dim >=maxlen) || (dim >= FLOW_MAX_DIM))
 		return false;

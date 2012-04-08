@@ -1,6 +1,13 @@
-
+set role admin;
+select id,sess,action from fclose();
+reset role;
 select ftruncatetables();
--- own,qual_prov,qtt_prov,qtt_requ,qual_requ
+set role admin;
+select id,sess,action from fprepare();
+
+-- market is opened
+select id,sess,action from fopen();
+set role client;
 
 select finsertorder('u','b',1000,1000,'a');
 select finsertorder('v','c',1000,1000,'b');
@@ -19,8 +26,21 @@ select fremoveagreement(4);
 
 select fgetquote('w','a','b');
 select finsertorder('w','a',500,1000,'b');
-select fremoveagreement(7);
-select id,qtt from tquality;
 
+set role admin;
+-- market is closed
+select id,sess,action from fclose();
+
+set role client;
+select fremoveagreement(7);
+
+set role admin;
+select id,qtt from tquality;
 select * from fgetstats(true);
+
+select id,sess,action from fprepare();
+select id,sess,action from fopen();
+-- select id,qtt from tquality;
+
+-- select * from fgetstats(true);
 

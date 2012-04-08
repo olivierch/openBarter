@@ -46,8 +46,10 @@ typedef struct Tflow {
 
 typedef struct ob_tGlobales {
 	bool verify;
+	bool warning_follow;
+	bool warning_get;
 } ob_tGlobales;
-extern ob_tGlobales globales; //defined in flow.c
+extern ob_tGlobales globales; //defined in yflow.c
 
 
 extern Tstatusflow flowc_maximum(Tflow *box);
