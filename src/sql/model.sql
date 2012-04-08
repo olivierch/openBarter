@@ -741,6 +741,7 @@ BEGIN
  	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL; 
+
 --------------------------------------------------------------------------------
 CREATE FUNCTION fcreate_tmp(_id int,_ord yorder,_np int,_nr int) RETURNS int AS $$
 DECLARE 
@@ -784,7 +785,7 @@ $$ LANGUAGE PLPGSQL;
 
 CREATE FUNCTION fexecute_flow(_flw yflow) RETURNS int AS $$
 DECLARE
-	_commits	int[][];
+	_commits	int8[][];
 	_i		int;
 	_next_i		int;
 	_nbcommit	int;
@@ -1546,9 +1547,10 @@ BEGIN
 	END IF;
 	
 	-- _o.qtt_prov/_o.qtt_requ < _mvt.qtt/_mvtprec.qtt
-	IF((_o.qtt_prov * _mvtprec.qtt) < (_mvt.qtt * _o.qtt_requ)) THEN
+	IF(((_o.qtt_prov::float8) / (_o.qtt_requ::float8)) < ((_mvt.qtt::float8)/(_mvtprec.qtt::float8))) THEN
 		RAISE INFO 'order %->%, with  mvt %->%',_o.qtt_requ,_o.qtt_prov,_mvtprec.qtt,_mvt.qtt;
-		RAISE INFO 'orderid %, with  mvtid %->%',_o.id,_mvtprec.id,_mvt.id;
+		RAISE INFO '% < 1; should be >=1',(((_o.qtt_prov::float8) / (_o.qtt_requ::float8)) / ((_mvt.qtt::float8)/(_mvtprec.qtt::float8)));
+		RAISE INFO 'order.uuid %, with  mvtid %->%',_o.uuid,_mvtprec.id,_mvt.id;
 		RETURN 1;
 	END IF;
 

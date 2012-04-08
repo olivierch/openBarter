@@ -532,7 +532,15 @@ static bool _rounding(double *fluxExact, Tchemin *pchemin) {
 			* the cycle exhausts the box
 			* Omega ~= 1.0 
 		*/
-
+		if(!box->lastignore) {
+			short _kp = _dim-1;
+			
+			obMRange(_k,_dim) {
+				if(pchemin->no[_k].omega < ((double) _flowNodes[_k]) / ((double) _flowNodes[_kp]))
+					goto _continue;
+				_kp = _k;
+			}
+		}
 
 		// choose the best
 		/***************************************************************/

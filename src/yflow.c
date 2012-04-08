@@ -330,21 +330,39 @@ static bool _yflow_follow(int32 maxlen,Torder *o,Tflow *f, bool before) {
 		if (o->np != f->x[0].nr)
 			return false;
 			
-		// cycle
+		// unexpected cycle
 		obMRange(i,dim-1)
 			if(f->x[i].np == o->nr) 
 				return false;
+				
+		// not yet an expected cycle
+		if(f->x[dim-1].np != o->nr)
+			return true;
 	} else {
 		// not end(f) -> o
 		if(f->x[dim-1].np != o->nr)
 			return false;
 			
-		// cycle
+		// unexpected cycle
 		obMRange(i,dim-1)
 			if(o->np == f->x[i+1].nr) 
 				return false;
+
+		// not yet an expected cycle
+		if(o->np != f->x[dim-1].nr)
+			return true;
 	}
-	return true;
+	// return true;
+	// it is an expected cycle
+	{
+		double _om = 1.;
+		obMRange(i,dim)
+			_om *= ((double)(f->x[i].qtt_prov)) / ((double)(f->x[i].qtt_requ));
+		_om *= ((double)(o->qtt_prov)) / ((double)(o->qtt_requ));
+		
+		return (_om >= 1.);
+	}
+	
 }
 /******************************************************************************
 yflow_follow(int,yorder,yflow)
@@ -429,8 +447,8 @@ if (f and fr are drafts)
 if (f or fr is not in (empty,draft))
 	error
 ******************************************************************************/
-#define FLOWISDOE(f) (((f)->status == draft) || ((f)->status == empty))
-#define FLOWAREDOE(f1,f2) (FLOWISDOE(f1) && FLOWISDOE(f2))
+#define FLOWISDOEU(f) (((f)->status == draft) || ((f)->status == empty) || ((f)->status == undefined))
+#define FLOWAREDOEU(f1,f2) (FLOWISDOEU(f1) && FLOWISDOEU(f2))
 
 
 Datum yflow_reduce(PG_FUNCTION_ARGS)
@@ -442,6 +460,11 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 			 
 	r = Ndbox_init(FLOW_MAX_DIM);
 	memcpy(r,f,sizeof(Tflow));
+	
+	if (!FLOWAREDOEU(r,fr)) 
+		ereport(ERROR,
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+			 errmsg("yflow_reduce: flows should be draft,undefined or empty;%s and %s instead",yflow_statusBoxToStr(r),yflow_statusBoxToStr(fr))));
 	
 	if(r->status == draft && fr->status == draft) {
 		short _dim;
@@ -459,12 +482,8 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 				}
 		}
 		(void) flowc_maximum(r);
-	} 
 	
-	if (!FLOWAREDOE(r,fr)) 
-		ereport(ERROR,
-			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-			 errmsg("yflow_reduce: flows should be draft or empty")));
+	}
 
 	PG_RETURN_TFLOW(r);
 
@@ -489,42 +508,46 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 	Tflow	*f1 = PG_GETARG_TFLOW(0);
 	Tflow	*f2 = PG_GETARG_TFLOW(1);
 
-	if(!FLOWAREDOE(f1,f2)) 
+	if(!FLOWAREDOEU(f1,f2)) 
 			ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("yflow_maxg: the flow should be draft or empty")));
-				 
-	if(f1->status == empty) 
-		PG_RETURN_TFLOW(f2); // f2 is draft or empty
-	else if(f2->status == empty) // f1 draft and f2 empty
-		PG_RETURN_TFLOW(f1);
+				 errmsg("yflow_maxg: flows should be draft,undefined or empty;%s and %s instead",yflow_statusBoxToStr(f1),yflow_statusBoxToStr(f2))));
+
 					 
-	// f1 and f2 are draft
-	if(	// for the last partner, qtt_prov(f1)/qtt_requ(f1) > qtt_prov(f2)/qtt_requ(f2)
-		FLOW_LAST_OMEGA(f1) > FLOW_LAST_OMEGA(f2)
-	) PG_RETURN_TFLOW(f2);
-	else PG_RETURN_TFLOW(f1);	
+	if ((f1->status == draft) && (f2->status == draft)) {
+	
+		if(	// for the last partner, qtt_prov(f1)/qtt_requ(f1) > qtt_prov(f2)/qtt_requ(f2)
+			FLOW_LAST_OMEGA(f1) > FLOW_LAST_OMEGA(f2)
+		) PG_RETURN_TFLOW(f2);
+		else PG_RETURN_TFLOW(f1);
+		
+	} else if(f1->status == draft)
+		PG_RETURN_TFLOW(f1);
+	else 
+		PG_RETURN_TFLOW(f2);	
 }
 Datum yflow_ming(PG_FUNCTION_ARGS)
 {
 	Tflow	*f1 = PG_GETARG_TFLOW(0);
 	Tflow	*f2 = PG_GETARG_TFLOW(1);
 
-	if(!FLOWAREDOE(f1,f2)) 
+	if(!FLOWAREDOEU(f1,f2)) 
 			ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("yflow_ming: the flow should be draft or empty")));
+				 errmsg("yflow_ming: the flow should be draft,undefined or empty")));
 				 
-	if(f1->status == empty) 
-		PG_RETURN_TFLOW(f2); // f2 is draft or empty
-	else if(f2->status == empty) // f1 draft and f2 empty
-		PG_RETURN_TFLOW(f1);
 					 
-	// f1 and f2 are draft
-	if(	// for the last partner, qtt_prov(f1)/qtt_requ(f1) < qtt_prov(f2)/qtt_requ(f2)
-		FLOW_LAST_OMEGA(f1) < FLOW_LAST_OMEGA(f2)
-	) PG_RETURN_TFLOW(f2);
-	else PG_RETURN_TFLOW(f1);	
+	if ((f1->status == draft) && (f2->status == draft)) {
+	
+		if(	// for the last partner, qtt_prov(f1)/qtt_requ(f1) < qtt_prov(f2)/qtt_requ(f2)
+			FLOW_LAST_OMEGA(f1) < FLOW_LAST_OMEGA(f2)
+		) PG_RETURN_TFLOW(f2);
+		else PG_RETURN_TFLOW(f1);
+		
+	} else if(f1->status == draft)
+		PG_RETURN_TFLOW(f1);
+	else 
+		PG_RETURN_TFLOW(f2);	
 }
 /******************************************************************************
 aggregate function yflow_max(yflow)
@@ -584,7 +607,7 @@ Datum yflow_status(PG_FUNCTION_ARGS)
 	}
 }
 /******************************************************************************
-// always returns 1. !!!!!
+// always returns 1. NORMAL!!!!
 ******************************************************************************/
 Datum yflow_flr_omega(PG_FUNCTION_ARGS)
 {
