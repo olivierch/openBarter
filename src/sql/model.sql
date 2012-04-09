@@ -26,8 +26,8 @@ INSERT INTO tconst (name,value) VALUES
 	('CHECK_QUALITY_OWNERSHIP',0), 
 	-- !=0, quality = user_name/quality_name prefix must match session_user
 	-- ==0, the name of quality can be any string
-	('MAXORDERFETCH',100);
-	-- maximum number of agreements of the set on which the competition occurs
+	('MAXORDERFETCH',10000);
+	-- maximum number of paths of the set on which the competition occurs
 --------------------------------------------------------------------------------
 -- fetch a constant, and verify consistancy
 CREATE FUNCTION fgetconst(_name text) RETURNS int AS $$
@@ -661,9 +661,6 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  finsertorder(text,text,int8,int8,text) TO market_open_role;
 
-CREATE VIEW vorderinsert AS
-	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
-	FROM torder ORDER BY id ASC;
 	
 --------------------------------------------------------------------------------
 -- finsert_order_int
@@ -710,7 +707,7 @@ BEGIN
 */	
 	LOOP
 		_cnt := _cnt + 1;
-		SELECT yflow_max(pat) INTO _patmax FROM _tmp;
+		SELECT yflow_max(pat) INTO _patmax FROM _tmp  ;
 		IF (yflow_status(_patmax)!=3) THEN
 			EXIT; -- from LOOP
 		END IF;
@@ -741,7 +738,10 @@ BEGIN
  	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL; 
-
+--------------------------------------------------------------------------------
+CREATE VIEW vorderinsert AS
+	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
+	FROM torder ORDER BY id ASC    ;
 --------------------------------------------------------------------------------
 CREATE FUNCTION fcreate_tmp(_id int,_ord yorder,_np int,_nr int) RETURNS int AS $$
 DECLARE 
@@ -760,9 +760,8 @@ BEGIN
 			SELECT 	X.id,X.ord,
 				yflow_get(X.ord,Y.pat), -- add the order at the begin of the yflow
 				X.np,X.nr
-				FROM vorderinsert X, search_backward Y
-				WHERE  X.np = yorder_nr(Y.ord) -- use of indexe 
-					AND yflow_follow(_MAXCYCLE,X.ord,Y.pat) 
+				FROM search_backward Y,vorderinsert X
+				WHERE   yflow_follow(_MAXCYCLE,X.ord,Y.pat) 
 					-- X->Y === X.qtt>0 and X.np=Y[0].nr
 					-- Y.pat does not contain X.ord 
 					-- len(X.ord+Y.path) <= _MAXCYCLE	
@@ -770,10 +769,11 @@ BEGIN
 				 
 		)
 		SELECT id,ord,nr,pat 
-		FROM search_backward where yflow_status(pat)=3 LIMIT _MAXORDERFETCH --draft
+		FROM search_backward LIMIT _MAXORDERFETCH --draft
 	);
+	DELETE FROM _tmp WHERE yflow_status(pat)!=3;
 	SELECT COUNT(*) INTO _cnt FROM _tmp;
-	
+
 	RETURN _cnt;
 END;
 $$ LANGUAGE PLPGSQL;

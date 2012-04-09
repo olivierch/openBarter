@@ -216,26 +216,26 @@ select id,qtt from tquality;
 (3 rows)
 
 select * from fgetstats(true);
-            _name             | cnt 
-------------------------------+-----
- number of qualities          |   3
- number of owners             |   3
- number of orders             |   7
- number of movements          |   8
- number of orders removed     |   7
- number of movements removed  |   8
- total number of agreements   |   3
- errors on quantities in mvts |   0
- errors on agreements in mvts |   0
- MAXCYCLE                     |   8
- VERSION                      |  31
- INSERT_OWN_UNKNOWN           |   1
- CHECK_QUALITY_OWNERSHIP      |   0
- MAXORDERFETCH                | 100
- MARKET_OPENED                |   0
- MARKET_SESSION               |   2
- agreements with 2 partners   |   1
- agreements with 3 partners   |   2
+            _name             |  cnt  
+------------------------------+-------
+ number of qualities          |     3
+ number of owners             |     3
+ number of orders             |     7
+ number of movements          |     8
+ number of orders removed     |     7
+ number of movements removed  |     8
+ total number of agreements   |     3
+ errors on quantities in mvts |     0
+ errors on agreements in mvts |     0
+ MAXCYCLE                     |     8
+ VERSION                      |    31
+ INSERT_OWN_UNKNOWN           |     1
+ CHECK_QUALITY_OWNERSHIP      |     0
+ MAXORDERFETCH                | 10000
+ MARKET_OPENED                |     0
+ MARKET_SESSION               |     2
+ agreements with 2 partners   |     1
+ agreements with 3 partners   |     2
 (18 rows)
 
 select id,sess,action from fprepare();

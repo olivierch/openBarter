@@ -88,25 +88,25 @@ select id,qtt from tquality;
 (3 rows)
 
 select * from fgetstats(true);
-            _name             | cnt 
-------------------------------+-----
- number of qualities          |   3
- number of owners             |   4
- number of orders             |   4
- number of movements          |   5
- number of orders removed     |   4
- number of movements removed  |   0
- total number of agreements   |   2
- errors on quantities in mvts |   0
- errors on agreements in mvts |   0
- MAXCYCLE                     |   8
- VERSION                      |  31
- INSERT_OWN_UNKNOWN           |   1
- CHECK_QUALITY_OWNERSHIP      |   0
- MAXORDERFETCH                | 100
- MARKET_OPENED                |   1
- MARKET_SESSION               |   3
- agreements with 2 partners   |   1
- agreements with 3 partners   |   1
+            _name             |  cnt  
+------------------------------+-------
+ number of qualities          |     3
+ number of owners             |     4
+ number of orders             |     4
+ number of movements          |     5
+ number of orders removed     |     4
+ number of movements removed  |     0
+ total number of agreements   |     2
+ errors on quantities in mvts |     0
+ errors on agreements in mvts |     0
+ MAXCYCLE                     |     8
+ VERSION                      |    31
+ INSERT_OWN_UNKNOWN           |     1
+ CHECK_QUALITY_OWNERSHIP      |     0
+ MAXORDERFETCH                | 10000
+ MARKET_OPENED                |     1
+ MARKET_SESSION               |     3
+ agreements with 2 partners   |     1
+ agreements with 3 partners   |     1
 (18 rows)
 
