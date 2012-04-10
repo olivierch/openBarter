@@ -148,7 +148,7 @@ char *yflow_ndboxToStr(Tflow *yflow,bool internal) {
 			appendStringInfo(&buf, "%lli, ", s->qtt_prov);
 		
 			if(internal)
-				appendStringInfo(&buf, "%lli:%lli)",s->qtt, yflow->flowr[i]);
+				appendStringInfo(&buf, "%lli:%lli)",s->qtt, s->flowr);
 			else 
 				appendStringInfo(&buf, "%lli)", s->qtt);
 		}
@@ -184,7 +184,7 @@ char *yflow_pathToStr(Tflow *yflow) {
 			appendStringInfo(&buf, "%lli, ", s->qtt_requ);
 			appendStringInfo(&buf, "%i, ", s->np);
 			appendStringInfo(&buf, "%lli, ", s->qtt_prov);
-			appendStringInfo(&buf, "%lli,%lli]",s->qtt, yflow->flowr[i]);
+			appendStringInfo(&buf, "%lli,%lli]",s->qtt, s->flowr);
 		}
 	}
 	appendStringInfoChar(&buf, ']');
@@ -477,8 +477,8 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 		obMRange(i,fr->dim) {
 			obMRange(j,_dim)
 				if(r->x[j].id == fr->x[i].id) {
-					if(r->x[j].qtt >= fr->flowr[i])
-						r->x[j].qtt -= fr->flowr[i];
+					if(r->x[j].qtt >= fr->x[i].flowr)
+						r->x[j].qtt -= fr->x[i].flowr;
 					else 
 				    		ereport(ERROR,
 							(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
@@ -492,8 +492,8 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 	PG_RETURN_TFLOW(r);
 
 }
-#define FLOW_LAST_OMEGA(f)  ((double)((f)->flowr[(f)->dim-1]))/((double)((f)->flowr[(f)->dim-2]))
-#define FLOW_LAST_IOMEGA(f) ((double)((f)->flowr[(f)->dim-2]))/((double)((f)->flowr[(f)->dim-1]))
+#define FLOW_LAST_OMEGA(f)  ((double)((f)->x[(f)->dim-1].flowr))/((double)((f)->x[(f)->dim-2].flowr))
+#define FLOW_LAST_IOMEGA(f) ((double)((f)->x[(f)->dim-2].flowr))/((double)((f)->x[(f)->dim-1].flowr))
 Datum yflow_last_iomega(PG_FUNCTION_ARGS)
 {
 	Tflow	*f = PG_GETARG_TFLOW(0);
@@ -575,9 +575,9 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 				 errmsg("yflow_qtts: the flow should be draft")));
 	
 	_datum_out = palloc(sizeof(Datum) * 3);
-	_datum_out[0] = Int64GetDatum(f->flowr[f->dim-1]); // qtt_prov
+	_datum_out[0] = Int64GetDatum(f->x[f->dim-1].flowr); // qtt_prov
 	_isnull[0] = false;
-	_datum_out[1] = Int64GetDatum(f->flowr[f->dim-2]); // qtt_requ
+	_datum_out[1] = Int64GetDatum(f->x[f->dim-2].flowr); // qtt_requ
 	_isnull[1] = false;
 	_datum_out[2] = Int64GetDatum((int64)f->dim); // dim
 	_isnull[2] = false;
@@ -625,12 +625,12 @@ Datum yflow_flr_omega(PG_FUNCTION_ARGS)
 	if(f->status != draft) 
 		PG_RETURN_FLOAT8(0.);
 		
-	_fprec = f->flowr[_dim-1];
+	_fprec = f->x[_dim-1].flowr;
 		
 	obMRange (_k,_dim) {
 		//elog(WARNING,"yflow_flr_omega: %lli,%lli",f->flowr[_k],_fprec);
-		_Omega *= ((double)f->flowr[_k])/((double)_fprec);
-		_fprec = f->flowr[_k];		
+		_Omega *= ((double)f->x[_k].flowr)/((double)_fprec);
+		_fprec = f->x[_k].flowr;		
 	}
 	//elog(WARNING,"yflow_flr_omega: %f",_Omega);
 	PG_RETURN_FLOAT8(_Omega);
@@ -678,7 +678,7 @@ Datum yflow_to_matrix(PG_FUNCTION_ARGS)
 		_null_out[_j+4] = false; _datum_out[_j+4] = Int64GetDatum((int64) box->x[_i].np);
 		_null_out[_j+5] = false; _datum_out[_j+5] = Int64GetDatum(box->x[_i].qtt_prov);
 		_null_out[_j+6] = false; _datum_out[_j+6] = Int64GetDatum(box->x[_i].qtt);
-		_null_out[_j+7] = false; _datum_out[_j+7] = Int64GetDatum(box->flowr[_i]);
+		_null_out[_j+7] = false; _datum_out[_j+7] = Int64GetDatum(box->x[_i].flowr);
 	}
 
 	dims[0] = _dim;

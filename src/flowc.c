@@ -126,7 +126,7 @@ _dropflow:
 		
 			// the flow is undefined
 			obMRange (_k,_dim)
-				box->flowr[_k] = 0;		
+				box->x[_k].flowr = 0;		
 		}
 		
 	}
@@ -565,7 +565,7 @@ _continue:
 		_obtain_vertex(_dim,_matbest,_floor,_flowNodes);
 		//elog(WARNING,"flowc_maximum: _matbest=%x",_matbest);
 		obMRange (_k,_dim) {
-			box->flowr[_k] = _flowNodes[_k];	
+			box->x[_k].flowr = _flowNodes[_k];	
 		}
 	} 
 
@@ -629,7 +629,7 @@ char * flowc_cheminToStr(Tchemin *pchemin) {
 	
 		appendStringInfo(&buf, "]\nflow->flowr[.]=[");
 		obMRange(_n,_dim) {
-			appendStringInfo(&buf, "%lli, ", flow->flowr[_n]);
+			appendStringInfo(&buf, "%lli, ", flow->x[_n].flowr);
 		}	
 		appendStringInfo(&buf, "]\n");
 	}

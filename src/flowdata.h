@@ -18,6 +18,7 @@
 typedef struct Torder {
 	int64	qtt_prov,qtt_requ,qtt;
 	int32	id,own,np,nr;
+	int64 	flowr;
 } Torder; // sizeof(Torder)=40
 
 typedef struct Tno {
@@ -37,10 +38,9 @@ typedef enum Tstatusflow {
 typedef struct Tflow {
 	short 		dim;
 	bool		lastignore;
+	Tstatusflow	status; 
 	Torder		x[FLOW_MAX_DIM];
 	// set by set by flowc_maximum
-	Tstatusflow	status; 
-	int64		flowr[FLOW_MAX_DIM];
 } Tflow; // sizeof(Tflow)=392 when FLOW_MAX_DIM=8
 
 
