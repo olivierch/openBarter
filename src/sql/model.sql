@@ -741,7 +741,8 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 CREATE VIEW vorderinsert AS
 	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
-	FROM torder ORDER BY id ASC    ;
+	FROM torder ORDER BY ((qtt_prov::double precision)/(qtt_requ::double precision)) DESC;
+
 --------------------------------------------------------------------------------
 CREATE FUNCTION fcreate_tmp(_id int,_ord yorder,_np int,_nr int) RETURNS int AS $$
 DECLARE 
@@ -1400,21 +1401,20 @@ BEGIN
 		_name := 'errors on agreements in mvts';
 		cnt := fverifmvt2();
 		RETURN NEXT;
-
-		FOR _name,cnt IN SELECT name,value FROM tconst LOOP
-			RETURN NEXT;
-		END LOOP;
-				
-		_cnt := 0;
-		FOR _i,cnt IN SELECT * FROM fcntcycles() LOOP
-			IF(_i !=1) THEN
-				_name := 'agreements with ' || _i || ' partners';
-				_cnt := _cnt + cnt;
-			RETURN NEXT;
-			END IF;
-		END LOOP;
-		
 	END IF;
+	
+	FOR _name,cnt IN SELECT name,value FROM tconst LOOP
+		RETURN NEXT;
+	END LOOP;
+			
+	_cnt := 0;
+	FOR _i,cnt IN SELECT * FROM fcntcycles() LOOP
+		IF(_i !=1) THEN
+			_name := 'agreements with ' || _i || ' partners';
+			_cnt := _cnt + cnt;
+		RETURN NEXT;
+		END IF;
+	END LOOP;
 	
 	RETURN;
 END;

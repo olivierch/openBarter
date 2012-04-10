@@ -314,8 +314,9 @@ static bool _yflow_follow(int32 maxlen,Torder *o,Tflow *f, bool before) {
 	if(globales.warning_follow)
 		elog(WARNING,"_yflow_follow %s",yflow_pathToStr(f));
 	
-	if(f->status == draft)
-		return false;
+	//if(f->status == draft)
+	//	return false;
+	// a path1 that is draft can compete with a an other path1+path2
 	
 	if((dim >=maxlen) || (dim >= FLOW_MAX_DIM))
 		return false;
