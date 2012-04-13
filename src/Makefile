@@ -18,7 +18,7 @@ PGXS := $(shell $(PG_CONFIG) --pgxs)
 PG91 = $shell $(PG_CONFIG) --version | grep -qE " 8\.| 9\.0" && echo no || echo yes 
 include $(PGXS)
 else
-subdir = contrib/yord/src
+subdir = contrib/openBarter/src
 top_builddir = ../../..
 include $(top_builddir)/src/Makefile.global
 include $(top_srcdir)/contrib/contrib-global.mk
