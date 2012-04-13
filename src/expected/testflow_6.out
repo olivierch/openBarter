@@ -1,5 +1,8 @@
 reset role;
 SELECT ftruncatetables();
+NOTICE:  truncate cascades to table "treltried"
+CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
+PL/pgSQL function "ftruncatetables" line 11 at SQL statement
 NOTICE:  truncate cascades to table "torder"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
 PL/pgSQL function "ftruncatetables" line 11 at SQL statement
@@ -100,13 +103,16 @@ select * from fgetstats(true);
  errors on quantities in mvts |     0
  errors on agreements in mvts |     0
  MAXCYCLE                     |     8
- VERSION                      |    31
+ VERSION-X.y.z                |     0
+ VERSION-x.Y.y                |     3
+ VERSION-x.y.Z                |     2
  INSERT_OWN_UNKNOWN           |     1
  CHECK_QUALITY_OWNERSHIP      |     0
  MAXORDERFETCH                | 10000
+ MAXTRY                       |    10
  MARKET_OPENED                |     1
  MARKET_SESSION               |     3
  agreements with 2 partners   |     1
  agreements with 3 partners   |     1
-(18 rows)
+(21 rows)
 

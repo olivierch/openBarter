@@ -10,6 +10,9 @@ INFO:  It will succeed only if tables tmvt and torder are empty.
 
 reset role;
 select ftruncatetables();
+NOTICE:  truncate cascades to table "treltried"
+CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
+PL/pgSQL function "ftruncatetables" line 11 at SQL statement
 NOTICE:  truncate cascades to table "torder"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
 PL/pgSQL function "ftruncatetables" line 11 at SQL statement
@@ -46,6 +49,11 @@ INFO:  All market tables will be truncated when you will execute it
 
 -- market is opened
 select id,sess,action from fopen();
+NOTICE:  truncate cascades to table "treltried"
+CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
+PL/pgSQL function "ftruncatetables" line 11 at SQL statement
+SQL statement "SELECT ftruncatetables()"
+PL/pgSQL function "fopen" line 7 at PERFORM
 NOTICE:  truncate cascades to table "torder"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
 PL/pgSQL function "ftruncatetables" line 11 at SQL statement
@@ -228,15 +236,18 @@ select * from fgetstats(true);
  errors on quantities in mvts |     0
  errors on agreements in mvts |     0
  MAXCYCLE                     |     8
- VERSION                      |    31
+ VERSION-X.y.z                |     0
+ VERSION-x.Y.y                |     3
+ VERSION-x.y.Z                |     2
  INSERT_OWN_UNKNOWN           |     1
  CHECK_QUALITY_OWNERSHIP      |     0
  MAXORDERFETCH                | 10000
+ MAXTRY                       |    10
  MARKET_OPENED                |     0
  MARKET_SESSION               |     2
  agreements with 2 partners   |     1
  agreements with 3 partners   |     2
-(18 rows)
+(21 rows)
 
 select id,sess,action from fprepare();
 INFO:  fopen() is enabled
@@ -247,6 +258,11 @@ INFO:  All market tables will be truncated when you will execute it
 (1 row)
 
 select id,sess,action from fopen();
+NOTICE:  truncate cascades to table "treltried"
+CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
+PL/pgSQL function "ftruncatetables" line 11 at SQL statement
+SQL statement "SELECT ftruncatetables()"
+PL/pgSQL function "fopen" line 7 at PERFORM
 NOTICE:  truncate cascades to table "torder"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
 PL/pgSQL function "ftruncatetables" line 11 at SQL statement

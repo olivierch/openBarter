@@ -19,15 +19,18 @@ create table tconst(
 --------------------------------------------------------------------------------
 INSERT INTO tconst (name,value) VALUES 
 	('MAXCYCLE',8),
-	('VERSION',31),
+	('VERSION-X.y.z',0),
+	('VERSION-x.Y.y',3),
+	('VERSION-x.y.Z',2),
 	('INSERT_OWN_UNKNOWN',1), 
 	-- !=0, insert an owner when it is unknown
 	-- ==0, raise an error when the owner is unknown
 	('CHECK_QUALITY_OWNERSHIP',0), 
 	-- !=0, quality = user_name/quality_name prefix must match session_user
 	-- ==0, the name of quality can be any string
-	('MAXORDERFETCH',10000);
+	('MAXORDERFETCH',10000),
 	-- maximum number of paths of the set on which the competition occurs
+	('MAXTRY',10);
 --------------------------------------------------------------------------------
 -- fetch a constant, and verify consistancy
 CREATE FUNCTION fgetconst(_name text) RETURNS int AS $$
@@ -192,6 +195,15 @@ alter sequence tquality_id_seq owned by tquality.id;
 create index tquality_name_idx on tquality(name);
 SELECT _reference_time('tquality');
 
+create table treltried (
+	np int references tquality(id) NOT NULL, 
+	nr int references tquality(id) NOT NULL, 
+	cnt bigint,
+	CHECK(
+		np!=nr 
+	)
+);	
+
 -- \copy tquality (depository,name) from data/ISO4217.data with delimiter '-'
 
 --------------------------------------------------------------------------------
@@ -345,7 +357,8 @@ create table torder (
     
     np int references tquality(id) not NULL ,
     qtt_prov dquantity NOT NULL,
-    qtt int NOT NULL,     
+    qtt int NOT NULL,  
+    start int8,   
 
     created timestamp not NULL,
     updated timestamp default NULL,    
@@ -391,7 +404,7 @@ CREATE VIEW vorder AS
 SELECT _grant_read('vorder');
 
 
--- Columns of torderremoved and torder are the same 
+-- Columns of torderremoved and torder are the same minus "start"
 create table torderremoved ( 
     id int NOT NULL,
     uuid text NOT NULL,
@@ -675,6 +688,7 @@ DECLARE
 	_cnt 		int;
 	_o		torder%rowtype;
 	_res	        int8[];
+	_start		int8;
 BEGIN
 	------------------------------------------------------------------------
 	_pivot.qtt := _pivot.qtt_prov;
@@ -684,7 +698,8 @@ BEGIN
 			VALUES ('',_pivot.qtt,_pivot.nr,_pivot.np,_pivot.qtt_prov,_pivot.qtt_requ,_pivot.own,statement_timestamp(),NULL)
 			RETURNING id INTO _idpivot;
 		_zuuid := fgetuuid(_idpivot);
-		UPDATE torder SET uuid = _zuuid WHERE id=_idpivot RETURNING * INTO _o;
+		_start := fget_treltried(_pivot.np,_pivot.nr);
+		UPDATE torder SET uuid = _zuuid,start = _start WHERE id=_idpivot RETURNING * INTO _o;
 
 		_cnt := fcreate_tmp(_o.id,
 				yorder_get(_o.id,_o.own,_o.nr,_o.qtt_requ,_o.np,_o.qtt_prov,_o.qtt),
@@ -734,6 +749,10 @@ BEGIN
 		UPDATE _tmp SET pat = yflow_reduce(pat,_patmax);
 	END LOOP;
 	
+	IF(_insert AND (_cnt != 0)) THEN
+		PERFORM finvalidate_treltried();
+	END IF;
+	
 	DROP TABLE _tmp;
  	RETURN;
 END; 
@@ -756,23 +775,24 @@ BEGIN
 */	
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
 		SELECT A.id,A.ord,A.nr,A.pat FROM (
-			WITH RECURSIVE search_backward(id,ord,pat,np,nr) AS (
-				SELECT 	_id,_ord,yflow_get(_ord),_np,_nr
+			WITH RECURSIVE search_backward(id,ord,pat,nr) AS (
+				SELECT 	_id,_ord,yflow_get(_ord),_nr
 				UNION ALL
 				SELECT 	X.id,X.ord,
-					yflow_get(X.ord,Y.pat), -- add the order at the begin of the yflow
-					X.np,X.nr
+					yflow_get(X.ord,Y.pat), 
+					-- add the order at the begin of the yflow
+					X.nr
 					FROM search_backward Y,vorderinsert X
 					WHERE   yflow_follow(_MAXCYCLE,X.ord,Y.pat) 
-						-- X->Y === X.qtt>0 and X.np=Y[0].nr
-						-- Y.pat does not contain X.ord 
-						-- len(X.ord+Y.path) <= _MAXCYCLE	
-						-- Y[!=-1]|->X === Y[i].np != X.nr with i!= -1
+					-- X->Y === X.qtt>0 and X.np=Y[0].nr
+					-- Y.pat does not contain X.ord 
+					-- len(X.ord+Y.path) <= _MAXCYCLE	
+					-- Y[!=-1]|->X === Y[i].np != X.nr with i!= -1
 					 
 			)
 			SELECT id,ord,nr,pat 
-			FROM search_backward LIMIT _MAXORDERFETCH --draft
-		) A WHERE  yflow_status(A.pat)=3
+			FROM search_backward LIMIT _MAXORDERFETCH 
+		) A WHERE  yflow_status(A.pat)=3 --draft
 	);
 	SELECT COUNT(*) INTO _cnt FROM _tmp;
 
@@ -859,7 +879,102 @@ BEGIN
 			USING ERRCODE='YA003';
 	END IF;
 	
+	PERFORM fupdate_treltried(_commits,_nbcommit);
+	
 	RETURN _first_mvt;
+END;
+$$ LANGUAGE PLPGSQL;
+/***************************************************************************************************
+Pour ne pas encombrer la base avec des ordres souvent refusés:
+
+1- A chaque mouvement inscrit, on incrémente un compteur Q pour le couple (np,nr) 
+	treltried[np,nr].cnt, 
+	fupdate_treltried(_commits int8[],_nbcommit int), called by vfexecute_flow()
+	
+	
+2- Au moment ou un ordre est déposé, on mémorise avec lui la position P du compteur Q, torder[.].start
+	fget_treltried(_np int,_nr int) called by finsert_order_int
+	
+3- On invalide les ordres dont P+MAXTRY < Q, avec MAXTRY = 10 défini dans tconst
+   l'opération 3) est exécutée chaque fois que des mouvements sont inscrits.
+	finvalidate_treltried() called by finsert_order_int
+	
+4- treltried doit être vidée à l'ouverture de marché
+	ftruncatetables()
+
+Ainsi, on permet à chaque offre d'être mis en concurrence MAXTRY fois sans pénaliser les couple (np,nr) plus rares. Celà suppose que tous les cas sont parcourus, ce qui n'est pas le cas.
+
+***************************************************************************************************/
+--------------------------------------------------------------------------------
+-- update treltried[np,nr].cnt
+--------------------------------------------------------------------------------
+CREATE FUNCTION  fupdate_treltried(_commits int8[],_nbcommit int) RETURNS void AS $$
+DECLARE 
+	_i int;
+	_np int;
+	_nr int;
+	_MAXTRY 	int := fgetconst('MAXTRY');
+BEGIN
+	IF(_MAXTRY=0) THEN
+		RETURN;
+	END IF;
+	
+	FOR _i IN 1 .. _nbcommit LOOP
+		_nr	:= _commits[_i][3]::int;
+		_np	:= _commits[_i][5]::int;
+		UPDATE treltried SET cnt = cnt + 1 WHERE np=_np AND nr=_nr;
+		IF NOT FOUND THEN
+			INSERT INTO treltried (np,nr,cnt) VALUES (_np,_nr,1);
+		END IF;
+	END LOOP;
+
+	RETURN;
+END;
+$$ LANGUAGE PLPGSQL;
+--------------------------------------------------------------------------------
+-- sets torder[.].start
+--------------------------------------------------------------------------------
+CREATE FUNCTION  fget_treltried(_np int,_nr int) RETURNS int8 AS $$
+DECLARE 
+	_cnt int8;
+	_MAXTRY 	int := fgetconst('MAXTRY');
+BEGIN
+	IF(_MAXTRY=0) THEN
+		RETURN NULL;
+	END IF;
+	SELECT cnt into _cnt FROM treltried WHERE np=_np AND nr=_nr;
+	IF NOT FOUND THEN
+		_cnt := 0;
+	END IF;
+
+	RETURN _cnt;
+END;
+$$ LANGUAGE PLPGSQL;
+--------------------------------------------------------------------------------
+-- 
+--------------------------------------------------------------------------------
+CREATE FUNCTION  finvalidate_treltried() RETURNS void AS $$
+DECLARE 
+	_o 	torder%rowtype;
+	_MAXTRY int := fgetconst('MAXTRY');
+BEGIN
+	IF(_MAXTRY=0) THEN
+		RETURN;
+	END IF;
+	
+	FOR _o IN SELECT o.* FROM torder o,treltried r 
+		WHERE o.np=r.np AND o.nr=r.nr AND o.start IS NOT NULL AND o.start + _MAXTRY < r.cnt LOOP
+		
+		WITH a AS (DELETE FROM torder o WHERE o.id=_id RETURNING *) 
+		INSERT INTO torderremoved 
+			SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt,created,updated 
+		FROM a;	
+
+		INSERT INTO tmvt (nb,oruuid,grp,own_src,own_dst,qtt,nat,created) 
+			VALUES(1,_o.uuid,NULL,_o.own,_o.own,_o.qtt,_o.nat,statement_timestamp());		
+			
+	END LOOP;
+	RETURN;
 END;
 $$ LANGUAGE PLPGSQL;
 
@@ -1218,6 +1333,7 @@ BEGIN
 		
 	TRUNCATE torderremoved;
 	TRUNCATE tmvtremoved;
+	TRUNCATE treltried;
 	
 	RAISE INFO 'The command: VACUUM FULL ANALYZE is recommended';
 	RAISE INFO 'All market tables have been truncated';
