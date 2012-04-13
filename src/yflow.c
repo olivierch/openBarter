@@ -20,7 +20,7 @@
 
 PG_MODULE_MAGIC;
 
-extern int  yflow_yyparse();
+extern int  yflow_yyparse(void *resultat);
 extern void yflow_yyerror(const char *message);
 extern void yflow_scanner_init(const char *str);
 extern void yflow_scanner_finish(void);
@@ -108,7 +108,7 @@ yflow_in(PG_FUNCTION_ARGS)
 
 	yflow_scanner_init(str);
 
-	if (yflow_yyparse(result) != 0)
+	if (yflow_yyparse(&result) != 0)
 		yflow_yyerror("bogus input for a yflow");
 
 	yflow_scanner_finish();

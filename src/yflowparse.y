@@ -2,7 +2,7 @@
 
 /* contrib/yflow/yflowparse.y */
 
-#define YYPARSE_PARAM result  /* need this to pass a pointer (void *) to yyparse */
+#define YYPARSE_PARAM resultat  /* need this to pass a pointer (void *) to yyparse */
 // #define YYSTYPE char *
 #define YYDEBUG 1
 
@@ -27,9 +27,9 @@ static char 	*scanbuf;
 static int	scanbuflen;
 
 void 	yflow_yyerror(const char *message);
-int 	yflow_yyparse(void *result);
+int 	yflow_yyparse(void *resultat);
 
-static Tflow * add_order(Tflow *result, int64 *vals);
+void add_order(Tflow **pf, int64 *vals);
 
 
 %}
@@ -74,7 +74,8 @@ bid_list:
 	    }
 	|
 	    bid_list COMMA bid {
-	        if (((Tflow * )result)->dim > FLOW_MAX_DIM) {
+	    	Tflow **pf = resultat;
+	        if ((*pf)->dim > FLOW_MAX_DIM) {
                    ereport(ERROR,
                       (errcode(ERRCODE_SYNTAX_ERROR),
                        errmsg("bad yflow representation"),
@@ -93,7 +94,7 @@ bid:
 			       errdetail("An order should have %d elements.",BID_DIM)));
 			YYABORT;
 		}
-		add_order(result,$2.vals);
+		add_order(resultat,$2.vals);
 	}
 
 list: 
@@ -119,12 +120,12 @@ list:
 
 %%
 
-static Tflow * add_order(Tflow *box, int64 *vals) {
+void add_order(Tflow **pf, int64 *vals) {
 	int i;
 	Torder *s;
-	Tflow *newbox = box;
+	Tflow *box = *pf;
 	
-	s = &newbox->x[box->dim];
+	s = &box->x[box->dim];
 	box->dim +=1;
 	
 	// id,own,nr,qtt_requ,np,qtt_prov,qtt
@@ -136,7 +137,8 @@ static Tflow * add_order(Tflow *box, int64 *vals) {
 	s->np = (int32) vals[i];i +=1;
 	s->qtt_prov = vals[i];i +=1;
 	s->qtt = vals[i];i +=1;
-	return newbox;	
+	*pf = box;
+	return;	
 	
 }
 

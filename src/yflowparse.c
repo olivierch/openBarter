@@ -81,7 +81,7 @@
 
 /* contrib/yflow/yflowparse.y */
 
-#define YYPARSE_PARAM result  /* need this to pass a pointer (void *) to yyparse */
+#define YYPARSE_PARAM resultat  /* need this to pass a pointer (void *) to yyparse */
 // #define YYSTYPE char *
 #define YYDEBUG 1
 
@@ -106,9 +106,9 @@ static char 	*scanbuf;
 static int	scanbuflen;
 
 void 	yflow_yyerror(const char *message);
-int 	yflow_yyparse(void *result);
+int 	yflow_yyparse(void *resultat);
 
-static Tflow * add_order(Tflow *result, int64 *vals);
+void add_order(Tflow **pf, int64 *vals);
 
 
 
@@ -464,7 +464,7 @@ static const yytype_int8 yyrhs[] =
 /* YYRLINE[YYN] -- source line where rule number YYN was defined.  */
 static const yytype_uint8 yyrline[] =
 {
-       0,    61,    61,    65,    72,    76,    87,   100,   106
+       0,    61,    61,    65,    72,    76,    88,   101,   107
 };
 #endif
 
@@ -1396,7 +1396,8 @@ yyreduce:
 /* Line 1455 of yacc.c  */
 #line 76 "yflowparse.y"
     {
-	        if (((Tflow * )result)->dim > FLOW_MAX_DIM) {
+	    	Tflow **pf = resultat;
+	        if ((*pf)->dim > FLOW_MAX_DIM) {
                    ereport(ERROR,
                       (errcode(ERRCODE_SYNTAX_ERROR),
                        errmsg("bad yflow representation"),
@@ -1409,7 +1410,7 @@ yyreduce:
   case 6:
 
 /* Line 1455 of yacc.c  */
-#line 87 "yflowparse.y"
+#line 88 "yflowparse.y"
     {
 		
 		if((yyvsp[(2) - (3)].bnd).dim != BID_DIM) {
@@ -1419,14 +1420,14 @@ yyreduce:
 			       errdetail("An order should have %d elements.",BID_DIM)));
 			YYABORT;
 		}
-		add_order(result,(yyvsp[(2) - (3)].bnd).vals);
+		add_order(resultat,(yyvsp[(2) - (3)].bnd).vals);
 	;}
     break;
 
   case 7:
 
 /* Line 1455 of yacc.c  */
-#line 100 "yflowparse.y"
+#line 101 "yflowparse.y"
     {
 		(yyval.bnd).dim = 0;
 		(yyval.bnd).vals[(yyval.bnd).dim] = atoll((yyvsp[(1) - (1)].text));
@@ -1437,7 +1438,7 @@ yyreduce:
   case 8:
 
 /* Line 1455 of yacc.c  */
-#line 106 "yflowparse.y"
+#line 107 "yflowparse.y"
     {
 		if ((yyval.bnd).dim >= BID_DIM) {		
 			ereport(ERROR,
@@ -1455,7 +1456,7 @@ yyreduce:
 
 
 /* Line 1455 of yacc.c  */
-#line 1459 "yflowparse.c"
+#line 1460 "yflowparse.c"
       default: break;
     }
   YY_SYMBOL_PRINT ("-> $$ =", yyr1[yyn], &yyval, &yyloc);
@@ -1667,15 +1668,15 @@ yyreturn:
 
 
 /* Line 1675 of yacc.c  */
-#line 120 "yflowparse.y"
+#line 121 "yflowparse.y"
 
 
-static Tflow * add_order(Tflow *box, int64 *vals) {
+void add_order(Tflow **pf, int64 *vals) {
 	int i;
 	Torder *s;
-	Tflow *newbox = box;
+	Tflow *box = *pf;
 	
-	s = &newbox->x[box->dim];
+	s = &box->x[box->dim];
 	box->dim +=1;
 	
 	// id,own,nr,qtt_requ,np,qtt_prov,qtt
@@ -1687,7 +1688,8 @@ static Tflow * add_order(Tflow *box, int64 *vals) {
 	s->np = (int32) vals[i];i +=1;
 	s->qtt_prov = vals[i];i +=1;
 	s->qtt = vals[i];i +=1;
-	return newbox;	
+	*pf = box;
+	return;	
 	
 }
 
