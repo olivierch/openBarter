@@ -17,7 +17,7 @@
 */
 
 #include "flowdata.h"
-#define BLOCSIZEFLOW 2
+#define BLOCSIZEFLOW 3
 
 Tflow *flowm_copy(Tflow *f) {
 	Tflow *g;
@@ -30,7 +30,7 @@ Tflow *flowm_copy(Tflow *f) {
 
 Tflow *flowm_init(void) {
 	Tflow *f;
-	int32 sb = offsetof(Tflow,x) + FLOW_MAX_DIM*sizeof(Torder); //BLOCSIZEFLOW * sizeof(Torder);
+	int32 sb = offsetof(Tflow,x);// + BLOCSIZEFLOW * sizeof(Torder);
 	
 	f = palloc0(sb);
 	f->dim = 0;
@@ -44,17 +44,22 @@ does not test if o.id belongs to the flow
 Tflow *flowm_extends(Torder *o,Tflow *f, bool before) {
 
 	short dim = f->dim;
-	size_t sf = offsetof(Tflow,x) + dim * sizeof(Torder);
+	size_t sg,sf = offsetof(Tflow,x) + dim * sizeof(Torder);
 	int32  sb = f->vl_len_;
-	Tflow *g = f;
-	
+	Tflow *g;
+	/*
 	Assert(sb>=sf);
-	sf = sf+sizeof(Torder);
-	if(sb < sf) {
+	sg = sf+sizeof(Torder);
+	if(sb < sg) {
 		sb = sb + BLOCSIZEFLOW*sizeof(Torder);
 		g = (Tflow *) repalloc(f,sb);
-	}
-	Assert(sb>=sf);
+	} else g = f;
+	Assert(sb>=sg);
+	*/
+	sg = sf+sizeof(Torder);
+	g = repalloc(f,sg);
+	
+	
 	if(before) {
 		memcpy(&g->x[1],&f->x[0],dim*sizeof(Torder));
 		memcpy(&g->x[0],o,sizeof(Torder));
@@ -62,24 +67,27 @@ Tflow *flowm_extends(Torder *o,Tflow *f, bool before) {
 		memcpy(&g->x[dim],o,sizeof(Torder));
 	}
 	g->dim = dim+1;
-	SET_VARSIZE(g, sb);
+	SET_VARSIZE(g, sg);
 	// elog(WARNING,"_yflow_get %s",yflow_pathToStr(f));
 	return g;	
 }
 /* same as flowm_extends, but provides a new copy */
 Tflow *flowm_cextends(Torder *o,Tflow *f, bool before) {
 
-	Tflow *g;
 	short dim = f->dim;
 	size_t sg,sf = offsetof(Tflow,x) + dim * sizeof(Torder);
 	int32  sb = f->vl_len_;
-	
+	Tflow *g;
+	/*
 	Assert(sb>=sf);
 	sg = sf+sizeof(Torder);
 	if(sb < sg) 
 		sb = sb + BLOCSIZEFLOW*sizeof(Torder);
-	Assert(sb>=sg);
 	g = (Tflow *) palloc(sb);
+	Assert(sb>=sg);
+	*/
+	sg = sf+sizeof(Torder);
+	g = palloc(sg);
 	
 	if(before) {
 		memcpy(g,f,offsetof(Tflow,x));
@@ -91,21 +99,11 @@ Tflow *flowm_cextends(Torder *o,Tflow *f, bool before) {
 	}
 	
 	g->dim = dim+1;
-	SET_VARSIZE(g, sb);
+	SET_VARSIZE(g, sg);
 	
 	return g;	
 }
 
-/*
-Tflow * flowm_8(void) {
-	Tflow *f;
-	//int32 sb = offsetof(Tflow,x) + FLOW_MAX_DIM * sizeof(Torder);
-	int32 sb = sizeof(Tflow);
-	
-	f = palloc(sb);
-	SET_VARSIZE(f,sb);
-	return f;
-}*/
 /***************************************************************************************************
 
 IDEES

@@ -73,7 +73,7 @@ char *yflow_pathToStr(Tflow *yflow);
 
 // memory allocation of Tflow
 // #define Ndbox_init(dim) ((Tflow *) palloc(sizeof(Tflow)))
-#define Ndbox_init(dim) flowm_init()
+// #define Ndbox_init(dim) flowm_init()
 
 void		_PG_init(void);
 void		_PG_fini(void);
@@ -103,8 +103,7 @@ yflow_in(PG_FUNCTION_ARGS)
 	
 	Tflow 	*result;
 	
-	result = Ndbox_init(FLOW_MAX_DIM);
-	result->dim = 0;
+	result = flowm_init();
 
 	yflow_scanner_init(str);
 
@@ -208,11 +207,11 @@ Datum yflow_out(PG_FUNCTION_ARGS)
 ******************************************************************************/
 Datum yflow_dim(PG_FUNCTION_ARGS)
 {
-	Tflow	*o;
+	Tflow	*f;
 	int32	dim;
 	
-	o = PG_GETARG_TFLOW(0);
-	dim = o->dim;
+	f = PG_GETARG_TFLOW(0);
+	dim = f->dim;
 	PG_RETURN_INT32(dim);
 }
 /******************************************************************************
@@ -221,13 +220,15 @@ yflow_get(yorder)
 Datum yflow_get_yorder(PG_FUNCTION_ARGS)
 {
 	Tflow	*result;
-	Torder	*ordi = PG_GETARG_TORDER(0);
-
+	Torder	*o = PG_GETARG_TORDER(0);
+	/*
 	result = Ndbox_init(1);
 	
 	result->dim = 1;
 	memcpy(&result->x[0],ordi,sizeof(Torder));
-	
+	*/
+	result = flowm_init();
+	result = flowm_extends(o,result,false);
 	(void) flowc_maximum(result);
 	PG_RETURN_TFLOW(result);
 }
@@ -251,10 +252,13 @@ static Tflow* _yflow_get(Torder *o,Tflow *f, bool before) {
 			break;
 		}
 		
-	result = Ndbox_init(FLOW_MAX_DIM);
+	//result = Ndbox_init(FLOW_MAX_DIM);
+	result = flowm_init();
 	if(inflow) { // the order already belongs to the flow: flow is unchanged
-		memcpy(result,f,sizeof(Tflow));
+		//memcpy(result,f,sizeof(Tflow));
+		result = flowm_copy(f);
 	} else {
+		/*
 		if(before) {
 			memcpy(&result->x[0],o,sizeof(Torder));
 			memcpy(&result->x[1],&f->x[0],dim*sizeof(Torder));
@@ -263,6 +267,8 @@ static Tflow* _yflow_get(Torder *o,Tflow *f, bool before) {
 			memcpy(&result->x[dim],o,sizeof(Torder));
 		}
 		result->dim = dim+1;
+		*/
+		result = flowm_cextends(o,f,before);
 		(void) flowc_maximum(result);
 	}
 	if(globales.warning_get) 
@@ -465,8 +471,9 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 	Tflow	*r;
 	short 	i,j;
 			 
-	r = Ndbox_init(FLOW_MAX_DIM);
-	memcpy(r,f,sizeof(Tflow));
+	//r = Ndbox_init(FLOW_MAX_DIM);
+	//memcpy(r,f,sizeof(Tflow));
+	r = flowm_copy(f);
 	
 	if (!FLOWAREDOEU(r,fr)) 
 		ereport(ERROR,

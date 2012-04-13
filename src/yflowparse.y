@@ -122,22 +122,18 @@ list:
 
 void add_order(Tflow **pf, int64 *vals) {
 	int i;
-	Torder *s;
-	Tflow *box = *pf;
-	
-	s = &box->x[box->dim];
-	box->dim +=1;
+	Torder s;
 	
 	// id,own,nr,qtt_requ,np,qtt_prov,qtt
 	i = 0;
-	s->id = (int32) vals[i];i +=1;
-	s->own = (int32) vals[i];i +=1;
-	s->nr = (int32) vals[i];i +=1;
-	s->qtt_requ = vals[i];i +=1;
-	s->np = (int32) vals[i];i +=1;
-	s->qtt_prov = vals[i];i +=1;
-	s->qtt = vals[i];i +=1;
-	*pf = box;
+	s.id = (int32) vals[i];i +=1;
+	s.own = (int32) vals[i];i +=1;
+	s.nr = (int32) vals[i];i +=1;
+	s.qtt_requ = vals[i];i +=1;
+	s.np = (int32) vals[i];i +=1;
+	s.qtt_prov = vals[i];i +=1;
+	s.qtt = vals[i];i +=1;
+	*pf = flowm_extends(&s,*pf,false);
 	return;	
 	
 }
