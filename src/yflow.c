@@ -358,12 +358,14 @@ static bool _yflow_follow(int32 maxlen,Torder *o,Tflow *f, bool before) {
 	}
 	// return true;
 	// it is an expected cycle
+	if(f->lastignore)
+		return true;
 	{
 		double _om = 1.;
 		obMRange(i,dim)
 			_om *= ((double)(f->x[i].qtt_prov)) / ((double)(f->x[i].qtt_requ));
 		_om *= ((double)(o->qtt_prov)) / ((double)(o->qtt_requ));
-		
+		//elog(WARNING,"_om %f, %c",_om,(_om>=1)?'T':'F');
 		return (_om >= 1.);
 	}
 	

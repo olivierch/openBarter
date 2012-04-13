@@ -440,6 +440,7 @@ static double _idistance(short lon,
  the last node does not limit the flow
 
  *******************************************************************************/
+// #define WHY_REJECTED
 static bool _rounding(double *fluxExact, Tchemin *pchemin) {
 	short 	_i,  _k;
 	short 	_matcour, _matmax, _matbest;
@@ -489,7 +490,9 @@ static bool _rounding(double *fluxExact, Tchemin *pchemin) {
 		obMRange (_k,_ldim) {
 			// verify that order >= flow
 			if(box->x[_k].qtt<_flowNodes[_k]) {
-				//elog(WARNING,"flowc_maximum 2: _mat=%x",_matcour);
+				#ifdef WHY_REJECTED 
+					elog(WARNING,"flowc_maximum 1: NOT order >= flow %s",flowc_vecIntStr(_dim,_flowNodes));
+				#endif
 				goto _continue;
 			}
 		}
@@ -498,7 +501,9 @@ static bool _rounding(double *fluxExact, Tchemin *pchemin) {
 		obMRange (_k,_dim) {
 			// verify that flow >0
 			if(_flowNodes[_k] <= 0) {
-				//elog(WARNING,"flowc_maximum 1: _mat=%x",_matcour);
+				#ifdef WHY_REJECTED
+					elog(WARNING,"flowc_maximum 2: NOT flow>0 %s",flowc_vecIntStr(_dim,_flowNodes));
+				#endif
 				goto _continue;
 			}
 		}
@@ -520,6 +525,9 @@ static bool _rounding(double *fluxExact, Tchemin *pchemin) {
 			}
 			if(!_exhausts) {
 				//elog(WARNING,"flowc_maximum 3: _mat=%x",_matcour);
+				#ifdef WHY_REJECTED
+					elog(WARNING,"flowc_maximum 3: NOT exhaust %s",flowc_vecIntStr(_dim,_flowNodes));
+				#endif
 				goto _continue;
 			}
 		} 
@@ -534,10 +542,15 @@ static bool _rounding(double *fluxExact, Tchemin *pchemin) {
 		*/
 		if(!box->lastignore) {
 			short _kp = _dim-1;
+			double _precision = 1.E-8;
 			
 			obMRange(_k,_dim) {
-				if(pchemin->no[_k].omega < ((double) _flowNodes[_k]) / ((double) _flowNodes[_kp]))
+				if(pchemin->no[_k].omega + _precision < ((double) _flowNodes[_k]) / ((double) _flowNodes[_kp])) {
+					#ifdef WHY_REJECTED
+						elog(WARNING,"flowc_maximum 4: NOT omega %f>=%f %s",pchemin->no[_k].omega,((double) _flowNodes[_k]) / ((double) _flowNodes[_kp]),flowc_vecIntStr(_dim,_flowNodes));
+					#endif
 					goto _continue;
+				}
 				_kp = _k;
 			}
 		}
@@ -668,5 +681,6 @@ char * flowc_vecDoubleStr(short dim,double *vecDouble) {
 
 	return buf.data;
 }
+
 
 
