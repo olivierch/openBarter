@@ -10,7 +10,7 @@ AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
 
 CREATE TYPE yflow (
-	INTERNALLENGTH = 392,
+	INTERNALLENGTH = variable, -- 400, -- 392, -- variable,
 	INPUT = yflow_in,
 	OUTPUT = yflow_out,
 	ALIGNMENT = double

@@ -19,7 +19,7 @@ typedef struct Torder {
 	int64	qtt_prov,qtt_requ,qtt;
 	int32	id,own,np,nr;
 	int64 	flowr;
-} Torder; // sizeof(Torder)=40
+} Torder; // sizeof(Torder)=48
 
 typedef struct Tno {
 	double 	omega;
@@ -36,11 +36,12 @@ typedef enum Tstatusflow {
 } Tstatusflow;
 
 typedef struct Tflow {
+	int32		vl_len_;		/* varlena header (do not touch directly!) */
 	short 		dim;
 	bool		lastignore;
 	Tstatusflow	status; 
 	Torder		x[FLOW_MAX_DIM];
-	// set by set by flowc_maximum
+	// status and x[.].flowr are set by set by flowc_maximum
 } Tflow; // sizeof(Tflow)=392 when FLOW_MAX_DIM=8
 
 
@@ -57,5 +58,11 @@ extern char *flowc_toStr(Tflow *box);
 
 extern char *yflow_ndboxToStr(Tflow *flow,bool internal);
 extern char *yflow_statusBoxToStr(Tflow *flow);
+
+extern Tflow *flowm_cextends(Torder *o,Tflow *f, bool before);
+extern Tflow *flowm_extends(Torder *o,Tflow *f, bool before);
+extern Tflow *flowm_copy(Tflow *f);
+extern Tflow *flowm_init(void);
+extern Tflow *flowm_8(void);
  
 

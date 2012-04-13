@@ -72,7 +72,8 @@ char *yflow_statusBoxToStr (Tflow *box);
 char *yflow_pathToStr(Tflow *yflow);
 
 // memory allocation of Tflow
-#define Ndbox_init(dim) ((Tflow *) palloc(sizeof(Tflow))) 
+// #define Ndbox_init(dim) ((Tflow *) palloc(sizeof(Tflow)))
+#define Ndbox_init(dim) flowm_8()
 
 void		_PG_init(void);
 void		_PG_fini(void);

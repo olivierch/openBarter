@@ -1,7 +1,7 @@
 # contrib/flow/Makefile
 
 MODULE_big = flow
-OBJS= yflow.o yflowparse.o yorder.o flowc.o
+OBJS= yflow.o yflowparse.o yorder.o flowc.o flowm.o
 
 EXTENSION = flow
 DATA = flow--1.0.sql flow--unpackaged--1.0.sql
