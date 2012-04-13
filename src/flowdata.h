@@ -63,6 +63,6 @@ extern Tflow *flowm_cextends(Torder *o,Tflow *f, bool before);
 extern Tflow *flowm_extends(Torder *o,Tflow *f, bool before);
 extern Tflow *flowm_copy(Tflow *f);
 extern Tflow *flowm_init(void);
-extern Tflow *flowm_8(void);
+// extern Tflow *flowm_8(void);
  
 

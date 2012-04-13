@@ -30,7 +30,7 @@ Tflow *flowm_copy(Tflow *f) {
 
 Tflow *flowm_init(void) {
 	Tflow *f;
-	int32 sb = offsetof(Tflow,x) + BLOCSIZEFLOW * sizeof(Torder);
+	int32 sb = offsetof(Tflow,x) + FLOW_MAX_DIM*sizeof(Torder); //BLOCSIZEFLOW * sizeof(Torder);
 	
 	f = palloc0(sb);
 	f->dim = 0;
@@ -96,7 +96,7 @@ Tflow *flowm_cextends(Torder *o,Tflow *f, bool before) {
 	return g;	
 }
 
-
+/*
 Tflow * flowm_8(void) {
 	Tflow *f;
 	//int32 sb = offsetof(Tflow,x) + FLOW_MAX_DIM * sizeof(Torder);
@@ -105,7 +105,7 @@ Tflow * flowm_8(void) {
 	f = palloc(sb);
 	SET_VARSIZE(f,sb);
 	return f;
-}
+}*/
 /***************************************************************************************************
 
 IDEES
