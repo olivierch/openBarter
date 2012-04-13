@@ -755,24 +755,25 @@ BEGIN
 	CREATE TEMPORARY TABLE _tmp /* ON COMMIT DROP */ AS (
 */	
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
-		WITH RECURSIVE search_backward(id,ord,pat,np,nr) AS (
-			SELECT 	_id,_ord,yflow_get(_ord),_np,_nr
-			UNION ALL
-			SELECT 	X.id,X.ord,
-				yflow_get(X.ord,Y.pat), -- add the order at the begin of the yflow
-				X.np,X.nr
-				FROM search_backward Y,vorderinsert X
-				WHERE   yflow_follow(_MAXCYCLE,X.ord,Y.pat) 
-					-- X->Y === X.qtt>0 and X.np=Y[0].nr
-					-- Y.pat does not contain X.ord 
-					-- len(X.ord+Y.path) <= _MAXCYCLE	
-					-- Y[!=-1]|->X === Y[i].np != X.nr with i!= -1
-				 
-		)
-		SELECT id,ord,nr,pat 
-		FROM search_backward LIMIT _MAXORDERFETCH --draft
+		SELECT A.id,A.ord,A.nr,A.pat FROM (
+			WITH RECURSIVE search_backward(id,ord,pat,np,nr) AS (
+				SELECT 	_id,_ord,yflow_get(_ord),_np,_nr
+				UNION ALL
+				SELECT 	X.id,X.ord,
+					yflow_get(X.ord,Y.pat), -- add the order at the begin of the yflow
+					X.np,X.nr
+					FROM search_backward Y,vorderinsert X
+					WHERE   yflow_follow(_MAXCYCLE,X.ord,Y.pat) 
+						-- X->Y === X.qtt>0 and X.np=Y[0].nr
+						-- Y.pat does not contain X.ord 
+						-- len(X.ord+Y.path) <= _MAXCYCLE	
+						-- Y[!=-1]|->X === Y[i].np != X.nr with i!= -1
+					 
+			)
+			SELECT id,ord,nr,pat 
+			FROM search_backward LIMIT _MAXORDERFETCH --draft
+		) A WHERE  yflow_status(A.pat)=3
 	);
-	DELETE FROM _tmp WHERE yflow_status(pat)!=3;
 	SELECT COUNT(*) INTO _cnt FROM _tmp;
 
 	RETURN _cnt;
