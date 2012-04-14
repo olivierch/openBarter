@@ -213,8 +213,9 @@ static void _calOwns(Tchemin *pchemin) {
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			 errmsg("createChemin: nbOwn equals zero")));		
 	}
-	
-	if(globales.verify) obMRange(_n,_dim) {
+	 
+	#ifdef GL_VERIFY
+	obMRange(_n,_dim) {
 		short _m;
 		
 		Torder *o = &box->x[_n];
@@ -237,6 +238,7 @@ static void _calOwns(Tchemin *pchemin) {
 			}
 		}
 	}
+	#endif
 	
 	return;	
 }

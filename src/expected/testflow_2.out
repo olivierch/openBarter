@@ -142,11 +142,12 @@ select * from fgetstats(true);
  number of movements          |   8
  number of orders removed     |   7
  number of movements removed  |   8
- total number of agreements   |   3
+ number of agreements         |   3
+ number of orders rejected    |   0
  balance                      |   0
  errors on quantities in mvts |   0
  errors on agreements in mvts |   0
  agreements with 2 partners   |   1
  agreements with 3 partners   |   2
-(12 rows)
+(13 rows)
 

@@ -28,9 +28,10 @@ INSERT INTO tconst (name,value) VALUES
 	('CHECK_QUALITY_OWNERSHIP',0), 
 	-- !=0, quality = user_name/quality_name prefix must match session_user
 	-- ==0, the name of quality can be any string
-	('MAXORDERFETCH',10000),
+	('MAXORDERFETCH',100000),
 	-- maximum number of paths of the set on which the competition occurs
 	('MAXTRY',10);
+	-- life time of an order for a given couple (np,nr)
 --------------------------------------------------------------------------------
 -- fetch a constant, and verify consistancy
 CREATE FUNCTION fgetconst(_name text) RETURNS int AS $$
@@ -968,13 +969,13 @@ BEGIN
 	FOR _o IN SELECT o.* FROM torder o,treltried r 
 		WHERE o.np=r.np AND o.nr=r.nr AND o.start IS NOT NULL AND o.start + _MAXTRY < r.cnt LOOP
 		
-		WITH a AS (DELETE FROM torder o WHERE o.id=_id RETURNING *) 
+		WITH a AS (DELETE FROM torder o WHERE o.id=_o.id RETURNING *) 
 		INSERT INTO torderremoved 
 			SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt,created,updated 
 		FROM a;	
 
 		INSERT INTO tmvt (nb,oruuid,grp,own_src,own_dst,qtt,nat,created) 
-			VALUES(1,_o.uuid,NULL,_o.own,_o.own,_o.qtt,_o.nat,statement_timestamp()) 
+			VALUES(1,_o.uuid,NULL,_o.own,_o.own,_o.qtt,_o.np,statement_timestamp()) 
 			RETURNING id INTO _mvt_id;
 		UPDATE tmvt SET grp = _mvt_id WHERE id = _mvt_id;			
 	END LOOP;
@@ -1524,10 +1525,14 @@ BEGIN
 	select count(*) INTO cnt FROM tmvtremoved;	
 	RETURN NEXT;
 	
-	_name := 'total number of agreements';
-	select count(distinct grp) INTO cnt FROM vmvtverif;	
+	_name := 'number of agreements';
+	select count(distinct grp) INTO cnt FROM vmvtverif where nb!=1;	
 	RETURN NEXT;	
 	
+	_name := 'number of orders rejected';
+	select count(distinct grp) INTO cnt FROM vmvtverif where nb=1;	
+	RETURN NEXT;
+		
 	_name := 'balance';
 	cnt := fbalance();	
 	RETURN NEXT;
@@ -1546,7 +1551,8 @@ BEGIN
 	FOR _name,cnt IN SELECT name,value FROM tconst LOOP
 		RETURN NEXT;
 	END LOOP;
-*/			
+*/		
+	
 	_cnt := 0;
 	FOR _i,cnt IN SELECT * FROM fcntcycles() LOOP
 		IF(_i !=1) THEN
@@ -1555,7 +1561,15 @@ BEGIN
 		RETURN NEXT;
 		END IF;
 	END LOOP;
-	
+/*
+--	plus simple
+	FOR _i,cnt IN select nb,count(distinct grp) INTO cnt FROM vmvtverif where nb!=1 LOOP
+		_name := 'agreements with ' || _i || ' partners';
+		RETURN NEXT;
+		END IF;
+	END LOOP;
+
+*/	
 	RETURN;
 END;
 $$ LANGUAGE PLPGSQL;

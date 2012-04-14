@@ -25,7 +25,7 @@ extern void yflow_yyerror(const char *message);
 extern void yflow_scanner_init(const char *str);
 extern void yflow_scanner_finish(void);
 
-ob_tGlobales globales;
+// ob_tGlobales globales;
 
 PG_FUNCTION_INFO_V1(yflow_in);
 PG_FUNCTION_INFO_V1(yflow_out);
@@ -71,10 +71,6 @@ Datum yflow_qtts(PG_FUNCTION_ARGS);
 char *yflow_statusBoxToStr (Tflow *box);
 char *yflow_pathToStr(Tflow *yflow);
 
-// memory allocation of Tflow
-// #define Ndbox_init(dim) ((Tflow *) palloc(sizeof(Tflow)))
-// #define Ndbox_init(dim) flowm_init()
-
 void		_PG_init(void);
 void		_PG_fini(void);
 
@@ -82,9 +78,6 @@ void		_PG_fini(void);
 begin and end functions called when flow.so is loaded
 ******************************************************************************/
 void		_PG_init(void) {
-	globales.verify = true;
-	globales.warning_follow = false;
-	globales.warning_get = false;	
 	return;
 }
 void		_PG_fini(void) {
@@ -271,8 +264,10 @@ static Tflow* _yflow_get(Torder *o,Tflow *f, bool before) {
 		result = flowm_cextends(o,f,before);
 		(void) flowc_maximum(result);
 	}
-	if(globales.warning_get) 
+
+	#ifdef GL_WARNING_GET
 		elog(WARNING,"_yflow_get %s",yflow_pathToStr(result));
+	#endif
 	return result;	
 	
 }
@@ -318,9 +313,9 @@ static bool _yflow_follow(int32 maxlen,Torder *o,Tflow *f, bool before) {
 	short 	dim = f->dim,i;
 	// bool	inflow,cycle;
 	
-	if(globales.warning_follow)
+	#ifdef GL_WARNING_FOLLOW
 		elog(WARNING,"_yflow_follow %s",yflow_pathToStr(f));
-	
+	#endif
 	//if(f->status == draft)
 	//	return false;
 	// a path1 that is draft can compete with a an other path1+path2

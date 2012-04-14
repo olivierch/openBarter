@@ -14,6 +14,12 @@
 #define  PG_GETARG_TORDER(x)	((Torder*)PG_GETARG_POINTER(x))
 #define PG_RETURN_TORDER(x)	PG_RETURN_POINTER(x)
 
+/*
+#define GL_VERIFY
+#define GL_WARNING_FOLLOW
+#define GL_WARNING_GET
+*/
+
 
 typedef struct Torder {
 	int64	qtt_prov,qtt_requ,qtt;
@@ -44,14 +50,14 @@ typedef struct Tflow {
 	// status and x[.].flowr are set by set by flowc_maximum
 } Tflow; // sizeof(Tflow)=392 when FLOW_MAX_DIM=8
 
-
+/*
 typedef struct ob_tGlobales {
 	bool verify;
 	bool warning_follow;
 	bool warning_get;
 } ob_tGlobales;
 extern ob_tGlobales globales; //defined in yflow.c
-
+*/
 
 extern Tstatusflow flowc_maximum(Tflow *box);
 extern char *flowc_toStr(Tflow *box);
