@@ -194,7 +194,9 @@ comment on column tquality.qtt is 'total quantity on the market for this quality
 alter sequence tquality_id_seq owned by tquality.id;
 create index tquality_name_idx on tquality(name);
 SELECT _reference_time('tquality');
-
+--------------------------------------------------------------------------------
+-- TRELTRIED
+--------------------------------------------------------------------------------
 create table treltried (
 	np int references tquality(id) NOT NULL, 
 	nr int references tquality(id) NOT NULL, 
@@ -957,6 +959,7 @@ CREATE FUNCTION  finvalidate_treltried() RETURNS void AS $$
 DECLARE 
 	_o 	torder%rowtype;
 	_MAXTRY int := fgetconst('MAXTRY');
+	_mvt_id int;
 BEGIN
 	IF(_MAXTRY=0) THEN
 		RETURN;
@@ -971,8 +974,9 @@ BEGIN
 		FROM a;	
 
 		INSERT INTO tmvt (nb,oruuid,grp,own_src,own_dst,qtt,nat,created) 
-			VALUES(1,_o.uuid,NULL,_o.own,_o.own,_o.qtt,_o.nat,statement_timestamp());		
-			
+			VALUES(1,_o.uuid,NULL,_o.own,_o.own,_o.qtt,_o.nat,statement_timestamp()) 
+			RETURNING id INTO _mvt_id;
+		UPDATE tmvt SET grp = _mvt_id WHERE id = _mvt_id;			
 	END LOOP;
 	RETURN;
 END;
@@ -1407,6 +1411,7 @@ BEGIN
 		
 		_cnt := _cnt +1;
 		UPDATE tquality SET qtt = qtt - _qtt WHERE id = _nat RETURNING qtt INTO _qlt;
+		-- _qlt.qtt >=0 is a constraint of tquality
 		IF(_qlt.qtt <0) THEN
 			RAISE WARNING 'the quantity % underflows',_qlt.name;
 			RAISE EXCEPTION USING ERRCODE='YA002';
@@ -1468,6 +1473,21 @@ BEGIN
 END;		
 $$ LANGUAGE PLPGSQL;
 
+--------------------------------------------------------------------------------
+-- 
+--------------------------------------------------------------------------------
+create function fbalance() RETURNS int AS $$
+DECLARE 
+	_cnt 		int;
+BEGIN
+	WITH accounting_order AS (SELECT np,sum(qtt) AS qtt FROM torder GROUP BY np),
+	     accounting_mvt   AS (SELECT nat as np,sum(qtt) AS qtt FROM tmvt GROUP BY nat)
+	SELECT count(*) INTO _cnt FROM tquality,accounting_order,accounting_mvt
+	WHERE tquality.id=accounting_order.np AND tquality.id=accounting_mvt.np
+		AND tquality.qtt != accounting_order.qtt + accounting_mvt.qtt;
+	RETURN _cnt;
+END;		
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- stat
@@ -1506,9 +1526,12 @@ BEGIN
 	
 	_name := 'total number of agreements';
 	select count(distinct grp) INTO cnt FROM vmvtverif;	
+	RETURN NEXT;	
+	
+	_name := 'balance';
+	cnt := fbalance();	
 	RETURN NEXT;
 	
-
 	IF(_extra) THEN
 	
 		_name := 'errors on quantities in mvts';
@@ -1519,11 +1542,11 @@ BEGIN
 		cnt := fverifmvt2();
 		RETURN NEXT;
 	END IF;
-	
+/*	
 	FOR _name,cnt IN SELECT name,value FROM tconst LOOP
 		RETURN NEXT;
 	END LOOP;
-			
+*/			
 	_cnt := 0;
 	FOR _i,cnt IN SELECT * FROM fcntcycles() LOOP
 		IF(_i !=1) THEN
