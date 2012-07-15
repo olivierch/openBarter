@@ -131,7 +131,7 @@ DECLARE
 BEGIN
 	_f := yflow_qtts(pat)::float8[];
 	-- qtt_prov/qtt_requ
-	RETURN (_f[1])/(_f[2]);
+	RETURN (_f[2])/(_f[1]);
 END;
 $$ LANGUAGE PLPGSQL;
 

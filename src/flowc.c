@@ -31,9 +31,9 @@ char *flowc_flowToStr(Tflow *flow);
 
 static void _calGains(Tchemin *pchemin,double omegaCorrige[]);
 static short _fluxMaximum(const Tchemin *pchemin,double	*omegaCorrige, double *fluxExact) ;
-static bool _rounding(double *fluxExact, Tchemin *pchemin);
+static Tstatusflow _rounding(short iExhausted, double *fluxExact, Tchemin *pchemin);
 static void _calOwns(Tchemin *pchemin);
-static double _calOmega(Tchemin *pchemin);
+static void _calOmega(Tchemin *pchemin);
 char * flowc_vecIntStr(short dim,int64 *vecInt);
 char * flowc_vecDoubleStr(short dim,double *vecDouble);
 static char *_flowc_maximum(Tflow *box,bool ret_str);
@@ -56,7 +56,6 @@ static char *_flowc_maximum(Tflow *box,bool ret_str) {
 	Tchemin chemin;
 	short _iExhausted;
 
-	
 	box->status = empty;
 	box->lastignore = false;
 	
@@ -68,14 +67,15 @@ static char *_flowc_maximum(Tflow *box,bool ret_str) {
 		ereport(ERROR,
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			 errmsg("max dimension reached for the flow")));
-
-
-	
-	
-	box->lastignore = box->x[_dim-1].id == 0;
-
-	_ldim = (box->lastignore)?_dim-1:_dim; 	
-	obMRange(_i,_ldim) 
+ 
+	box->lastignore = box->x[_dim-1].qtt_requ == 0;
+	_ldim = (box->lastignore)?_dim-1:_dim; 
+	/* when last ignore,
+		box->x[dim-1].qtt_prov and qtt_requ are ignored,
+		box->x[dim-1].qtt is the quantity maximum provided
+	*/
+		
+	obMRange(_i,_dim) 
 		if(box->x[_i].qtt == 0) 
 			goto _dropflow; // box->status = empty
 		else if(box->x[_i].qtt < 0) 
@@ -99,10 +99,11 @@ static char *_flowc_maximum(Tflow *box,bool ret_str) {
 	//elog(WARNING,"flowc_maximum: ->status!=noloop");
 	// error for 3-agreement: on omega ~= 1.1e-16
 	
-	if( _calOmega(&chemin) < 1.0) {
+	/*if( _calOmega(&chemin) < 1.0) {
 		box->status = refused;
 		goto _dropflow;
-	}
+	}*/
+	_calOmega(&chemin);
 		
 	_calOwns(&chemin);
 	
@@ -116,20 +117,19 @@ static char *_flowc_maximum(Tflow *box,bool ret_str) {
 	
 	/* the floating point vector is rounded 
 	to the nearest vector of positive integers */
-	if (_rounding(chemin.fluxExact, &chemin) ) 
-		box->status = draft;
-	else {
-		box->status = undefined;
+	box->status = _rounding(_iExhausted, chemin.fluxExact, &chemin);
+	if(box->status == draft)
+		goto _end;
+	
 _dropflow: 	
-		{
-			short _k;
-		
-			// the flow is undefined
-			obMRange (_k,_dim)
-				box->x[_k].flowr = 0;		
-		}
-		
+	{
+		short _k;
+	
+		// the flow is undefined
+		obMRange (_k,_dim)
+			box->x[_k].flowr = 0;		
 	}
+		
 _end:
 	if(ret_str)
 		return flowc_cheminToStr(&chemin);
@@ -139,7 +139,7 @@ _end:
 /******************************************************************************
  * 
  *****************************************************************************/
-static double _calOmega(Tchemin *pchemin) {
+static void _calOmega(Tchemin *pchemin) {
 	Tflow *box = pchemin->box;
 	short _n,_dim = box->dim;
 		
@@ -170,7 +170,7 @@ static double _calOmega(Tchemin *pchemin) {
 		pchemin->no[_dim-1].omega = 1.0/pchemin->prodOmega;
 		pchemin->prodOmega = 1.0;
 	}
-	return pchemin->prodOmega;
+	return;
 }
 /******************************************************************************
  * 
@@ -277,8 +277,12 @@ static void _calGains(Tchemin *pchemin,double omegaCorrige[]) {
 		omegaCorrige[_i] = pchemin->no[_i].omega;
 		if (_occ == 1)
 			omegaCorrige[_i] /= pchemin->gain;
-		else /* _occ is never zero */
+		else if (_occ > 1)
 			omegaCorrige[_i] /= pow(pchemin->gain, 1.0 / ((double) _occ));
+		else /* _occ is never zero */
+			ereport(ERROR,
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+			 errmsg("_calGains: nbOwn <=0 ")));
 		
 	}
 
@@ -292,28 +296,18 @@ This flow fluxExact[.] is such than:
  	fluxExact[i] = omegaCorrige[i] * fluxExact[i-1]
 and such as quantities of stock can provide this flow
  
-Each stock can be used by several nodes.
- 
 Input-output
 ************	
- In	pchemin, for i in [0,dim[ and j in [0,nbStock[
-		->cflags
+ In	pchemin, for i in [0,dim[ 
 		->omegaCorrige[i]
-		->no[i].stockIndex = j
-		->occStock[j]
 		->box[j].qtt
 
  Out	fluxExact[.] the maximum flow, of pchemin->lon elts
 
-returns the index i of the exhausted stock.
-	when lastIgnore, 
-		i in [0, nbStock -1[
-	else
-		i in [0, nbStock[
+returns the index i of the exhausted node.
+		i in [0, dim[
 Details
 *******
-If lastIgnore: The flow is not limited by the last node
-This node has always it's own stock.
 
 _piom[i] is the product of omegas between the start of the path and a given node i.
 	 For i==0 it is 1.
@@ -335,14 +329,14 @@ and:
 	
  *******************************************************************************/
 static short _fluxMaximum(const Tchemin *pchemin, double *omegaCorrige, double *fluxExact) {
-	short 	_is, _jn,_jm;
+	short 	_is, _jn; //,_jm;
 	double	*_piom = (double *) pchemin->piom; //  _fPiomega(i)
 	double	_min, _cour;
 	short	_iExhausted;	
 	//double	*omegaCorrige = (double *) pchemin->omegaCorrige;
 	Tflow	*box = pchemin->box;
 	short 	_dim = box->dim;
-	bool 	_lastignore = box->lastignore;
+	//bool 	_lastignore = box->lastignore;
 		
 	// piom are obtained on each node, 
 	/***********************************************************************/
@@ -358,17 +352,15 @@ static short _fluxMaximum(const Tchemin *pchemin, double *omegaCorrige, double *
 	
 	// minimum flow for the first node f[0]
 	/***********************************************************************/
-	_jm = _dim;
-	if(_lastignore)
-		_jm -= 1;
 	// now _is is an index on nodes
-	obMRange(_is,_jm) { // loop on nodes
+	obMRange(_is,_dim) { // loop on nodes
 		_cour = ((double) (box->x[_is].qtt)) /_piom[_is]; 
 		if ((_is == 0) || (_cour < _min)) {
 			_min = _cour;
 			_iExhausted = _is;
 		}
-	}
+	} /* _iExhausted in [0,_dim-1] 
+	*/
 	
 	// propagation to other nodes
 	/***********************************************************************/
@@ -397,7 +389,7 @@ do { \
 
 /*******************************************************************************
  Computes a distance between two vectors vecExact and vecArrondi. 
- It the angle alpha made by these vectors.
+ It is the angle alpha made by these vectors.
  We have:
  cos(alpha) = (vecExact.vecArrondi)/ (||vecArrondi||*||vecExact||)
 
@@ -425,13 +417,11 @@ static double _idistance(short lon,
 }
 /*******************************************************************************
  flow rounding
-	in: _iExhausted,pchemin
-	out: fluxExact,pchemin
 
  When it can be found, gives the vector pchemin->fluxArrondi of ingeters
  the nearest of fluxExact, not greater than orders.qtt.
 
- box->dim must be <= 31 (2^dim loops)
+ box->dim short => must be <= 31 (2^dim loops)
 
  returns
  	 1 if a solution is found
@@ -443,7 +433,7 @@ static double _idistance(short lon,
 
  *******************************************************************************/
 // #define WHY_REJECTED
-static bool _rounding(double *fluxExact, Tchemin *pchemin) {
+static Tstatusflow _rounding(short iExhausted, double *fluxExact, Tchemin *pchemin) {
 	short 	_i,  _k;
 	short 	_matcour, _matmax, _matbest;
 	bool 	_found;
@@ -453,20 +443,27 @@ static bool _rounding(double *fluxExact, Tchemin *pchemin) {
 	Tflow 	*box = pchemin->box;
 	short 	_dim = box->dim;
 	short _ldim = (box->lastignore)?(_dim-1):_dim;
+	Tstatusflow _ret;
 
 	// computes floor[] from fluxExact[]
 	/***********************************************************************/
 	obMRange(_i,_dim) {
-		double _d = floor(fluxExact[_i]);
-		int64 _f = (int64) _d;
-		if(_f < 0) _f = 0; 
-		if(((double)(_f)) != _d) {
-			ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("in _rounding, fluxExact[%i] = %f cannot be rounded",_i,fluxExact[_i])));
+		if(_i == iExhausted) { // will not change
+			_floor[_i] = box->x[_i].qtt;
+			continue; 
+		} else {
+			double _d = floor(fluxExact[_i]);
+			int64 _f = (int64) _d;
+			
+			if(_f < 0) _f = 0; 
+			if(((double)(_f)) != _d) {
+				ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("in _rounding, fluxExact[%i] = %f cannot be rounded",_i,fluxExact[_i])));
+			}
+			_floor[_i] = _f;
+			//elog(WARNING,"flowc_maximum: _floor[%i]=%lli",_i,_f);
 		}
-		_floor[_i] = _f;
-		//elog(WARNING,"flowc_maximum: _floor[%i]=%lli",_i,_f);
 	}
 
 	_matmax = 1 << _dim; // one bit for each node 
@@ -479,60 +476,40 @@ static bool _rounding(double *fluxExact, Tchemin *pchemin) {
 	// for each vertex of the hypercude
 	/***********************************************************************/
 	_found = false;
+	_ret = undefined;
 	for (_matcour = 0; _matcour < _matmax; _matcour++) {
+	
+		if((_matcour >> iExhausted) & 1)
+			goto _continue;
 		 
 		// obtain the vertex _flowNodes
 		/***************************************************************/
 		_obtain_vertex(_dim,_matcour,_floor,_flowNodes);
-
+		/* if _i == iExhausted, we have _flowNodes[_i] == box->x[_i].qtt
+		else _flowNodes[_i] == _floor[i] (+1)  with _floor[i] <= box->x[i].qtt
+		*/
 		// several checkings
 		/***************************************************************/
 		
 		// verify that flow <= box->k[.].qtt
-		obMRange (_k,_ldim) {
+		obMRange (_k,_dim) {
+		
 			// verify that order >= flow
-			if(box->x[_k].qtt<_flowNodes[_k]) {
+			if(box->x[_k].qtt < _flowNodes[_k]) {
 				#ifdef WHY_REJECTED 
-					elog(WARNING,"flowc_maximum 1: NOT order >= flow %s",flowc_vecIntStr(_dim,_flowNodes));
+					elog(WARNING,"_rounding 1: NOT order >= flow %s",flowc_vecIntStr(_dim,_flowNodes));
 				#endif
 				goto _continue;
 			}
-		}
-				
-		// verify that flow > 0
-		obMRange (_k,_dim) {
-			// verify that flow >0
+			
+			// verify that flow > 0
 			if(_flowNodes[_k] <= 0) {
 				#ifdef WHY_REJECTED
-					elog(WARNING,"flowc_maximum 2: NOT flow>0 %s",flowc_vecIntStr(_dim,_flowNodes));
+					elog(WARNING,"_rounding 2: NOT flow>0 %s",flowc_vecIntStr(_dim,_flowNodes));
 				#endif
 				goto _continue;
 			}
 		}
-		
-		/* when lastignore, pivot.qtt is not defined
-		*/
-		
-		// verify that the flow exhausts some order 
-		{
-			bool _exhausts = false;
-			/*
-			for lastignore, some order between [0,dim-2] should be exhausted
-			*/
-			obMRange (_k,_ldim) {
-				if(_flowNodes[_k] == box->x[_k].qtt ) {
-					_exhausts = true; 
-					break;
-				}		
-			}
-			if(!_exhausts) {
-				//elog(WARNING,"flowc_maximum 3: _mat=%x",_matcour);
-				#ifdef WHY_REJECTED
-					elog(WARNING,"flowc_maximum 3: NOT exhaust %s",flowc_vecIntStr(_dim,_flowNodes));
-				#endif
-				goto _continue;
-			}
-		} 
 				
 		/* At this point, 
 			* each node can provide flowNodes[],
@@ -542,20 +519,24 @@ static bool _rounding(double *fluxExact, Tchemin *pchemin) {
 			* the cycle exhausts the box
 			* Omega ~= 1.0 
 		*/
-		if(!box->lastignore) {
+		
+		{ 
 			short _kp = _dim-1;
 			double _precision = 1.E-8;
 			
-			obMRange(_k,_dim) {
+			/* the test is not made on the last node when lastignore */
+			obMRange(_k,_ldim) {
 				if(pchemin->no[_k].omega + _precision < ((double) _flowNodes[_k]) / ((double) _flowNodes[_kp])) {
 					#ifdef WHY_REJECTED
 						elog(WARNING,"flowc_maximum 4: NOT omega %f>=%f %s",pchemin->no[_k].omega,((double) _flowNodes[_k]) / ((double) _flowNodes[_kp]),flowc_vecIntStr(_dim,_flowNodes));
 					#endif
+					_ret = refused;
 					goto _continue;
 				}
 				_kp = _k;
 			}
-		}
+		} // order limits are observed
+		
 
 		// choose the best
 		/***************************************************************/
@@ -567,14 +548,14 @@ static bool _rounding(double *fluxExact, Tchemin *pchemin) {
 		// this vertex is better than other found (if any)
 		/***************************************************************/
 		if( (!_found) || _distbest < _distcour) {
-			// _distbest=max(cos(a)) === min(a) 
+			// _distbest=max(cos(alpha)) === min(alpha) 
 			_found = true;
 			_distbest = _distcour;
 			_matbest = _matcour;
 
 		}
 _continue:
-		;
+		; // choose an other vertex
 	};
 	if(_found) {
 		_obtain_vertex(_dim,_matbest,_floor,_flowNodes);
@@ -582,10 +563,11 @@ _continue:
 		obMRange (_k,_dim) {
 			box->x[_k].flowr = _flowNodes[_k];	
 		}
-	} 
-
-	return _found; 
+		_ret = draft;
+	} // else _ret is undefined or refused
+	return _ret; 
 }
+
 /******************************************************************************
  * 
  *****************************************************************************/

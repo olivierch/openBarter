@@ -4,10 +4,21 @@
  ******************************************************************************
 
 ******************************************************************************/
+#include <math.h>
 
 #include "postgres.h"
+
+#include "lib/stringinfo.h"
+#include "libpq/pqformat.h"
+#include "utils/array.h"
+#include "utils/builtins.h"
+#include "utils/lsyscache.h" 
+#include "catalog/pg_type.h" 
+#include "funcapi.h" 
+
 #include "flowdata.h"
-#include "fmgr.h"
+//#include "fmgr.h"
+
 // #include "libpq/pqformat.h"		/* needed for send/recv functions */
 
 
@@ -21,6 +32,8 @@ PG_FUNCTION_INFO_V1(yorder_nr);
 PG_FUNCTION_INFO_V1(yorder_get);
 PG_FUNCTION_INFO_V1(yorder_eq);
 PG_FUNCTION_INFO_V1(yorder_left);
+PG_FUNCTION_INFO_V1(yorder_to_vector);
+PG_FUNCTION_INFO_V1(yorder_moyen);
 	
 Datum		yorder_in(PG_FUNCTION_ARGS);
 Datum		yorder_out(PG_FUNCTION_ARGS);
@@ -30,6 +43,8 @@ Datum		yorder_nr(PG_FUNCTION_ARGS);
 Datum		yorder_get(PG_FUNCTION_ARGS);
 Datum		yorder_eq(PG_FUNCTION_ARGS);
 Datum		yorder_left(PG_FUNCTION_ARGS);
+Datum		yorder_to_vector(PG_FUNCTION_ARGS);
+Datum		yorder_moyen(PG_FUNCTION_ARGS);
 
 /*****************************************************************************
  * Input/Output functions
@@ -140,8 +155,124 @@ yorder_left(PG_FUNCTION_ARGS)
 	Torder    *o2 = PG_GETARG_TORDER(1);
 	Torder	   *result;
 
-	if(o1->id != 0) result = o1;
+	if(o1->id != 0) result = o1; // TODO ????
 	else result = o2;
 	PG_RETURN_POINTER(result);
 }
+/*****************************************************************************
+// int8 res[7] = yorder_to_vector(yorder)
+ *****************************************************************************/
+Datum
+yorder_to_vector(PG_FUNCTION_ARGS)
+{
+	Torder    *o = PG_GETARG_TORDER(0);
+	Datum	*_datum_out;
+	bool	*_isnull;
+	
+	ArrayType  *result;
+	
+	int16       _typlen;
+	bool        _typbyval;
+	char        _typalign;
+	int	    _ndims = 1;
+	int         _dims[1];
+	int         _lbs[1];
+
+	
+	_datum_out = palloc(sizeof(Datum) * 7);
+	_isnull = palloc(sizeof(bool) *7);
+	
+	_isnull[0] = false; _datum_out[0] = Int64GetDatum((int64)o->id); 
+	_isnull[1] = false; _datum_out[1] = Int64GetDatum((int64)o->own); 
+	_isnull[2] = false; _datum_out[2] = Int64GetDatum((int64)o->nr); 
+	_isnull[3] = false; _datum_out[3] = Int64GetDatum(o->qtt_requ);
+	_isnull[4] = false; _datum_out[4] = Int64GetDatum((int64)o->np);
+	_isnull[5] = false; _datum_out[5] = Int64GetDatum(o->qtt_prov);
+	_isnull[6] = false; _datum_out[6] = Int64GetDatum(o->qtt);
+
+	_dims[0] = 7;
+	_lbs[0] = 1;
+				 
+	/* get required info about the INT8 */
+	get_typlenbyvalalign(INT8OID, &_typlen, &_typbyval, &_typalign);
+
+	/* now build the array */
+	result = construct_md_array(_datum_out, _isnull, _ndims, _dims, _lbs,
+		                INT8OID, _typlen, _typbyval, _typalign);
+	PG_FREE_IF_COPY(o,0);
+	PG_RETURN_ARRAYTYPE_P(result);
+}
+/*****************************************************************************
+ int8[2] res_in,res_out = yorder_moyen(res_in,res_out,qtt_in,qtt_out)
+ res is an aggregate that starts at: res_in=0, res_out=0
+ it cumulates couples of quantities in such a way that the omega of the sum is the maximum
+ of omegas already cumulated
+ *****************************************************************************/
+Datum yorder_moyen(PG_FUNCTION_ARGS)
+{
+	int64 i_in 	= PG_GETARG_INT64(0);
+	int64 i_out 	= PG_GETARG_INT64(1);
+	int64 qtt_in 	= PG_GETARG_INT64(2);
+	int64 qtt_out 	= PG_GETARG_INT64(3);
+	int64 res_in;
+	int64 res_out;
+	double om_i,om_q;
+	ArrayType  *result;
+	
+	if(i_in ==0 && i_out ==0 && qtt_in >=1 && qtt_out >=1) {
+		res_in = qtt_in;
+		res_out = qtt_out;
+	} else {
+		if ( i_in < 1 || i_out < 1 || qtt_in < 1 || qtt_out < 1)
+			ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("invalid input for yorder_moyen")));
+	
+		om_i = ((double)i_out)/((double)i_in);
+		om_q = ((double)qtt_out)/((double)qtt_in);
+	
+		if(om_i > om_q) {
+			int64 q = (int64) floor((((double)qtt_out)/om_i)+0.5);
+			// q < qtt_in
+			res_in = i_in + q;
+		} else {
+			int64 q = (int64) floor((((double)i_out)/om_q)+0.5);
+			// q < i_in
+			res_in = q + qtt_in;
+		}
+		res_out = i_out + qtt_out;
+	}
+	{
+		Datum	*_datum_out;
+		bool	*_isnull;	
+		
+	
+		int16       _typlen;
+		bool        _typbyval;
+		char        _typalign;
+		int	    _ndims = 1;
+		int         _dims[1];
+		int         _lbs[1];
+
+	
+		_datum_out = palloc(sizeof(Datum) * 2);
+		_isnull = palloc(sizeof(bool) *2);
+	
+		_isnull[0] = false; _datum_out[0] = Int64GetDatum(res_in); 
+		_isnull[1] = false; _datum_out[1] = Int64GetDatum(res_out); 
+
+		_dims[0] = 2;
+		_lbs[0] = 1;
+					 
+		/* get required info about the INT8 */
+		get_typlenbyvalalign(INT8OID, &_typlen, &_typbyval, &_typalign);
+
+		/* now build the array */
+		result = construct_md_array(_datum_out, _isnull, _ndims, _dims, _lbs,
+				        INT8OID, _typlen, _typbyval, _typalign);
+	}
+	
+	PG_RETURN_ARRAYTYPE_P(result);
+}
+
 

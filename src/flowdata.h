@@ -20,12 +20,11 @@
 #define GL_WARNING_GET
 */
 
-
 typedef struct Torder {
 	int64	qtt_prov,qtt_requ,qtt;
 	int32	id,own,np,nr;
 	int64 	flowr;
-} Torder; // sizeof(Torder)=48
+} Torder; 
 
 typedef struct Tno {
 	double 	omega;

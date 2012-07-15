@@ -46,6 +46,7 @@ PG_FUNCTION_INFO_V1(yflow_status);
 PG_FUNCTION_INFO_V1(yflow_flr_omega);
 PG_FUNCTION_INFO_V1(yflow_to_matrix);
 PG_FUNCTION_INFO_V1(yflow_qtts);
+PG_FUNCTION_INFO_V1(yflow_get_last_order);
 
 Datum yflow_in(PG_FUNCTION_ARGS);
 Datum yflow_out(PG_FUNCTION_ARGS);
@@ -66,6 +67,7 @@ Datum yflow_status(PG_FUNCTION_ARGS);
 Datum yflow_flr_omega(PG_FUNCTION_ARGS);
 Datum yflow_to_matrix(PG_FUNCTION_ARGS);
 Datum yflow_qtts(PG_FUNCTION_ARGS);
+Datum yflow_get_last_order(PG_FUNCTION_ARGS);
 
 
 char *yflow_statusBoxToStr (Tflow *box);
@@ -251,16 +253,6 @@ static Tflow* _yflow_get(Torder *o,Tflow *f, bool before) {
 		//memcpy(result,f,sizeof(Tflow));
 		result = flowm_copy(f);
 	} else {
-		/*
-		if(before) {
-			memcpy(&result->x[0],o,sizeof(Torder));
-			memcpy(&result->x[1],&f->x[0],dim*sizeof(Torder));
-		} else {
-			memcpy(&result->x[0],&f->x[0],dim*sizeof(Torder));	
-			memcpy(&result->x[dim],o,sizeof(Torder));
-		}
-		result->dim = dim+1;
-		*/
 		result = flowm_cextends(o,f,before);
 		(void) flowc_maximum(result);
 	}
@@ -316,9 +308,6 @@ static bool _yflow_follow(int32 maxlen,Torder *o,Tflow *f, bool before) {
 	#ifdef GL_WARNING_FOLLOW
 		elog(WARNING,"_yflow_follow %s",yflow_pathToStr(f));
 	#endif
-	//if(f->status == draft)
-	//	return false;
-	// a path1 that is draft can compete with a an other path1+path2
 	
 	if((dim >=maxlen) || (dim >= FLOW_MAX_DIM))
 		return false;
@@ -331,7 +320,7 @@ static bool _yflow_follow(int32 maxlen,Torder *o,Tflow *f, bool before) {
 		if(f->x[i].id == o->id) 
 			return false;
 	
-	if(before) {
+	if(before) { 
 		// not o -> begin(f)
 		if (o->np != f->x[0].nr)
 			return false;
@@ -341,9 +330,11 @@ static bool _yflow_follow(int32 maxlen,Torder *o,Tflow *f, bool before) {
 			if(f->x[i].np == o->nr) 
 				return false;
 				
-		// not yet an expected cycle
+		// not yet a cycle
 		if(f->x[dim-1].np != o->nr)
 			return true;
+			
+		/* o->f form a cycle */
 	} else {
 		// not end(f) -> o
 		if(f->x[dim-1].np != o->nr)
@@ -354,13 +345,14 @@ static bool _yflow_follow(int32 maxlen,Torder *o,Tflow *f, bool before) {
 			if(o->np == f->x[i+1].nr) 
 				return false;
 
-		// not yet an expected cycle
+		// not yet a cycle
 		if(o->np != f->x[dim-1].nr)
 			return true;
+			
+		/* f->o from a cycle */
 	}
-	// return true;
-	// it is an expected cycle
-	if(f->lastignore)
+	// it is a cycle
+	if(f->lastignore) // then omega of the pivot is undefined
 		return true;
 	{
 		double _om = 1.;
@@ -525,7 +517,7 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 					 
 	if ((f1->status == draft) && (f2->status == draft)) {
 	
-		if(	// for the last partner, qtt_prov(f1)/qtt_requ(f1) > qtt_prov(f2)/qtt_requ(f2)
+		if(	// for the last partner, qtt_out(f1)/qtt_in(f1) > qtt_out(f2)/qtt_in(f2)
 			FLOW_LAST_OMEGA(f1) > FLOW_LAST_OMEGA(f2)
 		) PG_RETURN_TFLOW(f2);
 		else PG_RETURN_TFLOW(f1);
@@ -548,7 +540,7 @@ Datum yflow_ming(PG_FUNCTION_ARGS)
 					 
 	if ((f1->status == draft) && (f2->status == draft)) {
 	
-		if(	// for the last partner, qtt_prov(f1)/qtt_requ(f1) < qtt_prov(f2)/qtt_requ(f2)
+		if(	// for the last partner, qtt_out(f1)/qtt_in(f1) < qtt_out(f2)/qtt_in(f2)
 			FLOW_LAST_OMEGA(f1) < FLOW_LAST_OMEGA(f2)
 		) PG_RETURN_TFLOW(f2);
 		else PG_RETURN_TFLOW(f1);
@@ -559,15 +551,16 @@ Datum yflow_ming(PG_FUNCTION_ARGS)
 		PG_RETURN_TFLOW(f2);	
 }
 /******************************************************************************
-aggregate function yflow_max(yflow)
+aggregate function [qtt_in,qtt_out,dim] = yflow_qtts(yflow)
+with: qtt_out=flow[dim-1] and qtt_in=flow[dim-2]
 ******************************************************************************/
 Datum yflow_qtts(PG_FUNCTION_ARGS)
 {
 	Tflow	*f = PG_GETARG_TFLOW(0);
 	Datum	*_datum_out;
+	bool	*_isnull;
 	
 	ArrayType  *result;
-	bool        _isnull[1];
 	int16       _typlen;
 	bool        _typbyval;
 	char        _typalign;
@@ -580,9 +573,10 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 				 errmsg("yflow_qtts: the flow should be draft")));
 	
 	_datum_out = palloc(sizeof(Datum) * 3);
-	_datum_out[0] = Int64GetDatum(f->x[f->dim-1].flowr); // qtt_prov
+	_isnull = palloc(sizeof(bool) * 3);
+	_datum_out[0] = Int64GetDatum(f->x[f->dim-2].flowr); // qtt_in
 	_isnull[0] = false;
-	_datum_out[1] = Int64GetDatum(f->x[f->dim-2].flowr); // qtt_requ
+	_datum_out[1] = Int64GetDatum(f->x[f->dim-1].flowr); // qtt_out
 	_isnull[1] = false;
 	_datum_out[2] = Int64GetDatum((int64)f->dim); // dim
 	_isnull[2] = false;
@@ -708,6 +702,24 @@ char * yflow_statusBoxToStr (Tflow *box){
 	case empty: return "empty";
 	default: return "unknown status!";
 	}
+}
+/*****************************************************************************
+// get the last order of the flow
+ *****************************************************************************/
+Datum
+yflow_get_last_order(PG_FUNCTION_ARGS)
+{
+	Tflow	*f = PG_GETARG_TFLOW(0);
+	Torder	*result = palloc(sizeof(Torder));
+	short 	dim = f->dim;
+
+	if(dim == 0) 
+		ereport(ERROR,
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				errmsg("yorder_get_last_order: the flow is empty")));
+	memcpy(result,&f->x[dim-1],sizeof(Torder));
+	PG_FREE_IF_COPY(f,0);
+	PG_RETURN_TORDER(result);
 }
 
 

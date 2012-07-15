@@ -1,0 +1,18 @@
+
+Evaluer ce qui peut se passer si les tables ne sont pas RAZ à l'ouverture.
+	actuellement, les tables sont vidées, et les pk raz
+	
+Supprimer les uuid?
+
+Séparer l'ouverture-cloture dans un script distinct
+
+modifier le mode de traitement des vieux ordres
+
+mémoriser les quotes, et retourner un n° avec la réponse
+permettre de faire un ordre sur la base d'un n° de quote.
+
+*****************************************************************
+getxquote - exexquote
+
+finsertorder(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text)
+	RETURNS TABLE ( _yuuid text, _ydim int, _ygrp int)
