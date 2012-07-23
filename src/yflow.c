@@ -468,11 +468,11 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 			 errmsg("yflow_reduce: flows should be draft,undefined or empty;%s and %s instead",yflow_statusBoxToStr(r),yflow_statusBoxToStr(fr))));
 	
 	if(r->status == draft && fr->status == draft) {
-		short _dim;
+		//short _dim;
 		
-		_dim = (r->lastignore) ? (r->dim-1) : r->dim; // lastignore?
+		//_dim = (r->lastignore) ? (r->dim-1) : r->dim; // lastignore?
 		obMRange(i,fr->dim) {
-			obMRange(j,_dim)
+			obMRange(j,r->dim)
 				if(r->x[j].id == fr->x[i].id) {
 					if(r->x[j].qtt >= fr->x[i].flowr)
 						r->x[j].qtt -= fr->x[i].flowr;

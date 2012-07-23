@@ -13,40 +13,45 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL;
 select fcreateuser(session_user);
-INFO:  The role olivier is a super user.
-INFO:  The market is opened for this user olivier
+INFO:  The role is a super user.
+INFO:  The market is opened for this user
  fcreateuser 
 -------------
  
 (1 row)
 
 -- own,qual_prov,qtt_prov,qtt_requ,qual_requ
-select finsertorder('u',fq('b'),1000,1000,fq('a'));
+select * from finsertorder('u',fq('b'),1000,1000,fq('a'));
 INFO:  owner u created
-CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
- finsertorder 
---------------
-(0 rows)
-
-select finsertorder('v',fq('c'),1000,1000,fq('b'));
-INFO:  owner v created
-CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
- finsertorder 
---------------
-(0 rows)
-
-select fgetquote('w',fq('a'),fq('c'));
-   fgetquote   
----------------
- (3,1000,1000)
+CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
+PL/pgSQL function "finsertorder" line 19 at assignment
+ id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows | created | removed 
+----+-----+----+----------+----+----------+--------+---------+-------+---------+---------
+  1 |   1 |  2 |     1000 |  1 |     1000 |      0 |       0 | {}    |         | 
 (1 row)
 
-select finsertorder('w',fq('a'),1000,1000,fq('c'));
+select * from finsertorder('v',fq('c'),1000,1000,fq('b'));
+INFO:  owner v created
+CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
+PL/pgSQL function "finsertorder" line 19 at assignment
+ id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows | created | removed 
+----+-----+----+----------+----+----------+--------+---------+-------+---------+---------
+  2 |   2 |  1 |     1000 |  3 |     1000 |      0 |       0 | {}    |         | 
+(1 row)
+
+select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fgetquote('w',fq('a'),1000,1000,fq('c')); 
 INFO:  owner w created
-CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
- finsertorder 
---------------
- (1-3,3,1)
+CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
+PL/pgSQL function "fgetquote" line 36 at assignment
+ id | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                                               flows                                                
+----+----+----------+----+----------+--------+---------+----------------------------------------------------------------------------------------------------
+  1 |  3 |     1000 |  2 |     1000 |   1000 |    1000 | {"[(1, 1, 2, 1000, 1, 1000, 1000),(2, 2, 1, 1000, 3, 1000, 1000),(0, 3, 3, 1000, 2, 1000, 1000)]"}
+(1 row)
+
+select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fexecquote('w',1);
+ id | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                                               flows                                                
+----+----+----------+----+----------+--------+---------+----------------------------------------------------------------------------------------------------
+  3 |  3 |     1000 |  2 |     1000 |   1000 |    1000 | {"[(1, 1, 2, 1000, 1, 1000, 1000),(2, 2, 1, 1000, 3, 1000, 1000),(3, 3, 3, 1000, 2, 1000, 1000)]"}
 (1 row)
 
 select id,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt;
@@ -57,40 +62,34 @@ select id,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt;
   1 |  3 | 1-3    |   1 | w        | a  | 1000 | u
 (3 rows)
 
-select fremoveagreement(1);
+select * from fremoveagreement(1);
  fremoveagreement 
 ------------------
                 3
 (1 row)
 
-select id,qtt from tquality;
- id | qtt 
-----+-----
-  1 |   0
-  2 |   0
-  3 |   0
-(3 rows)
-
-select finsertorder('u',fq('b'),2000,1000,fq('a'));
- finsertorder 
---------------
-(0 rows)
-
-select finsertorder('v',fq('c'),2000,1000,fq('b'));
- finsertorder 
---------------
-(0 rows)
-
-select fgetquote('w',fq('a'),fq('c'));
-  fgetquote   
---------------
- (3,500,2000)
+select * from finsertorder('u',fq('b'),2000,1000,fq('a'));
+ id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows | created | removed 
+----+-----+----+----------+----+----------+--------+---------+-------+---------+---------
+  4 |   1 |  2 |     1000 |  1 |     2000 |      0 |       0 | {}    |         | 
 (1 row)
 
-select finsertorder('w',fq('a'),500,2000,fq('c'));
- finsertorder 
---------------
- (1-6,3,4)
+select * from finsertorder('v',fq('c'),2000,1000,fq('b'));
+ id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows | created | removed 
+----+-----+----+----------+----+----------+--------+---------+-------+---------+---------
+  5 |   2 |  1 |     1000 |  3 |     2000 |      0 |       0 | {}    |         | 
+(1 row)
+
+select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fgetquote('w',fq('a'),500,2000,fq('c'));
+ id | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                                              flows                                               
+----+----+----------+----+----------+--------+---------+--------------------------------------------------------------------------------------------------
+  2 |  3 |     2000 |  2 |      500 |   2000 |     500 | {"[(4, 1, 2, 1000, 1, 2000, 2000),(5, 2, 1, 1000, 3, 2000, 2000),(0, 3, 3, 2000, 2, 500, 500)]"}
+(1 row)
+
+select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fexecquote('w',2);
+ id | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                                              flows                                               
+----+----+----------+----+----------+--------+---------+--------------------------------------------------------------------------------------------------
+  6 |  3 |     2000 |  2 |      500 |   2000 |     500 | {"[(4, 1, 2, 1000, 1, 2000, 2000),(5, 2, 1, 1000, 3, 2000, 2000),(6, 3, 3, 2000, 2, 500, 500)]"}
 (1 row)
 
 select id,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt;
@@ -101,25 +100,32 @@ select id,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt;
   4 |  3 | 1-6    |   4 | w        | a  |  500 | u
 (3 rows)
 
-select fremoveagreement(4);
+select * from fremoveagreement(4);
  fremoveagreement 
 ------------------
                 3
 (1 row)
 
-select fgetquote('w',fq('a'),fq('b'));
-  fgetquote   
---------------
- (2,500,1000)
+select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fgetquote('w',fq('a'),500,1000,fq('b'));
+ id | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                               flows                               
+----+----+----------+----+----------+--------+---------+-------------------------------------------------------------------
+  3 |  1 |     1000 |  2 |      500 |   1000 |     500 | {"[(4, 1, 2, 1000, 1, 2000, 1000),(0, 3, 1, 1000, 2, 500, 500)]"}
 (1 row)
 
-select finsertorder('w',fq('a'),500,1000,fq('b'));
- finsertorder 
---------------
- (1-7,2,7)
+select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fexecquote('w',3);
+ id | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                               flows                               
+----+----+----------+----+----------+--------+---------+-------------------------------------------------------------------
+  7 |  1 |     1000 |  2 |      500 |   1000 |     500 | {"[(4, 1, 2, 1000, 1, 2000, 1000),(7, 3, 1, 1000, 2, 500, 500)]"}
 (1 row)
 
-select fremoveagreement(7);
+select id,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt;
+ id | nb | oruuid | grp | provider | fs | qtt  | receiver 
+----+----+--------+-----+----------+----+------+----------
+  8 |  2 | 1-4    |   7 | u        | b  | 1000 | w
+  7 |  2 | 1-7    |   7 | w        | a  |  500 | u
+(2 rows)
+
+select * from fremoveagreement(7);
  fremoveagreement 
 ------------------
                 2
@@ -129,25 +135,32 @@ select id,qtt from tquality;
  id | qtt 
 ----+-----
   3 |   0
-  2 |   0
   1 |   0
+  2 |   0
 (3 rows)
 
 select * from fgetstats(true);
+            _name            | cnt 
+-----------------------------+-----
+ number of qualities         |   3
+ number of owners            |   3
+ number of quotes            |   0
+ number of orders            |   7
+ number of movements         |   8
+ number of quotes removed    |   3
+ number of orders removed    |   7
+ number of movements removed |   8
+ number of agreements        |   3
+ number of orders rejected   |   0
+ agreements with 2 partners  |   1
+ agreements with 3 partners  |   2
+(12 rows)
+
+select * from fgeterrs(true);
             _name             | cnt 
 ------------------------------+-----
- number of qualities          |   3
- number of owners             |   3
- number of orders             |   7
- number of movements          |   8
- number of orders removed     |   7
- number of movements removed  |   8
- number of agreements         |   3
- number of orders rejected    |   0
  balance                      |   0
  errors on quantities in mvts |   0
  errors on agreements in mvts |   0
- agreements with 2 partners   |   1
- agreements with 3 partners   |   2
-(13 rows)
+(3 rows)
 

@@ -242,7 +242,7 @@ END;
 $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	fget_quality(_quality_name text, insert bool) RETURNS int AS $$
+	fgetquality(_quality_name text, insert bool) RETURNS int AS $$
 DECLARE 
 	_idd int;
 	_qlt	tquality%rowtype;
@@ -285,58 +285,35 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 /* We know that _idd <=> session_user, since _idd := fverifyquota() TODO*/
 CREATE FUNCTION 
-	fupdate_quality(_idd int,_quality_name text,_qtt int8) 
-	RETURNS int AS $$
+	fupdate_quality(_qid int,_qtt int8) 
+	RETURNS void AS $$
 DECLARE 
 	_qp tquality%rowtype;
 	_q text[];
 	_id int;
 	_qtta int8;
 BEGIN
-	_q := fexplodequality(_quality_name);
-	IF ((_q[1] IS NOT NULL) AND (_q[1] != session_user)) THEN
-		RAISE NOTICE 'depository % of quality is not the user %',_q[1],session_user;
-		RAISE EXCEPTION USING ERRCODE='YU001';
+
+	UPDATE tquality SET qtt = qtt + _qtt 
+		WHERE id = _qid RETURNING qtt INTO _qtta;
+
+	IF NOT FOUND THEN
+		RAISE EXCEPTION USING ERRCODE='YA004';
+	END IF;	
+		
+	IF (_qtt > 0)   THEN 
+		IF (_qtta < _qtt) THEN 
+			RAISE WARNING 'Quality "%" owerflows',_quality_name;
+			RAISE EXCEPTION USING ERRCODE='YA004';
+		END IF; 
+	ELSIF (_qtt < 0) THEN
+		IF (_qtta > _qtt) THEN 
+			RAISE WARNING 'Quality "%" underflows',_quality_name;
+			RAISE EXCEPTION USING ERRCODE='YA004';
+		END IF;			
 	END IF;
 	
-	LOOP
-		UPDATE tquality SET id = id,qtt = qtt + _qtt 
-			WHERE name = _quality_name RETURNING id,qtt INTO _id,_qtta;
-
-		IF FOUND THEN
-		
-			IF ((_qtt > 0) AND (_qtta < _qtt))   THEN 
-				RAISE WARNING 'Quality "%" owerflows',_quality_name;
-			
-			-- check constraint tquality.qtt >=0 
-			ELSE
-				RETURN _id;
-			END IF;
-			
-			RAISE EXCEPTION USING ERRCODE='YA004';
-		END IF;
-		
-		BEGIN
-			_q := fexplodequality(_quality_name);
-			IF(_q[1] IS NOT NULL) THEN 	
-				-- _CHECK_QUALITY_OWNERSHIP =1
-				SELECT id INTO _idd FROM tuser WHERE name=_q[1];
-				IF(NOT FOUND) THEN -- user should exists
-					RAISE NOTICE 'The depository "%" is undefined',_q[1] ;
-					RAISE EXCEPTION USING ERRCODE='YU001';
-				END IF;
-			ELSE
-				_idd := NULL;
-			END IF;
-		
-			INSERT INTO tquality (name,idd,depository,qtt) VALUES (_quality_name,_idd,_q[1],_qtt)
-				RETURNING * INTO _qp;
-			RETURN _qp.id;
-			
-		EXCEPTION WHEN unique_violation THEN
-			--
-		END;
-	END LOOP;
+	RETURN;
 END;
 $$ LANGUAGE PLPGSQL;
 	
@@ -422,7 +399,8 @@ create table torder (
     own int NOT NULL, 
 	
     nr int NOT NULL ,
-    qtt_requ dquantity NOT NULL,
+    qtt_requ int8 NOT NULL,
+    -- 0 allowed to pass lastignore flag
     
     np int NOT NULL ,
     qtt_prov dquantity NOT NULL,
@@ -434,7 +412,7 @@ create table torder (
     updated timestamp default NULL,    
     PRIMARY KEY (id),
     CHECK(	
-    	qtt >=0 AND qtt_prov >= qtt
+    	qtt >=0 AND qtt_prov >= qtt AND qtt_requ >=0
     ),
     CONSTRAINT ctorder_own FOREIGN KEY (own) references towner(id),
     CONSTRAINT ctorder_np FOREIGN KEY (np) references tquality(id),
@@ -489,6 +467,7 @@ create table torderremoved (
     np int not NULL ,
     qtt_prov dquantity NOT NULL,
     qtt int8 NOT NULL, -- != 0 for order finvalidate_treltried
+    start int8, 
     created timestamp not NULL,
     updated timestamp default NULL,
     PRIMARY KEY (uuid)
@@ -648,7 +627,7 @@ CREATE FUNCTION  fremoveorder_int(_id int) RETURNS void AS $$
 BEGIN		
 	WITH a AS (DELETE FROM torder o WHERE o.id=_id RETURNING *) 
 	INSERT INTO torderremoved 
-		SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,created,statement_timestamp() 
+		SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt,start,created,statement_timestamp() 
 	FROM a;					
 END;
 $$ LANGUAGE PLPGSQL;
@@ -885,6 +864,7 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- tquote
 --------------------------------------------------------------------------------
+-- id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows
 CREATE TABLE tquote (
     id serial UNIQUE not NULL,
     
@@ -905,7 +885,7 @@ CREATE TABLE tquote (
 SELECT _grant_read('tquote');
 -- SELECT _reference_time('tquote');
 -- TODO truncate at market opening
-
+-- id,own,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows,created,removed
 CREATE TABLE tquoteremoved (
     id int NOT NULL,
     
@@ -973,19 +953,13 @@ BEGIN
 	-- if does not exists, inserted
 	_pivot.own := fgetowner(_owner,true); 
 	 
-	IF(_qttrequired = 0) THEN -- lastignore == true
-		_pivot.qtt_requ := 0; -- omega is undefined
-		_pivot.qtt_prov := 0; 
-		_pivot.qtt := _qttprovided;
-	ELSE
-		_pivot.qtt_requ := _qttrequired; 
-		_pivot.qtt_prov := _qttprovided; 
-		_pivot.qtt := _qttprovided;
-	END IF;
+	_pivot.qtt_requ := _qttrequired; -- if _qttrequired==0 then lastignore == true
+	_pivot.qtt_prov := _qttprovided; 
+	_pivot.qtt := _qttprovided;
 	
 	_r.id 		:= 0;
 	_r.own 		:= _pivot.own;
-	_r.flows 	:= ARRAY[];
+	_r.flows 	:= ARRAY[]::yflow[];
 	_r.nr 		:= _pivot.nr;
 	_r.qtt_requ 	:= _pivot.qtt_requ;
 	_r.np 		:= _pivot.np;
@@ -1017,6 +991,7 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fgetquote(text,text,int8,int8,text) TO client_opened_role;
+
 --------------------------------------------------------------------------------
 -- 
 --------------------------------------------------------------------------------
@@ -1029,9 +1004,6 @@ CREATE FUNCTION
 DECLARE
 	_wid		int;
 	_o		torder%rowtype;
-	_start		int8;
-	_idpivot	int;
-	_yuuid		text;
 	_idd		int;
 	_expected	tquote%rowtype;
 	_q		tquote%rowtype;
@@ -1057,23 +1029,17 @@ BEGIN
 		END IF;
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
-	
+		
 	-- _q.qtt_requ != 0		
 	_qtt_requ := _q.qtt_requ;
 	_qtt_prov := _q.qtt_prov;
-
-			
-	INSERT INTO torder (uuid,qtt,nr,np,qtt_prov,qtt_requ,own,created,updated) 
-		VALUES ('',_qtt_prov,_q.nr,_q.np,_qtt_prov,_qtt_requ,_q.own,statement_timestamp(),NULL)
-		RETURNING id INTO _idpivot;
-	_yuuid := fgetuuid(_idpivot);
-	_start := fget_treltried(_q.np,_q.nr);
-	UPDATE torder SET uuid = _yuuid,start = _start WHERE id=_idpivot RETURNING * INTO _o;
+	
+	_o := finsert_toint(_qtt_prov,_q.nr,_q.np,_qtt_requ,_q.own);
 	
 	_q.id      := _o.id;
 	_q.qtt_in  := 0;
 	_q.qtt_out := 0;
-	_q.flows   := ARRAY[];
+	_q.flows   := ARRAY[]::yflow[];
 	
 	FOR _ypatmax IN SELECT _patmax  FROM finsertflows(_o) LOOP
 		_first_mvt := fexecute_flow(_ypatmax);
@@ -1112,11 +1078,117 @@ CREATE FUNCTION  fremovequote_int(_idquote int) RETURNS void AS $$
 BEGIN		
 	WITH a AS (DELETE FROM tquote o WHERE o.id=_idquote RETURNING *) 
 	INSERT INTO tquoteremoved 
-		SELECT id,own,qtt_prov,qtt_requ,flows,created,statement_timestamp() 
+		SELECT id,own,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows,created,statement_timestamp() 
 	FROM a;					
 END;
 $$ LANGUAGE PLPGSQL;
 
+CREATE FUNCTION  finsert_toint(_qtt_prov int8,_nr int,_np int,_qtt_requ int8,_own int8) RETURNS torder AS $$
+DECLARE
+	_o		 torder%rowtype;
+	_id		 int;
+	_uuid		 text;
+	_start		 int8;
+BEGIN	
+	perform fupdate_quality(_np,_qtt_prov);	
+		
+	INSERT INTO torder (uuid,qtt,nr,np,qtt_prov,qtt_requ,own,created,updated) 
+		VALUES ('',_qtt_prov,_nr,_np,_qtt_prov,_qtt_requ,_own,statement_timestamp(),NULL)
+		RETURNING id INTO _id;
+	
+	_uuid := fgetuuid(_id);
+	_start := fget_treltried(_np,_nr);
+	
+	UPDATE torder SET uuid = _uuid,start = _start WHERE id=_id RETURNING * INTO _o;	
+	
+	RETURN _o;					
+END;
+$$ LANGUAGE PLPGSQL;
+
+
+--------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- 
+--------------------------------------------------------------------------------
+-- torder id,uuid,yorder,created,updated
+-- yorder: qtt,nr,np,qtt_prov,qtt_requ,own
+CREATE FUNCTION 
+	finsertorder(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text)
+	RETURNS tquote AS $$
+	
+DECLARE
+	_wid		int;
+	_o		torder%rowtype;
+	_idd		int;
+	_expected	tquote%rowtype;
+	_q		tquote%rowtype;
+	_pivot		torder%rowtype;
+	_qua		text[];
+
+	_flows		yflow[];
+	_ypatmax	yflow;
+	_res	        int8[];
+	_first_mvt	int;
+BEGIN
+	
+	_idd := fverifyquota();
+	_q.own := fgetowner(_owner,true); -- inserted if not found
+	
+	-- quantities must be >0
+	IF(_qttprovided<=0 OR _qttrequired<=0) THEN
+		RAISE NOTICE 'quantities incorrect: %<=0 or %<=0', _qttprovided,_qttrequired;
+		RAISE EXCEPTION USING ERRCODE='YU001';
+	END IF;
+	
+	_qua := fexplodequality(_qualityprovided);
+	IF ((_qua[1] IS NOT NULL) AND (_qua[1] != session_user)) THEN
+		RAISE NOTICE 'depository % of quality is not the user %',_qua[1],session_user;
+		RAISE EXCEPTION USING ERRCODE='YU001';
+	END IF;
+	
+	-- qualities are red and inserted if necessary
+	_q.np := fgetquality(_qualityprovided,true); 
+	_q.nr := fgetquality(_qualityrequired,true); 
+	-- _q.qtt_requ != 0
+		
+	_q.qtt_requ := _qttrequired;
+	_q.qtt_prov := _qttprovided;
+	
+	_o := finsert_toint(_qttprovided,_q.nr,_q.np,_qttrequired,_q.own);
+	
+	_q.id      := _o.id;
+	_q.qtt_in  := 0;
+	_q.qtt_out := 0;
+	_q.flows   := ARRAY[]::yflow[];
+	
+	FOR _ypatmax IN SELECT _patmax  FROM finsertflows(_o) LOOP
+		_first_mvt := fexecute_flow(_ypatmax);
+		_res := yflow_qtts(_ypatmax);
+		_q.qtt_in  := _q.qtt_in  + _res[1];
+		_q.qtt_out := _q.qtt_out + _res[2];
+		_q.flows := array_append(_q.flows,_ypatmax);
+	END LOOP;
+	
+	
+	IF (	(_q.qtt_in != 0) AND 
+		((_q.qtt_out::double precision)		/(_q.qtt_in::double precision)) > 
+		((_qttprovided::double precision)	/(_qttrequired::double precision))
+	) THEN
+		RAISE NOTICE 'Omega of the flows obtained is not limited by the order';
+		RAISE EXCEPTION USING ERRCODE='YA003';
+	END IF;
+		
+	PERFORM finvalidate_treltried();
+	
+	RETURN _q;
+	
+EXCEPTION WHEN SQLSTATE 'YU001' THEN 
+	RAISE INFO 'Abort';
+	RETURN _q; 
+
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  finsertorder(text,text,int8,int8,text) TO client_opened_role;
 
 --------------------------------------------------------------------------------
 /*
@@ -1252,19 +1324,23 @@ BEGIN
 		EXECUTE 'ALTER ROLE ' || _name || ' LOGIN CONNECTION LIMIT 1';
 	ELSE
 		IF(_super) THEN
-			RAISE INFO 'The role % is a super user.',_name;
+			-- RAISE INFO 'The role % is a super user.',_name;
+			RAISE INFO 'The role is a super user.';
 		ELSE
-			RAISE WARNING 'The user is not found but a role % already exists - unchanged.',_name;
+			-- RAISE WARNING 'The user is not found but a role % already exists - unchanged.',_name;
+			RAISE WARNING 'The user is not found but the role already exists - unchanged.';
 			RAISE EXCEPTION USING ERRCODE='YU001';				
 		END IF;
 	END IF;
 	
 	SELECT market_status INTO _market_status FROM vmarket;
 	IF(_market_status = 'OPENED') THEN 
-		RAISE INFO 'The market is opened for this user %', _name;
+		-- RAISE INFO 'The market is opened for this user %', _name;
+		RAISE INFO 'The market is opened for this user';
 		EXECUTE 'GRANT client_opened_role TO ' || _name;
 	ELSIF(_market_status = 'STOPPING') THEN
-		RAISE INFO 'The market is stopping for this user %', _name;
+		-- RAISE INFO 'The market is stopping for this user %', _name;
+		RAISE INFO 'The market is stopping for this user ';
 		EXECUTE 'GRANT client_stopping_role TO ' || _name;	
 	END IF;
 	
@@ -1349,7 +1425,7 @@ BEGIN
 			RAISE EXCEPTION USING ERRCODE='YA001';
 		END IF;	
 					
-	ELSE -- _action='starting'
+	ELSE -- _action='start'
 		_res := frenumbertables(true);
 		IF NOT _res THEN
 			RAISE EXCEPTION USING ERRCODE='YA001';
@@ -1361,10 +1437,11 @@ BEGIN
 	RETURN _action;
 	 
 END;
-$$ LANGUAGE PLPGSQL;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION fchangestatemarket(bool) TO admin;
 
 --------------------------------------------------------------------------------
-CREATE FUNCTION ftruncatemarket() RETURNS void AS $$
+CREATE FUNCTION fresetmarket_int() RETURNS void AS $$
 DECLARE
 	_prev_status text;
 BEGIN
@@ -1376,13 +1453,33 @@ BEGIN
 	
 	TRUNCATE tmvt;
 	TRUNCATE torder;
-	TRUNCATE towner;
-	TRUNCATE tquality;
-	TRUNCATE tuser;
+	TRUNCATE towner CASCADE;
+	TRUNCATE tquality CASCADE;
+	TRUNCATE tuser CASCADE;
 	PERFORM setval('tuser_id_seq',1,false);
 	RETURN;
 END;
+$$ LANGUAGE PLPGSQL;
+
+--------------------------------------------------------------------------------
+CREATE FUNCTION fresetmarket() RETURNS void AS $$
+DECLARE
+	_prev_status 	text;
+	_action	 	ymarketaction;
+BEGIN
+	LOOP
+		_action := fchangestatemarket(true); 
+		IF(_action = 'stop') THEN
+			perform fresetmarket_int();
+			CONTINUE WHEN true;
+		END IF;
+		EXIT WHEN _action = 'open';
+	END LOOP;
+	RAISE INFO 'The market is reset';
+	RETURN;
+END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION fresetmarket() TO admin;
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION frenumbertables(exec bool) RETURNS bool AS $$
@@ -1620,13 +1717,21 @@ BEGIN
 	_name := 'number of owners';
 	select count(*) INTO cnt FROM towner;
 	RETURN NEXT;
-		
+	
+	_name := 'number of quotes';
+	select count(*) INTO cnt FROM tquote;
+	RETURN NEXT;
+			
 	_name := 'number of orders';
 	select count(*) INTO cnt FROM vorderverif;
 	RETURN NEXT;
 	
 	_name := 'number of movements';
 	select count(*) INTO cnt FROM vmvtverif;
+	RETURN NEXT;
+	
+	_name := 'number of quotes removed';
+	select count(*) INTO cnt FROM tquoteremoved;
 	RETURN NEXT;
 
 	_name := 'number of orders removed';
@@ -1658,7 +1763,7 @@ BEGIN
 
 	RETURN;
 END;
-$$ LANGUAGE PLPGSQL;
+$$ LANGUAGE PLPGSQL  SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fgetstats(bool) TO admin;
 
 --------------------------------------------------------------------------------
@@ -1683,7 +1788,7 @@ BEGIN
 	END IF;
 	RETURN;
 END;
-$$ LANGUAGE PLPGSQL;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fgeterrs(bool) TO admin;
 --------------------------------------------------------------------------------
 -- number of partners for the 100 last movements
