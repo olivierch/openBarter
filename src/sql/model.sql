@@ -1359,54 +1359,59 @@ create table tmarket (
 alter sequence tmarket_id_seq owned by tmarket.id;
 SELECT _grant_read('tmarket');
 --------------------------------------------------------------------------------
+CREATE TYPE ymarketaction AS ENUM ('init', 'open','stop','close','start');
+CREATE TYPE ymarketstatus AS ENUM ('INITIALIZING','OPENED', 'STOPPING','CLOSED','STARTING');
 CREATE VIEW vmarket AS SELECT
  	(id+4)/4 as market_session,
- 	CASE 	WHEN (id-1)%4=0 THEN 'OPENED' 	
- 		WHEN (id-1)%4=1 THEN 'STOPPING'
- 		WHEN (id-1)%4=2 THEN 'CLOSED'
- 		WHEN (id-1)%4=3 THEN 'STARTING'
+ 	CASE 	WHEN (id-1)%4=0 THEN 'OPENED'::ymarketstatus 	
+ 		WHEN (id-1)%4=1 THEN 'STOPPING'::ymarketstatus
+ 		WHEN (id-1)%4=2 THEN 'CLOSED'::ymarketstatus
+ 		WHEN (id-1)%4=3 THEN 'STARTING'::ymarketstatus
 	END AS market_status,
  	created
 	FROM tmarket ORDER BY ID DESC LIMIT 1; 
 SELECT _grant_read('vmarket');	
-CREATE TYPE ymarketaction AS ENUM ('init', 'open','stop','close','start');
+
 --------------------------------------------------------------------------------
-CREATE FUNCTION fchangestatemarket(_execute bool) RETURNS ymarketaction AS $$
+CREATE FUNCTION fchangestatemarket(_execute bool) RETURNS ymarketstatus AS $$
 DECLARE
 	_cnt int;
 	_hm tmarket%rowtype;
 	_action ymarketaction;
-	_prev_status text;
+	_prev_status ymarketstatus;
 	_res bool;
+	_new_status ymarketstatus;
 BEGIN
 
 	SELECT market_status INTO _prev_status FROM vmarket;
 	IF NOT FOUND THEN 
 		_action := 'init';
 		_prev_status := 'INITIALIZING';
-		RAISE INFO 'market_status %->OPENED',_prev_status;
+		_new_status := 'OPENED';
+		
 	ELSIF (_prev_status = 'STARTING') THEN		
 		_action := 'open';
-		RAISE INFO 'market_status %->OPENED',_prev_status;
+		_new_status := 'OPENED';
 		
 	ELSIF (_prev_status = 'OPENED') THEN
 		_action := 'stop';
-		RAISE INFO 'market_status %->STOPPING',_prev_status;
+		_new_status := 'STOPPING';
 		
 	ELSIF (_prev_status = 'STOPPING') THEN
 		_action := 'close';
-		RAISE INFO 'market_status %->CLOSED',_prev_status;
+		_new_status := 'CLOSED';
 		
 	ELSE -- _prev_status='CLOSED'
 		_action := 'start';
-		RAISE INFO 'market_status %->STARTING',_prev_status;
+		_new_status := 'STARTING';
 		RAISE INFO 'market_session = n->n+1';
 	END IF;
 	
+	RAISE INFO 'market_status %->%',_prev_status,_new_status;
 	IF NOT _execute THEN
 		RAISE INFO 'The next action will be: %',_action;
 		RAISE INFO 'market_status = % is unchanged.',_prev_status;
-		RETURN _action;
+		RETURN _new_status;
 	END IF;
 	
 	IF (_action = 'init' OR _action = 'open') THEN 		
@@ -1434,7 +1439,7 @@ BEGIN
 	END IF;
 	
 	INSERT INTO tmarket (created) VALUES (statement_timestamp()) RETURNING * INTO _hm;
-	RETURN _action;
+	RETURN _new_status;
 	 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
@@ -1443,7 +1448,7 @@ GRANT EXECUTE ON FUNCTION fchangestatemarket(bool) TO admin;
 --------------------------------------------------------------------------------
 CREATE FUNCTION fresetmarket_int() RETURNS void AS $$
 DECLARE
-	_prev_status text;
+	_prev_status ymarketstatus;
 BEGIN
 	SELECT market_status INTO _prev_status FROM vmarket; 
 	IF(_prev_status != 'STOPPING') THEN
@@ -1464,18 +1469,18 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 CREATE FUNCTION fresetmarket() RETURNS void AS $$
 DECLARE
-	_prev_status 	text;
-	_action	 	ymarketaction;
+	_prev_status 	ymarketstatus;
+	_new_status 	ymarketstatus;
 BEGIN
 	LOOP
-		_action := fchangestatemarket(true); 
-		IF(_action = 'stop') THEN
+		_new_status := fchangestatemarket(true); 
+		IF(_new_status = 'STOPPING') THEN
 			perform fresetmarket_int();
 			CONTINUE WHEN true;
 		END IF;
-		EXIT WHEN _action = 'open';
+		EXIT WHEN _new_status = 'OPENED';
 	END LOOP;
-	RAISE INFO 'The market is reset';
+	RAISE INFO 'The market is reset and opened';
 	RETURN;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;

@@ -1,6 +1,7 @@
 reset role;
 
-SELECT ftruncatetables();
+-- SELECT ftruncatetables();
+select fresetmarket();
 
 -- two concurrent paths, (a) is the best
 -- path (b)

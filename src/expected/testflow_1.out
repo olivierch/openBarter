@@ -118,11 +118,11 @@ SET client_min_messages = warning;
  
 (1 row)
 
-psql:sql/model.sql:1998: INFO:  market_status INITIALIZING->OPENED
-psql:sql/model.sql:1998: INFO:  The market is now opened for clients
+psql:sql/model.sql:2003: INFO:  market_status INITIALIZING->OPENED
+psql:sql/model.sql:2003: INFO:  The market is now opened for clients
  fchangestatemarket 
 --------------------
- init
+ OPENED
 (1 row)
 
  RESET client_min_messages;

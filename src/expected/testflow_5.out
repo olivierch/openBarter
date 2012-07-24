@@ -41,24 +41,24 @@ SQL statement "SELECT fresetmarket_int()"
 PL/pgSQL function "fresetmarket" line 9 at PERFORM
 INFO:  market_status STOPPING->CLOSED
 CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
-INFO:  market_status CLOSED->STARTING
-CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
 INFO:  market_session = n->n+1
 CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+INFO:  market_status CLOSED->STARTING
+CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
 INFO:  Run the command:
-CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 59 at assignment
 PL/pgSQL function "fresetmarket" line 7 at assignment
 INFO:  	VACUUM FULL ANALYZE
-CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 59 at assignment
 PL/pgSQL function "fresetmarket" line 7 at assignment
 INFO:  before starting the market
-CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 59 at assignment
 PL/pgSQL function "fresetmarket" line 7 at assignment
 INFO:  market_status STARTING->OPENED
 CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
 INFO:  The market is now opened for clients
 CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
-INFO:  The market is reset
+INFO:  The market is reset and opened
  fresetmarket 
 --------------
  
@@ -183,7 +183,7 @@ INFO:  market_status OPENED->STOPPING
 INFO:  The market is now stopping for clients
  fchangestatemarket 
 --------------------
- stop
+ STOPPING
 (1 row)
 
 -- market is closed
@@ -229,21 +229,21 @@ select * from fchangestatemarket(true);
 INFO:  market_status STOPPING->CLOSED
  fchangestatemarket 
 --------------------
- close
+ CLOSED
 (1 row)
 
 select * from fchangestatemarket(true);
-INFO:  market_status CLOSED->STARTING
 INFO:  market_session = n->n+1
+INFO:  market_status CLOSED->STARTING
 INFO:  Run the command:
-CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 59 at assignment
 INFO:  	VACUUM FULL ANALYZE
-CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 59 at assignment
 INFO:  before starting the market
-CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 59 at assignment
  fchangestatemarket 
 --------------------
- start
+ STARTING
 (1 row)
 
 select * from fchangestatemarket(true);
@@ -251,7 +251,7 @@ INFO:  market_status STARTING->OPENED
 INFO:  The market is now opened for clients
  fchangestatemarket 
 --------------------
- open
+ OPENED
 (1 row)
 
 -- merket is opened
