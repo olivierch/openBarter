@@ -1,129 +1,101 @@
 set role admin;
-select id,sess,action from fclose();
-INFO:  The market is now closed
-INFO:  The function fprepare() is enabled.
-INFO:  It will succeed only if tables tmvt and torder are empty.
- id | sess | action 
-----+------+--------
-  2 |    1 | close
-(1 row)
-
-reset role;
-select ftruncatetables();
+select fresetmarket();
+INFO:  market_status OPENED->STOPPING
+CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+INFO:  The market is now stopping for clients
+CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+NOTICE:  truncate cascades to table "torder"
+CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
+PL/pgSQL function "fresetmarket_int" line 13 at SQL statement
+SQL statement "SELECT fresetmarket_int()"
+PL/pgSQL function "fresetmarket" line 9 at PERFORM
+NOTICE:  truncate cascades to table "tmvt"
+CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
+PL/pgSQL function "fresetmarket_int" line 13 at SQL statement
+SQL statement "SELECT fresetmarket_int()"
+PL/pgSQL function "fresetmarket" line 9 at PERFORM
+NOTICE:  truncate cascades to table "tmvtremoved"
+CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
+PL/pgSQL function "fresetmarket_int" line 13 at SQL statement
+SQL statement "SELECT fresetmarket_int()"
+PL/pgSQL function "fresetmarket" line 9 at PERFORM
 NOTICE:  truncate cascades to table "treltried"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
+PL/pgSQL function "fresetmarket_int" line 14 at SQL statement
+SQL statement "SELECT fresetmarket_int()"
+PL/pgSQL function "fresetmarket" line 9 at PERFORM
 NOTICE:  truncate cascades to table "torder"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
+PL/pgSQL function "fresetmarket_int" line 14 at SQL statement
+SQL statement "SELECT fresetmarket_int()"
+PL/pgSQL function "fresetmarket" line 9 at PERFORM
 NOTICE:  truncate cascades to table "tmvt"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
+PL/pgSQL function "fresetmarket_int" line 14 at SQL statement
+SQL statement "SELECT fresetmarket_int()"
+PL/pgSQL function "fresetmarket" line 9 at PERFORM
 NOTICE:  truncate cascades to table "tmvtremoved"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
-NOTICE:  truncate cascades to table "torder"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "ftruncatetables" line 13 at SQL statement
-NOTICE:  truncate cascades to table "tmvt"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "ftruncatetables" line 13 at SQL statement
-NOTICE:  truncate cascades to table "tmvtremoved"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "ftruncatetables" line 13 at SQL statement
-INFO:  The command: VACUUM FULL ANALYZE is recommended
-INFO:  All market tables have been truncated
- ftruncatetables 
------------------
+PL/pgSQL function "fresetmarket_int" line 14 at SQL statement
+SQL statement "SELECT fresetmarket_int()"
+PL/pgSQL function "fresetmarket" line 9 at PERFORM
+INFO:  market_status STOPPING->CLOSED
+CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+INFO:  market_status CLOSED->STARTING
+CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+INFO:  market_session = n->n+1
+CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+INFO:  Run the command:
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+PL/pgSQL function "fresetmarket" line 7 at assignment
+INFO:  	VACUUM FULL ANALYZE
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+PL/pgSQL function "fresetmarket" line 7 at assignment
+INFO:  before starting the market
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+PL/pgSQL function "fresetmarket" line 7 at assignment
+INFO:  market_status STARTING->OPENED
+CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+INFO:  The market is now opened for clients
+CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+INFO:  The market is reset
+ fresetmarket 
+--------------
  
-(1 row)
-
-set role admin;
-select id,sess,action from fprepare();
-INFO:  fopen() is enabled
-INFO:  All market tables will be truncated when you will execute it
- id | sess | action  
-----+------+---------
-  3 |    1 | prepare
-(1 row)
-
--- market is opened
-select id,sess,action from fopen();
-NOTICE:  truncate cascades to table "treltried"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "torder"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "tmvt"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "tmvtremoved"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "torder"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "ftruncatetables" line 13 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "tmvt"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "ftruncatetables" line 13 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "tmvtremoved"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "ftruncatetables" line 13 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-INFO:  The command: VACUUM FULL ANALYZE is recommended
-CONTEXT:  SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-INFO:  All market tables have been truncated
-CONTEXT:  SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-INFO:  fclose() is enabled
-INFO:  The market is now opened
- id | sess | action 
-----+------+--------
-  4 |    2 | open
 (1 row)
 
 set role client;
 select finsertorder('u','b',1000,1000,'a');
 INFO:  owner u created
-CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
- finsertorder 
---------------
-(0 rows)
+CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
+PL/pgSQL function "finsertorder" line 19 at assignment
+         finsertorder         
+------------------------------
+ (1,1,2,1000,1,1000,0,0,{},,)
+(1 row)
 
 select finsertorder('v','c',1000,1000,'b');
 INFO:  owner v created
-CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
- finsertorder 
---------------
-(0 rows)
+CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
+PL/pgSQL function "finsertorder" line 19 at assignment
+         finsertorder         
+------------------------------
+ (2,2,1,1000,3,1000,0,0,{},,)
+(1 row)
 
-select fgetquote('w','a','c');
-   fgetquote   
----------------
- (3,1000,1000)
+select qtt_in,qtt_out from fgetquote('w','a',1000,0,'c');
+INFO:  owner w created
+CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
+PL/pgSQL function "fgetquote" line 36 at assignment
+ qtt_in | qtt_out 
+--------+---------
+   1000 |    1000
 (1 row)
 
 select finsertorder('w','a',1000,1000,'c');
-INFO:  owner w created
-CONTEXT:  PL/pgSQL function "finsertorder" line 35 at assignment
- finsertorder 
---------------
- (2-3,3,1)
+                                                              finsertorder                                                              
+----------------------------------------------------------------------------------------------------------------------------------------
+ (3,3,3,1000,2,1000,1000,1000,"{""[(1, 1, 2, 1000, 1, 1000, 1000),(2, 2, 1, 1000, 3, 1000, 1000),(3, 3, 3, 1000, 2, 1000, 1000)]""}",,)
 (1 row)
 
 select id,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
@@ -149,25 +121,34 @@ select id,qtt from tquality;
 (3 rows)
 
 select finsertorder('u','b',2000,1000,'a');
- finsertorder 
---------------
-(0 rows)
-
-select finsertorder('v','c',2000,1000,'b');
- finsertorder 
---------------
-(0 rows)
-
-select fgetquote('w','a','c');
-  fgetquote   
---------------
- (3,500,2000)
+         finsertorder         
+------------------------------
+ (4,1,2,1000,1,2000,0,0,{},,)
 (1 row)
 
-select finsertorder('w','a',500,2000,'c');
- finsertorder 
---------------
- (2-6,3,4)
+select finsertorder('v','c',2000,1000,'b');
+         finsertorder         
+------------------------------
+ (5,2,1,1000,3,2000,0,0,{},,)
+(1 row)
+
+select  qtt_in,qtt_out from fgetquote('w','a',500,0,'c');
+ qtt_in | qtt_out 
+--------+---------
+   2000 |     500
+(1 row)
+
+--select finsertorder('w','a',500,2000,'c');
+select qtt_in,qtt_out from fgetquote('w','a',500,2000,'c');
+ qtt_in | qtt_out 
+--------+---------
+   2000 |     500
+(1 row)
+
+select qtt_in,qtt_out from fexecquote('w',1);
+ qtt_in | qtt_out 
+--------+---------
+   2000 |     500
 (1 row)
 
 select id,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
@@ -184,29 +165,28 @@ select fremoveagreement(4);
                 3
 (1 row)
 
-select fgetquote('w','a','b');
-  fgetquote   
---------------
- (2,500,1000)
+select fgetquote('w','a',500,0,'b');
+                                           fgetquote                                           
+-----------------------------------------------------------------------------------------------
+ (0,3,1,0,2,500,1000,500,"{""[(4, 1, 2, 1000, 1, 2000, 1000),(0, 3, 1, 0, 2, 500, 500)]""}",,)
 (1 row)
 
 select finsertorder('w','a',500,1000,'b');
- finsertorder 
---------------
- (2-7,2,7)
+                                            finsertorder                                             
+-----------------------------------------------------------------------------------------------------
+ (7,3,1,1000,2,500,1000,500,"{""[(4, 1, 2, 1000, 1, 2000, 1000),(7, 3, 1, 1000, 2, 500, 500)]""}",,)
 (1 row)
 
 set role admin;
--- market is closed
-select id,sess,action from fclose();
-INFO:  The market is now closed
-INFO:  The function fprepare() is enabled.
-INFO:  It will succeed only if tables tmvt and torder are empty.
- id | sess | action 
-----+------+--------
-  5 |    2 | close
+select * from fchangestatemarket(true);
+INFO:  market_status OPENED->STOPPING
+INFO:  The market is now stopping for clients
+ fchangestatemarket 
+--------------------
+ stop
 (1 row)
 
+-- market is closed
 set role client;
 select fremoveagreement(7);
  fremoveagreement 
@@ -219,84 +199,74 @@ select id,qtt from tquality;
  id | qtt 
 ----+-----
   3 |   0
-  2 |   0
   1 |   0
+  2 |   0
 (3 rows)
 
 select * from fgetstats(true);
-            _name             | cnt 
-------------------------------+-----
- number of qualities          |   3
- number of owners             |   3
- number of orders             |   7
- number of movements          |   8
- number of orders removed     |   7
- number of movements removed  |   8
- number of agreements         |   3
- number of orders rejected    |   0
- balance                      |   0
- errors on quantities in mvts |   0
- errors on agreements in mvts |   0
- agreements with 2 partners   |   1
- agreements with 3 partners   |   2
-(13 rows)
+            _name            | cnt 
+-----------------------------+-----
+ number of qualities         |   3
+ number of owners            |   3
+ number of quotes            |   0
+ number of orders            |   7
+ number of movements         |   8
+ number of quotes removed    |   1
+ number of orders removed    |   7
+ number of movements removed |   8
+ number of agreements        |   3
+ number of orders rejected   |   0
+ agreements with 2 partners  |   1
+ agreements with 3 partners  |   2
+(12 rows)
 
-select id,sess,action from fprepare();
-INFO:  fopen() is enabled
-INFO:  All market tables will be truncated when you will execute it
- id | sess | action  
-----+------+---------
-  6 |    2 | prepare
+select * from fgeterrs(true) where cnt != 0;
+ _name | cnt 
+-------+-----
+(0 rows)
+
+select * from fchangestatemarket(true);
+INFO:  market_status STOPPING->CLOSED
+ fchangestatemarket 
+--------------------
+ close
 (1 row)
 
-select id,sess,action from fopen();
-NOTICE:  truncate cascades to table "treltried"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "torder"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "tmvt"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "tmvtremoved"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "ftruncatetables" line 11 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "torder"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "ftruncatetables" line 13 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "tmvt"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "ftruncatetables" line 13 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-NOTICE:  truncate cascades to table "tmvtremoved"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "ftruncatetables" line 13 at SQL statement
-SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-INFO:  The command: VACUUM FULL ANALYZE is recommended
-CONTEXT:  SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-INFO:  All market tables have been truncated
-CONTEXT:  SQL statement "SELECT ftruncatetables()"
-PL/pgSQL function "fopen" line 7 at PERFORM
-INFO:  fclose() is enabled
-INFO:  The market is now opened
- id | sess | action 
-----+------+--------
-  7 |    3 | open
+select * from fchangestatemarket(true);
+INFO:  market_status CLOSED->STARTING
+INFO:  market_session = n->n+1
+INFO:  Run the command:
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+INFO:  	VACUUM FULL ANALYZE
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+INFO:  before starting the market
+CONTEXT:  PL/pgSQL function "fchangestatemarket" line 56 at assignment
+ fchangestatemarket 
+--------------------
+ start
 (1 row)
 
--- select id,qtt from tquality;
--- select * from fgetstats(true);
+select * from fchangestatemarket(true);
+INFO:  market_status STARTING->OPENED
+INFO:  The market is now opened for clients
+ fchangestatemarket 
+--------------------
+ open
+(1 row)
+
+-- merket is opened
+select * from fgetstats(true);
+            _name            | cnt 
+-----------------------------+-----
+ number of qualities         |   0
+ number of owners            |   0
+ number of quotes            |   0
+ number of orders            |   0
+ number of movements         |   0
+ number of quotes removed    |   0
+ number of orders removed    |   0
+ number of movements removed |   0
+ number of agreements        |   0
+ number of orders rejected   |   0
+(10 rows)
+

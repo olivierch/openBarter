@@ -902,7 +902,7 @@ CREATE TABLE tquoteremoved (
     created timestamp,
     removed timestamp
 );
-
+SELECT _grant_read('tquoteremoved');
 --------------------------------------------------------------------------------
 -- (id,own,qtt_in,qtt_out,flows) = fgetquote(owner,qltprovided,qttprovided,qttrequired,qltprovided)
 /* if qttrequired == 0, 
@@ -1455,8 +1455,8 @@ BEGIN
 	TRUNCATE torder;
 	TRUNCATE towner CASCADE;
 	TRUNCATE tquality CASCADE;
-	TRUNCATE tuser CASCADE;
-	PERFORM setval('tuser_id_seq',1,false);
+	-- TRUNCATE tuser CASCADE;
+	-- PERFORM setval('tuser_id_seq',1,false);
 	RETURN;
 END;
 $$ LANGUAGE PLPGSQL;
