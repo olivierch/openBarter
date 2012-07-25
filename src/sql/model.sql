@@ -991,6 +991,105 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fgetquote(text,text,int8,int8,text) TO client_opened_role;
+--------------------------------------------------------------------------------
+CREATE TYPE yresprequote AS (
+    own int,
+    nr int,
+    np int,
+    qtt_prov int8,
+    
+    qtt_in_min int8,
+    qtt_out_min int8,
+    
+    qtt_in_max int8,
+    qtt_out_max int8,
+    
+    qtt_in_sum int8,
+    qtt_out_sum int8,
+        
+    flows yflow[]
+);
+--------------------------------------------------------------------------------
+CREATE FUNCTION 
+	fgetprequote(_owner text,_qualityprovided text,_qttprovided int8,_qualityrequired text) 
+	RETURNS yresprequote AS $$
+	
+DECLARE
+	_pivot 		 torder%rowtype;
+	_ypatmax	 yflow;
+	_flows		 yflow[];
+	_res	         int8[];
+	_idd		 int;
+	_q		 text[];
+	_r		 yresprequote;
+	_om_min		double precision;
+	_om_max		double precision;
+	_om		double precision;
+BEGIN
+	_idd := fverifyquota();
+	
+	-- quantity must be >0
+	IF(_qttprovided<=0) THEN
+		RAISE NOTICE 'quantities incorrect: %<=0', _qttprovided;
+		RAISE EXCEPTION USING ERRCODE='YU001';
+	END IF;
+	
+	_q := fexplodequality(_qualityprovided);
+	IF ((_q[1] IS NOT NULL) AND (_q[1] != session_user)) THEN
+		RAISE NOTICE 'depository % of quality is not the user %',_q[1],session_user;
+		RAISE EXCEPTION USING ERRCODE='YU001';
+	END IF;
+	
+	-- qualities are red and inserted if necessary
+	_pivot.np := fgetquality(_qualityprovided,true); 
+	_pivot.nr := fgetquality(_qualityrequired,true); 
+	_pivot.id  := 0; 
+	
+	-- if does not exists, inserted
+	_pivot.own := fgetowner(_owner,true); 
+	 
+	_pivot.qtt_requ := 0; -- lastignore == true
+	_pivot.qtt_prov := _qttprovided; 
+	_pivot.qtt := _qttprovided;
+	
+	_r.own 		:= _pivot.own;
+	_r.flows 	:= ARRAY[]::yflow[];
+	_r.nr 		:= _pivot.nr;
+	_r.np 		:= _pivot.np;
+	_r.qtt_prov 	:= _pivot.qtt_prov;
+	
+	_r.qtt_in_min := 0;	_r.qtt_in_max := 0; 
+	_r.qtt_out_min := 0;	_r.qtt_out_max := 0;
+	_om_min := 0;		_om_max := 0;
+	
+	_r.qtt_in_sum := 0;
+	_r.qtt_out_sum := 0;
+	
+	FOR _ypatmax IN SELECT _patmax  FROM finsertflows(_pivot) LOOP
+		_r.flows := array_append(_r.flows,_ypatmax);
+		_res := yflow_qtts(_ypatmax); -- [in,out] of the last node
+		
+		_r.qtt_in_sum  := _r.qtt_in_sum + _res[1];
+		_r.qtt_out_sum := _r.qtt_out_sum + _res[2];
+		
+		_om := (_res[2]::double precision)/(_res[1]::double precision);
+		
+		IF(_om_min = 0 OR _om < _om_min) THEN
+			_r.qtt_in_min := _res[1];
+			_r.qtt_out_min := _res[2];
+			_om_min := _om;
+		END IF;
+		IF(_om_max = 0 OR _om > _om_max) THEN
+			_r.qtt_in_max := _res[1];
+			_r.qtt_out_max := _res[2];
+			_om_max := _om;
+		END IF;
+	END LOOP;
+
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fgetprequote(text,text,int8,text) TO client_opened_role;
 
 --------------------------------------------------------------------------------
 -- 
