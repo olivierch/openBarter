@@ -462,7 +462,7 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 	//memcpy(r,f,sizeof(Tflow));
 	r = flowm_copy(f);
 	
-	if (!FLOWAREDOEU(r,fr)) 
+	if (false && !FLOWAREDOEU(r,fr)) 
 		ereport(ERROR,
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			 errmsg("yflow_reduce: flows should be draft,undefined or empty;%s and %s instead",yflow_statusBoxToStr(r),yflow_statusBoxToStr(fr))));
@@ -509,7 +509,7 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 	Tflow	*f1 = PG_GETARG_TFLOW(0);
 	Tflow	*f2 = PG_GETARG_TFLOW(1);
 
-	if(!FLOWAREDOEU(f1,f2)) 
+	if(false && !FLOWAREDOEU(f1,f2)) 
 			ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("yflow_maxg: flows should be draft,undefined or empty;%s and %s instead",yflow_statusBoxToStr(f1),yflow_statusBoxToStr(f2))));
@@ -532,7 +532,7 @@ Datum yflow_ming(PG_FUNCTION_ARGS)
 	Tflow	*f1 = PG_GETARG_TFLOW(0);
 	Tflow	*f2 = PG_GETARG_TFLOW(1);
 
-	if(!FLOWAREDOEU(f1,f2)) 
+	if(false && !FLOWAREDOEU(f1,f2)) 
 			ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("yflow_ming: the flow should be draft,undefined or empty")));

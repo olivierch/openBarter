@@ -5,11 +5,12 @@ import prims
 import sys
 import const
 import util
+import random
 # import curses
 
 #stdscr = curses.initscr()
 
-class Work(Object):
+class Work(object):
 	def __init__(self,iOper):
 		self.cdes = []
 		self.iOper = iOper
@@ -30,10 +31,14 @@ class Work(Object):
 		try:
 			cde = prims.GetQuote(self.params)
 			cde.execute(cursor)
-			cde = prims.ExecQuote(cde.getIdQuote())
-			cde.execute(cursor)
+			if(cde.getIdQuote()!=0):
+				cde2 = prims.ExecQuote(cde.getOwner(),cde.getIdQuote())
+				cde2.execute(cursor)
+			else:
+				cde2 = prims.InsertOrder(self.params)
+				cde2.execute(cursor)
 			
-		except util.PrimException e:
+		except util.PrimException, e:
 			e.setWork(self)
 			raise e
 			
@@ -42,12 +47,10 @@ class Work(Object):
 		
 	def __str__(self):
 		return "[work iOper=%i]"%self.iOper
-
+		
+		
 def iterer(cursor,iteration,obCMAXCYCLE=7,MAX_REFUSED=10):
 	random.seed(0) #for reproductibility of playings
-
-	if(not prims.initDb(cursor,obCMAXCYCLE,MAX_REFUSED)):
-		raise util.SimuException("Market not opened")
 	
 	iOper = 0
 	while True:
@@ -56,20 +59,24 @@ def iterer(cursor,iteration,obCMAXCYCLE=7,MAX_REFUSED=10):
 			print 'Stopped before:\n%s'% (str(w),)
 			break
 		w.execute(cursor)
-		ibOper +=1
+		iOper +=1
 
 	print "Finished"
 	print "Totalseconds;operations;obCMAXCYCLE;MAX_REFUSED;NbAgreement"
-	print "%.6f;%i;%i;%i;%i;" % (secs,iOper,obCMAXCYCLE,MAX_REFUSED,prims.getNbAgreement(cursor))
+	print "%i;%i;%i;%i;" % (iOper,obCMAXCYCLE,MAX_REFUSED,prims.getNbAgreement(cursor))
 	return 
 	
 
-
 def simu(iteration):
-	start = util.now()
 	
+	if(not prims.initDb()):
+		raise util.SimuException("Market not opened")
+	#print 'debut simu'
+		
 	dbcon = util.connect()
 	cursor = dbcon.cursor()
+	cursor.execute("SELECT fcreateuser(%s)",[const.DB_USER])
+	start = util.now()
 	try:
 		iterer(cursor,iteration)
 		
@@ -98,7 +105,7 @@ def simu(iteration):
 		
 	secs = util.getDelai(start)
 	
-	print 'simu(%i) terminated after %f seconds' % (iteration,secs)
+	print 'simu(%i) terminated after %.6f seconds' % (iteration,secs)
 	
 	return 
 	

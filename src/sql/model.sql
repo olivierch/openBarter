@@ -519,7 +519,7 @@ create table tmvt (
 	created timestamp not NULL,
 	CHECK (
 		(nb = 1 AND own_src = own_dst)
-	OR 	(nb !=1 AND own_src != own_dst)
+	OR 	(nb !=1) -- ( AND own_src != own_dst)
 	),
 	-- check do not covers grp==NULL AND nb !=0
 	-- since when inserting, grp is NULL for the first mvt 

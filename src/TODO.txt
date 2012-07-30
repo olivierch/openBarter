@@ -16,3 +16,9 @@ getxquote - exexquote
 
 finsertorder(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text)
 	RETURNS TABLE ( _yuuid text, _ydim int, _ygrp int)
+	
+*****************************************************************
+NOTES:
+pour débloquer:
+dans yflow.c
+suppression des tests if (!FLOWAREDOEU(f1,f2)) dans les fcts yflow_reduce et yflow_maxg

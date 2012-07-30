@@ -76,13 +76,15 @@ class PrimException(SimuException):
 	def getWork(self):
 		return self.work
 	
-class Cmde(Object):
+class Cmde(object):
 	def __init__(self):
+		# start and stop time when done
 		self.start = None
 		self.stop = None
-		self.params = None
-		self.proc = None
-		self.str = None
+		
+		self.params = None # vector of params
+		self.proc = None # primitive name
+		self.str = None # string format of params
 
 		
 	def getDelay(self):
@@ -93,7 +95,7 @@ class Cmde(Object):
 	def execproc(self,cursor):
 		self.begin = now()
 		
-		if(self.params id None or self.proc is None):
+		if(self.params is None or self.proc is None):
 			raise PrimException(self,None)
 		try:
 			cursor.callproc(self.proc,self.params)
@@ -104,7 +106,7 @@ class Cmde(Object):
 
 			
 	def __str__(self):
-		res = '[iOper= %i]' % self.nit
+		res = '' #'[iOper= %i]' % self.nit
 		try:
 			res += self.str % tuple(self.params)
 			# raise TypeError if incorrect formatting
