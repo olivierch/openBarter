@@ -207,6 +207,11 @@ Datum yflow_dim(PG_FUNCTION_ARGS)
 	
 	f = PG_GETARG_TFLOW(0);
 	dim = f->dim;
+	
+	if((dim < 2) ||(dim > FLOW_MAX_DIM))
+    		ereport(ERROR,
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+			errmsg("flow->dim not in [2,%i]",FLOW_MAX_DIM)));
 	PG_RETURN_INT32(dim);
 }
 /******************************************************************************

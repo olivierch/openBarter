@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf8 -*-
 import util
+import const
 		
 class GetQuote(util.Cmde):
 	def __init__(self,params):
@@ -49,11 +50,19 @@ class InsertOrder(util.Cmde):
 	def execute(self,cursor):
 		self.execproc(cursor)
 		self.res = [e for e in cursor]
-		return self.res		
+		return self.res
+		
+def getErrs(cde,cursor):
+	cursor.execute("SELECT * from fgeterrs(true) ")
+	for e in cursor:
+		if(e[1] != 0):
+			ex = Exception("fgeterrs(true) -> %s:%i"% tuple(e) )
+			raise util.PrimException(cde,ex)
+	return
 	
 def initDb():
 	import subprocess
-	import const
+
 
 	subprocess.call(['dropdb',const.DB_NAME])
 	subprocess.call(['createdb',const.DB_NAME])
@@ -65,22 +74,15 @@ def initDb():
 
 	# subprocess.Popen(['psql '+ const.DB_NAME +' < ../src/sql/model.sql'],shell=True)
 
-	
-			
-def initDbOld(cursor,obCMAXCYCLE,MAX_REFUSED):
-	cursor.execute("SET search_path='t' ")
-	cursor.execute("TRUNCATE torder RESTART IDENTITY CASCADE")
-	cursor.execute("TRUNCATE torderempty RESTART IDENTITY CASCADE")
-	cursor.execute("TRUNCATE tmvt RESTART IDENTITY CASCADE")
-	cursor.execute("UPDATE tquality SET qtt=0")
-	cursor.execute("UPDATE tconst SET value=%s WHERE name=%s",[obCMAXCYCLE,'obCMAXCYCLE'])
-	cursor.execute("UPDATE tconst SET value=%s WHERE name=%s",[MAX_REFUSED,'MAX_REFUSED'])
-	cursor.execute("VACUUM ANALYZE")
-	
-	cursor.execute("SELECT fcreateuser(%s)",[const.DB_USER])
+def execSql(fil):
+	import subprocess
 
-	# print "torder and torderempty truncated"
-	return isOpened(cursor)
+
+	p1 = subprocess.Popen(['more',fil], stdout=subprocess.PIPE)
+	p2 = subprocess.Popen(['psql', const.DB_NAME], stdin=p1.stdout,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+	p2.communicate()
+	# print 'done'
+	return p2.returncode == 0
 
 	
 def isOpened(cursor):
@@ -105,4 +107,8 @@ def getNbAgreement(cursor):
 	res = [e[0] for e in cursor]
 	# print res[0]	
 	return res[0]
+	
+def getSelect(cursor,sql,pars):
+	cursor.execute(sql,pars)	
+	return [e for e in cursor]
 	

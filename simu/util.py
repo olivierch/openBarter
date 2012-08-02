@@ -27,6 +27,7 @@ import random	# random.randint(a,b) gives N such as a<=N<=b
 	
 def getRandQtt():
 	max_qtt = 10000 #sys.maxint
+	#qtt = random.randint(max_qtt,max_qtt*2)
 	qtt = random.randint(1,max_qtt)
 	return qtt
 	
@@ -49,15 +50,17 @@ def getDistinctRandQlt():
 from datetime import datetime
 
 def duree(begin,end):
+	if(not isinstance(begin,datetime)): raise SimuException('begin is not datetime object')
+	if(not isinstance(end,datetime)): raise SimuException('end is not datetime object')
 	duration = end - begin
-	secs = duration.seconds + duration.microseconds/1000000.
+	secs = duration.days*3600*24 + duration.seconds + duration.microseconds/1000000.
 	return secs
 	
 def now():
 	return datetime.now()
 		
 def getDelai(time):
-	return duree(now(),time)
+	return duree(time,now())
 
 #############################################################################
 
@@ -93,7 +96,7 @@ class Cmde(object):
 		return duree(self.start,self.stop)
 	
 	def execproc(self,cursor):
-		self.begin = now()
+		self.start = now()
 		
 		if(self.params is None or self.proc is None):
 			raise PrimException(self,None)
@@ -114,4 +117,51 @@ class Cmde(object):
 			res += "ERROR: Could not format the primitive"
 		return res	
 
+
+def writeMaxOptions(cursor,options):	
+	sql = "UPDATE tconst SET value=%i WHERE name=\'%s\'"
+	if(not options.MAXCYCLE is None):
+		cursor.execute(sql % (int(options.MAXCYCLE),"MAXCYCLE"))
+	if(not options.MAXTRY is None):
+		cursor.execute(sql % (int(options.MAXTRY),"MAXTRY"))
+	if(not options.MAXORDERFETCH is None):
+		cursor.execute(sql % (int(options.MAXORDERFETCH),"MAXORDERFETCH"))
+
+def readMaxOptions(cursor):
+	r = []
+	for n in ("MAXCYCLE","MAXTRY","MAXORDERFETCH"):
+		cursor.execute("SELECT value FROM tconst WHERE name=%s",[n])
+		res = [e[0] for e in cursor]
+		r.append((n,res[0]))
+	return r
+	
+def runverif(cursor):
+	sql = "SELECT * from fgeterrs(true) WHERE cnt != 0"
+	cursor.execute(sql,[])
+	res = [e for e in cursor]
+	if(len(res)):
+		print "fgeterrs Errors found: %s" % res
+	else:
+		print "fgeterrs No errors found"
+		
+	
+def getAvct(cursor):
+	#nbAgreements
+	avct={}
+	cursor.execute("SELECT count(*),count(distinct grp) FROM tmvt WHERE nb != 1")
+	res = [e for e in cursor]
+	res = res[0]
+	avct["nbMvtAgr"] = res[0]
+	avct["nbAgreement"] = res[1]
+
+	cursor.execute("SELECT count(*) FROM tmvt WHERE nb = 1")
+	res = [e[0] for e in cursor]
+	avct["nbMvtLeak"] = res[0]
+
+	cursor.execute("SELECT count(*) FROM torder ")
+	res = [e[0] for e in cursor]
+	avct["nbOrder"] = res[0]
+	
+	return avct
+		
 	

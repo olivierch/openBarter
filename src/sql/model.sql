@@ -506,16 +506,16 @@ SELECT _grant_read('vorderverif');
 -- CREATE TYPE ymvt_origin AS ENUM ('EXECUTION', 'CANCEL');
 create table tmvt (
         id serial UNIQUE not NULL,
-        nb int not null,
+        nb int not NULL,
         -- origin ymvt_origin DEFAULT 'EXECUTION',
         oruuid text NOT NULL, -- refers to order uuid
     	grp int, 
     	-- References the first mvt of an exchange.
     	-- can be NULL
-	own_src int not null, 
-	own_dst int not null,
+	own_src int not NULL, 
+	own_dst int not NULL,
 	qtt dquantity not NULL,
-	nat int not null,
+	nat int not NULL,
 	created timestamp not NULL,
 	CHECK (
 		(nb = 1 AND own_src = own_dst)
@@ -591,9 +591,9 @@ create table tmvtremoved (
 SELECT _grant_read('tmvtremoved');
 --------------------------------------------------------------------------------
 CREATE VIEW vmvtverif AS
-	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvt
+	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvt where grp is not NULL
 	UNION ALL
-	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvtremoved;
+	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvtremoved where grp is not null;
 SELECT _grant_read('vmvtverif');
 
 --------------------------------------------------------------------------------
@@ -796,10 +796,10 @@ BEGIN
 	-- 1  2   3  4        5  6        7   8
 	-- id,own,nr,qtt_requ,np,qtt_prov,qtt,flowr
 	
-	_nbcommit := yflow_dim(_flw);
+	_nbcommit := yflow_dim(_flw); -- raise an error when flow->dim not in [2,8]
 	_first_mvt := NULL;
 	_exhausted := false;
-	
+	-- RAISE INFO 'flow of % commits',_nbcommit;
 	_i := _nbcommit;	
 	FOR _next_i IN 1 .. _nbcommit LOOP
 		-- _commits[_next_i] follows _commits[_i]
@@ -831,8 +831,8 @@ BEGIN
 		_i := _next_i;
 		----------------------------------------------------------------
 	END LOOP;
-
-	UPDATE tmvt SET grp = _first_mvt WHERE id = _first_mvt  AND (grp IS NULL);	
+	-- RAISE INFO '_first_mvt=%',_first_mvt;
+	UPDATE tmvt SET grp = _first_mvt WHERE id = _first_mvt  AND (grp IS NULL); --done only for oruuid==_uuid	
 	IF(NOT FOUND) THEN
 		RAISE EXCEPTION 'the movement % does not exist',_first_mvt 
 			USING ERRCODE='YA003';

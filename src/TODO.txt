@@ -22,3 +22,14 @@ NOTES:
 pour débloquer:
 dans yflow.c
 suppression des tests if (!FLOWAREDOEU(f1,f2)) dans les fcts yflow_reduce et yflow_maxg
+
+TODO:
+quand le quote n'est pas exécute avec le bon owner, ne pas supprimer le quote.
+
+*****************************************************************
+./simu.py 417
+test5_417.sql
+SELECT * from fgetquote('w84','olivier/q13',8784,1455,'olivier/q95')
+test5_417a.sql
+SELECT * from fexecquote('w84',72);
+
