@@ -28,7 +28,7 @@ INSERT INTO tconst (name,value) VALUES
 	('CHECK_QUALITY_OWNERSHIP',0), 
 	-- !=0, quality = user_name/quality_name prefix must match session_user
 	-- ==0, the name of quality can be any string
-	('MAXORDERFETCH',100000),
+	('MAXORDERFETCH',10000),
 	-- maximum number of paths of the set on which the competition occurs
 	('MAXTRY',10);
 	-- life time of an order for a given couple (np,nr)
@@ -593,7 +593,7 @@ SELECT _grant_read('tmvtremoved');
 CREATE VIEW vmvtverif AS
 	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvt where grp is not NULL
 	UNION ALL
-	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvtremoved where grp is not null;
+	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvtremoved where grp is not NULL;
 SELECT _grant_read('vmvtverif');
 
 --------------------------------------------------------------------------------
@@ -1163,8 +1163,8 @@ BEGIN
 	RETURN _q;
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
-	PERFORM fremovequote_int(_idquote); 
-	RAISE INFO 'Abort; Quote removed';
+	-- PERFORM fremovequote_int(_idquote); 
+	-- RAISE INFO 'Abort; Quote removed';
 	RETURN _q; 
 
 END; 
@@ -1303,7 +1303,7 @@ Some orders that are frequently included in refused cycles are removed from the 
 	
 3- orders are removed from the market when their torder[.].start is such as P+MAXTRY < Q, with MAXTRY defined in tconst [10]
 	This operation 3) is performed each time some movements are created.
-	done by finvalidate_treltried() called by finsert_order_int()
+	done by finvalidate_treltried() called by fexecquote() and finsertorder()
 	
 4- treltried must be truncated at market opening
 	done by frenumbertables()
