@@ -20,8 +20,8 @@ create table tconst(
 INSERT INTO tconst (name,value) VALUES 
 	('MAXCYCLE',8),
 	('VERSION-X.y.z',0),
-	('VERSION-x.Y.y',3),
-	('VERSION-x.y.Z',2),
+	('VERSION-x.Y.y',4),
+	('VERSION-x.y.Z',0),
 	('INSERT_OWN_UNKNOWN',1), 
 	-- !=0, insert an owner when it is unknown
 	-- ==0, raise an error when the owner is unknown
@@ -1460,7 +1460,8 @@ SELECT _grant_read('tmarket');
 --------------------------------------------------------------------------------
 CREATE TYPE ymarketaction AS ENUM ('init', 'open','stop','close','start');
 CREATE TYPE ymarketstatus AS ENUM ('INITIALIZING','OPENED', 'STOPPING','CLOSED','STARTING');
-CREATE VIEW vmarket AS SELECT
+CREATE VIEW vmarkethistory AS SELECT
+	id,
  	(id+4)/4 as market_session,
  	CASE 	WHEN (id-1)%4=0 THEN 'OPENED'::ymarketstatus 	
  		WHEN (id-1)%4=1 THEN 'STOPPING'::ymarketstatus
@@ -1468,7 +1469,9 @@ CREATE VIEW vmarket AS SELECT
  		WHEN (id-1)%4=3 THEN 'STARTING'::ymarketstatus
 	END AS market_status,
  	created
-	FROM tmarket ORDER BY ID DESC LIMIT 1; 
+	FROM tmarket;
+SELECT _grant_read('vmarkethistory');
+CREATE VIEW vmarket AS SELECT * FROM  vmarkethistory ORDER BY ID DESC LIMIT 1; 
 SELECT _grant_read('vmarket');	
 
 --------------------------------------------------------------------------------
