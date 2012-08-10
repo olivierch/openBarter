@@ -640,6 +640,8 @@ Datum yflow_flr_omega(PG_FUNCTION_ARGS)
 	PG_RETURN_FLOAT8(_Omega);
 }
 /******************************************************************************
+returns a matrix int8[i][j] of i lines of nodes, where a node is:
+	[id,own,nr,qtt_requ,np,qtt_prov,qtt,flowr]
 ******************************************************************************/
 Datum yflow_to_matrix(PG_FUNCTION_ARGS)
 {
@@ -672,7 +674,7 @@ Datum yflow_to_matrix(PG_FUNCTION_ARGS)
 	_datum_out = palloc(sizeof(Datum) * _dim * DIMELTRESULT);
 	_null_out =  palloc(sizeof(bool)  * _dim * DIMELTRESULT);
 	
-	//id,nr,qtt_prov,qtt_requ,sid,own,qtt,np
+	//  id,own,nr,qtt_requ,np,qtt_prov,qtt,flowr
 	obMRange(_i,_dim) {
 		int _j = _i * DIMELTRESULT;
 		_null_out[_j+0] = false; _datum_out[_j+0] = Int64GetDatum((int64) box->x[_i].id);

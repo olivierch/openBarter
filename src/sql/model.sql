@@ -903,6 +903,7 @@ CREATE TABLE tquoteremoved (
     removed timestamp
 );
 SELECT _grant_read('tquoteremoved');
+
 --------------------------------------------------------------------------------
 -- (id,own,qtt_in,qtt_out,flows) = fgetquote(owner,qltprovided,qttprovided,qttrequired,qltprovided)
 /* if qttrequired == 0, 
@@ -1092,28 +1093,40 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fgetprequote(text,text,int8,text) TO client_opened_role;
 
 --------------------------------------------------------------------------------
--- 
+-- -- id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows
+CREATE TYPE yresorder AS (
+    id int,
+    uuid text,
+    own int,
+    nr int,
+    qtt_requ int8,
+    np int,
+    qtt_prov int8,
+    qtt_in int8,
+    qtt_out int8,
+    flows yflow[]
+);
 --------------------------------------------------------------------------------
 -- torder id,uuid,yorder,created,updated
 -- yorder: qtt,nr,np,qtt_prov,qtt_requ,own
 CREATE FUNCTION 
 	fexecquote(_owner text,_idquote int)
-	RETURNS tquote AS $$
+	RETURNS yresorder AS $$
 	
 DECLARE
 	_wid		int;
 	_o		torder%rowtype;
 	_idd		int;
-	_expected	tquote%rowtype;
 	_q		tquote%rowtype;
-	_pivot		torder%rowtype;
+	_ro		yresorder%ROWTYPE;
 
 	_flows		yflow[];
-	_ypatmax	yflow;
+	_ypatmax	yflow;	
 	_res	        int8[];
 	_qtt_prov	int8;
 	_qtt_requ	int8;
 	_first_mvt	int;
+
 BEGIN
 	
 	_idd := fverifyquota();
@@ -1135,23 +1148,30 @@ BEGIN
 	
 	_o := finsert_toint(_qtt_prov,_q.nr,_q.np,_qtt_requ,_q.own);
 	
-	_q.id      := _o.id;
-	_q.qtt_in  := 0;
-	_q.qtt_out := 0;
-	_q.flows   := ARRAY[]::yflow[];
+	-- id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows
+	_ro.id      	:= _o.id;
+	_ro.uuid    	:= _o.uuid;
+	_ro.own     	:= _q.own;
+	_ro.nr      	:= _q.nr;
+	_ro.qtt_requ	:= _q.qtt_requ;
+	_ro.np      	:= _q.np;
+	_ro.qtt_prov	:= _q.qtt_prov;
+	_ro.qtt_in  	:= 0;
+	_ro.qtt_out 	:= 0;
+	_ro.flows   	:= ARRAY[]::yflow[];
 	
 	FOR _ypatmax IN SELECT _patmax  FROM finsertflows(_o) LOOP
 		_first_mvt := fexecute_flow(_ypatmax);
 		_res := yflow_qtts(_ypatmax);
-		_q.qtt_in  := _q.qtt_in  + _res[1];
-		_q.qtt_out := _q.qtt_out + _res[2];
-		_q.flows := array_append(_q.flows,_ypatmax);
+		_ro.qtt_in  := _ro.qtt_in  + _res[1];
+		_ro.qtt_out := _ro.qtt_out + _res[2];
+		_ro.flows := array_append(_ro.flows,_ypatmax);
 	END LOOP;
 	
 	
-	IF (	(_q.qtt_in = 0) OR (_qtt_requ = 0) OR
-		((_q.qtt_out::double precision)	/(_q.qtt_in::double precision)) > 
-		((_qtt_prov::double precision)	/(_qtt_requ::double precision))
+	IF (	(_ro.qtt_in = 0) OR (_qtt_requ = 0) OR
+		((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
+		((_qtt_prov::double precision)		/(_qtt_requ::double precision))
 	) THEN
 		RAISE NOTICE 'Omega of the flows obtained is not limited by the order';
 		RAISE EXCEPTION USING ERRCODE='YA003';
@@ -1160,12 +1180,12 @@ BEGIN
 	PERFORM fremovequote_int(_idquote);	
 	PERFORM finvalidate_treltried();
 	
-	RETURN _q;
+	RETURN _ro;
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	-- PERFORM fremovequote_int(_idquote); 
 	-- RAISE INFO 'Abort; Quote removed';
-	RETURN _q; 
+	RETURN _ro; 
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
@@ -1213,15 +1233,16 @@ $$ LANGUAGE PLPGSQL;
 -- yorder: qtt,nr,np,qtt_prov,qtt_requ,own
 CREATE FUNCTION 
 	finsertorder(_owner text,_qualityprovided text,_qttprovided int8,_qttrequired int8,_qualityrequired text)
-	RETURNS tquote AS $$
+	RETURNS yresorder AS $$
 	
 DECLARE
 	_wid		int;
 	_o		torder%rowtype;
 	_idd		int;
-	_expected	tquote%rowtype;
+	-- _expected	tquote%rowtype;
 	_q		tquote%rowtype;
-	_pivot		torder%rowtype;
+	_ro		yresorder%rowTYPE;
+	-- _pivot		torder%rowtype;
 	_qua		text[];
 
 	_flows		yflow[];
@@ -1255,22 +1276,28 @@ BEGIN
 	
 	_o := finsert_toint(_qttprovided,_q.nr,_q.np,_qttrequired,_q.own);
 	
-	_q.id      := _o.id;
-	_q.qtt_in  := 0;
-	_q.qtt_out := 0;
-	_q.flows   := ARRAY[]::yflow[];
+	_ro.id      	:= _o.id;
+	_ro.uuid    	:= _o.uuid;
+	_ro.own     	:= _q.own;
+	_ro.nr      	:= _q.nr;
+	_ro.qtt_requ	:= _q.qtt_requ;
+	_ro.np      	:= _q.np;
+	_ro.qtt_prov	:= _q.qtt_prov;
+	_ro.qtt_in  	:= 0;
+	_ro.qtt_out 	:= 0;
+	_ro.flows   	:= ARRAY[]::yflow[];
 	
 	FOR _ypatmax IN SELECT _patmax  FROM finsertflows(_o) LOOP
 		_first_mvt := fexecute_flow(_ypatmax);
 		_res := yflow_qtts(_ypatmax);
-		_q.qtt_in  := _q.qtt_in  + _res[1];
-		_q.qtt_out := _q.qtt_out + _res[2];
-		_q.flows := array_append(_q.flows,_ypatmax);
+		_ro.qtt_in  := _ro.qtt_in  + _res[1];
+		_ro.qtt_out := _ro.qtt_out + _res[2];
+		_ro.flows := array_append(_ro.flows,_ypatmax);
 	END LOOP;
 	
 	
-	IF (	(_q.qtt_in != 0) AND 
-		((_q.qtt_out::double precision)		/(_q.qtt_in::double precision)) > 
+	IF (	(_ro.qtt_in != 0) AND 
+		((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
 		((_qttprovided::double precision)	/(_qttrequired::double precision))
 	) THEN
 		RAISE NOTICE 'Omega of the flows obtained is not limited by the order';
@@ -1279,11 +1306,11 @@ BEGIN
 		
 	PERFORM finvalidate_treltried();
 	
-	RETURN _q;
+	RETURN _ro;
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN 
 	RAISE INFO 'Abort';
-	RETURN _q; 
+	RETURN _ro; 
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;

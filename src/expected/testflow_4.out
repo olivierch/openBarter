@@ -2,28 +2,28 @@
 select * from finsertorder('x','b',160,40,'a');
 INFO:  owner x created
 CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
-PL/pgSQL function "finsertorder" line 19 at assignment
- id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows | created | removed 
-----+-----+----+----------+----+----------+--------+---------+-------+---------+---------
-  8 |   4 |  5 |       40 |  4 |      160 |      0 |       0 | {}    |         | 
+PL/pgSQL function "finsertorder" line 20 at assignment
+ id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
+----+------+-----+----+----------+----+----------+--------+---------+-------
+  8 | 1-8  |   4 |  5 |       40 |  4 |      160 |      0 |       0 | {}
 (1 row)
 
 select * from finsertorder('y','c',160,80,'b');
 INFO:  owner y created
 CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
-PL/pgSQL function "finsertorder" line 19 at assignment
- id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows | created | removed 
-----+-----+----+----------+----+----------+--------+---------+-------+---------+---------
-  9 |   5 |  4 |       80 |  6 |      160 |      0 |       0 | {}    |         | 
+PL/pgSQL function "finsertorder" line 20 at assignment
+ id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
+----+------+-----+----+----------+----+----------+--------+---------+-------
+  9 | 1-9  |   5 |  4 |       80 |  6 |      160 |      0 |       0 | {}
 (1 row)
 
 select * from finsertorder('t','c',100,100,'a');
 INFO:  owner t created
 CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
-PL/pgSQL function "finsertorder" line 19 at assignment
- id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows | created | removed 
-----+-----+----+----------+----+----------+--------+---------+-------+---------+---------
- 10 |   6 |  5 |      100 |  6 |      100 |      0 |       0 | {}    |         | 
+PL/pgSQL function "finsertorder" line 20 at assignment
+ id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
+----+------+-----+----+----------+----+----------+--------+---------+-------
+ 10 | 1-10 |   6 |  5 |      100 |  6 |      100 |      0 |       0 | {}
 (1 row)
 
 select * from fgetquote('z','a',20,0,'c'); -- expected (qtt_prov,qtt_requ)= (20,160)
@@ -68,9 +68,9 @@ select * from fgetquote('z','a',100,0,'c'); -- expected (qtt_in,qtt_out)= (100,1
 (1 row)
 
 select * from finsertorder('z','a',100,100,'c'); -- one agreements
- id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                              flows                              | created | removed 
-----+-----+----+----------+----+----------+--------+---------+-----------------------------------------------------------------+---------+---------
- 12 |   7 |  6 |      100 |  5 |      100 |    100 |     100 | {"[(10, 6, 5, 100, 6, 100, 100),(12, 7, 6, 100, 5, 100, 100)]"} |         | 
+ id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                              flows                              
+----+------+-----+----+----------+----+----------+--------+---------+-----------------------------------------------------------------
+ 12 | 1-12 |   7 |  6 |      100 |  5 |      100 |    100 |     100 | {"[(10, 6, 5, 100, 6, 100, 100),(12, 7, 6, 100, 5, 100, 100)]"}
 (1 row)
 
 select * from fgetagr(12) where _own='z'; -- expected as first quote
@@ -80,21 +80,21 @@ select * from fgetagr(12) where _own='z'; -- expected as first quote
 (1 row)
 
 select * from finsertorder('x','b2',160,40,'a2');
- id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows | created | removed 
-----+-----+----+----------+----+----------+--------+---------+-------+---------+---------
- 13 |   4 |  8 |       40 |  7 |      160 |      0 |       0 | {}    |         | 
+ id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
+----+------+-----+----+----------+----+----------+--------+---------+-------
+ 13 | 1-13 |   4 |  8 |       40 |  7 |      160 |      0 |       0 | {}
 (1 row)
 
 select * from finsertorder('y','c2',160,80,'b2');
- id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows | created | removed 
-----+-----+----+----------+----+----------+--------+---------+-------+---------+---------
- 14 |   5 |  7 |       80 |  9 |      160 |      0 |       0 | {}    |         | 
+ id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
+----+------+-----+----+----------+----+----------+--------+---------+-------
+ 14 | 1-14 |   5 |  7 |       80 |  9 |      160 |      0 |       0 | {}
 (1 row)
 
 select * from finsertorder('t','c2',90,10,'a2');
- id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows | created | removed 
-----+-----+----+----------+----+----------+--------+---------+-------+---------+---------
- 15 |   6 |  8 |       10 |  9 |       90 |      0 |       0 | {}    |         | 
+ id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
+----+------+-----+----+----------+----+----------+--------+---------+-------
+ 15 | 1-15 |   6 |  8 |       10 |  9 |       90 |      0 |       0 | {}
 (1 row)
 
 select * from fgetquote('z','a2',10,0,'c2');-- expected (qtt_in,qtt_out)= (90,10)
@@ -104,9 +104,9 @@ select * from fgetquote('z','a2',10,0,'c2');-- expected (qtt_in,qtt_out)= (90,10
 (1 row)
 
 select * from finsertorder('z','a2',10,90,'c2'); 
- id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                           flows                           | created | removed 
-----+-----+----+----------+----+----------+--------+---------+-----------------------------------------------------------+---------+---------
- 16 |   7 |  9 |       90 |  8 |       10 |     90 |      10 | {"[(15, 6, 8, 10, 9, 90, 90),(16, 7, 9, 90, 8, 10, 10)]"} |         | 
+ id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                           flows                           
+----+------+-----+----+----------+----+----------+--------+---------+-----------------------------------------------------------
+ 16 | 1-16 |   7 |  9 |       90 |  8 |       10 |     90 |      10 | {"[(15, 6, 8, 10, 9, 90, 90),(16, 7, 9, 90, 8, 10, 10)]"}
 (1 row)
 
 select * from fgetagr(14) where _own='z'; -- expected as first quote
@@ -122,9 +122,9 @@ select * from fgetquote('z','a2',20,0,'c2'); -- expected (qtt_in,qtt_out)= (160,
 (1 row)
 
 select * from finsertorder('z','a2',20,160,'c2');
- id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                                          flows                                           | created | removed 
-----+-----+----+----------+----+----------+--------+---------+------------------------------------------------------------------------------------------+---------+---------
- 17 |   7 |  9 |      160 |  8 |       20 |    160 |      20 | {"[(13, 4, 8, 40, 7, 160, 160),(14, 5, 7, 80, 9, 160, 160),(17, 7, 9, 160, 8, 20, 20)]"} |         | 
+ id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                                          flows                                           
+----+------+-----+----+----------+----+----------+--------+---------+------------------------------------------------------------------------------------------
+ 17 | 1-17 |   7 |  9 |      160 |  8 |       20 |    160 |      20 | {"[(13, 4, 8, 40, 7, 160, 160),(14, 5, 7, 80, 9, 160, 160),(17, 7, 9, 160, 8, 20, 20)]"}
 (1 row)
 
 select * from fgetagr(16) where _own='z'; -- expected as first quote
