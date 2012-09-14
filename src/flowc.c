@@ -335,10 +335,8 @@ static short _fluxMaximum(const Tchemin *pchemin, double *omegaCorrige, double *
 	double	*_piom = (double *) pchemin->piom; //  _fPiomega(i)
 	double	_min, _cour;
 	short	_iExhausted;	
-	//double	*omegaCorrige = (double *) pchemin->omegaCorrige;
 	Tflow	*box = pchemin->box;
 	short 	_dim = box->dim;
-	//bool 	_lastignore = box->lastignore;
 		
 	// piom are obtained on each node, 
 	/***********************************************************************/
@@ -355,6 +353,7 @@ static short _fluxMaximum(const Tchemin *pchemin, double *omegaCorrige, double *
 	// minimum flow for the first node f[0]
 	/***********************************************************************/
 	// now _is is an index on nodes
+	_iExhausted = 0;
 	obMRange(_is,_dim) { // loop on nodes
 		_cour = ((double) (box->x[_is].qtt)) /_piom[_is]; 
 		if ((_is == 0) || (_cour < _min)) {
