@@ -23,8 +23,8 @@ INFO:  The market is opened for this user
 -- own,qual_prov,qtt_prov,qtt_requ,qual_requ
 select * from finsertorder('u',fq('b'),1000,1000,fq('a'));
 INFO:  owner u created
-CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
-PL/pgSQL function "finsertorder" line 20 at assignment
+CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
  id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
 ----+------+-----+----+----------+----+----------+--------+---------+-------
   1 | 1-1  |   1 |  2 |     1000 |  1 |     1000 |      0 |       0 | {}
@@ -32,8 +32,8 @@ PL/pgSQL function "finsertorder" line 20 at assignment
 
 select * from finsertorder('v',fq('c'),1000,1000,fq('b'));
 INFO:  owner v created
-CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
-PL/pgSQL function "finsertorder" line 20 at assignment
+CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
  id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
 ----+------+-----+----+----------+----+----------+--------+---------+-------
   2 | 1-2  |   2 |  1 |     1000 |  3 |     1000 |      0 |       0 | {}
@@ -41,8 +41,8 @@ PL/pgSQL function "finsertorder" line 20 at assignment
 
 select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fgetquote('w',fq('a'),1000,1000,fq('c')); 
 INFO:  owner w created
-CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
-PL/pgSQL function "fgetquote" line 36 at assignment
+CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
+PL/pgSQL function fgetquote(text,text,bigint,bigint,text) line 36 at assignment
  id | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                                               flows                                                
 ----+----+----------+----+----------+--------+---------+----------------------------------------------------------------------------------------------------
   1 |  3 |     1000 |  2 |     1000 |   1000 |    1000 | {"[(1, 1, 2, 1000, 1, 1000, 1000),(2, 2, 1, 1000, 3, 1000, 1000),(0, 3, 3, 1000, 2, 1000, 1000)]"}

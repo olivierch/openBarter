@@ -2,63 +2,63 @@ reset role;
 -- SELECT ftruncatetables();
 select fresetmarket();
 INFO:  market_status OPENED->STOPPING
-CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 INFO:  The market is now stopping for clients
-CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 NOTICE:  truncate cascades to table "torder"
 CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "fresetmarket_int" line 13 at SQL statement
+PL/pgSQL function fresetmarket_int() line 13 at SQL statement
 SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function "fresetmarket" line 9 at PERFORM
+PL/pgSQL function fresetmarket() line 9 at PERFORM
 NOTICE:  truncate cascades to table "tmvt"
 CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "fresetmarket_int" line 13 at SQL statement
+PL/pgSQL function fresetmarket_int() line 13 at SQL statement
 SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function "fresetmarket" line 9 at PERFORM
+PL/pgSQL function fresetmarket() line 9 at PERFORM
 NOTICE:  truncate cascades to table "tmvtremoved"
 CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function "fresetmarket_int" line 13 at SQL statement
+PL/pgSQL function fresetmarket_int() line 13 at SQL statement
 SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function "fresetmarket" line 9 at PERFORM
+PL/pgSQL function fresetmarket() line 9 at PERFORM
 NOTICE:  truncate cascades to table "treltried"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "fresetmarket_int" line 14 at SQL statement
+PL/pgSQL function fresetmarket_int() line 14 at SQL statement
 SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function "fresetmarket" line 9 at PERFORM
+PL/pgSQL function fresetmarket() line 9 at PERFORM
 NOTICE:  truncate cascades to table "torder"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "fresetmarket_int" line 14 at SQL statement
+PL/pgSQL function fresetmarket_int() line 14 at SQL statement
 SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function "fresetmarket" line 9 at PERFORM
+PL/pgSQL function fresetmarket() line 9 at PERFORM
 NOTICE:  truncate cascades to table "tmvt"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "fresetmarket_int" line 14 at SQL statement
+PL/pgSQL function fresetmarket_int() line 14 at SQL statement
 SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function "fresetmarket" line 9 at PERFORM
+PL/pgSQL function fresetmarket() line 9 at PERFORM
 NOTICE:  truncate cascades to table "tmvtremoved"
 CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function "fresetmarket_int" line 14 at SQL statement
+PL/pgSQL function fresetmarket_int() line 14 at SQL statement
 SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function "fresetmarket" line 9 at PERFORM
+PL/pgSQL function fresetmarket() line 9 at PERFORM
 INFO:  market_status STOPPING->CLOSED
-CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 INFO:  market_session = n->n+1
-CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 INFO:  market_status CLOSED->STARTING
-CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 INFO:  Run the command:
-CONTEXT:  PL/pgSQL function "fchangestatemarket" line 59 at assignment
-PL/pgSQL function "fresetmarket" line 7 at assignment
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
+PL/pgSQL function fresetmarket() line 7 at assignment
 INFO:  	VACUUM FULL ANALYZE
-CONTEXT:  PL/pgSQL function "fchangestatemarket" line 59 at assignment
-PL/pgSQL function "fresetmarket" line 7 at assignment
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
+PL/pgSQL function fresetmarket() line 7 at assignment
 INFO:  before starting the market
-CONTEXT:  PL/pgSQL function "fchangestatemarket" line 59 at assignment
-PL/pgSQL function "fresetmarket" line 7 at assignment
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
+PL/pgSQL function fresetmarket() line 7 at assignment
 INFO:  market_status STARTING->OPENED
-CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 INFO:  The market is now opened for clients
-CONTEXT:  PL/pgSQL function "fresetmarket" line 7 at assignment
+CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 INFO:  The market is reset and opened
  fresetmarket 
 --------------
@@ -70,8 +70,8 @@ INFO:  The market is reset and opened
 -- select finsertorder('A','x',25  ,100 ,'z');
 select finsertorder('A','z',200 ,200 ,'x');
 INFO:  owner A created
-CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
-PL/pgSQL function "finsertorder" line 20 at assignment
+CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
          finsertorder         
 ------------------------------
  (1,4-1,1,2,200,1,200,0,0,{})
@@ -81,8 +81,8 @@ PL/pgSQL function "finsertorder" line 20 at assignment
 -- select finsertorder('B','x',25  ,200 ,'y');
 select finsertorder('B','y',200 ,25  ,'x');
 INFO:  owner B created
-CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
-PL/pgSQL function "finsertorder" line 20 at assignment
+CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
         finsertorder         
 -----------------------------
  (2,4-2,2,2,25,3,200,0,0,{})
@@ -91,8 +91,8 @@ PL/pgSQL function "finsertorder" line 20 at assignment
 --select finsertorder('C','y',100 ,100 ,'z');
 select finsertorder('C','z',100 ,100 ,'y');
 INFO:  owner C created
-CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
-PL/pgSQL function "finsertorder" line 20 at assignment
+CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
          finsertorder         
 ------------------------------
  (3,4-3,3,3,100,1,100,0,0,{})
@@ -107,8 +107,8 @@ select id,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
 --select finsertorder('D','z',250 ,250 ,'x');
 select finsertorder('D','x',250 ,250 ,'z');
 INFO:  owner D created
-CONTEXT:  PL/pgSQL function "fgetowner" line 10 at assignment
-PL/pgSQL function "finsertorder" line 20 at assignment
+CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
                                                                                        finsertorder                                                                                       
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  (4,4-4,4,1,250,2,250,300,250,"{""[(2, 2, 2, 25, 3, 200, 200),(3, 3, 3, 100, 1, 100, 100),(4, 4, 1, 250, 2, 250, 250)]"",""[(1, 1, 2, 200, 1, 200, 200),(4, 4, 1, 250, 2, 250, 200)]""}")
