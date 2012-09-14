@@ -138,14 +138,14 @@ char *yflow_ndboxToStr(Tflow *yflow,bool internal) {
 			appendStringInfo(&buf, "(%i, ", s->id);
 			appendStringInfo(&buf, "%i, ", s->own);
 			appendStringInfo(&buf, "%i, ", s->nr);
-			appendStringInfo(&buf, "%lli, ", s->qtt_requ);
+			appendStringInfo(&buf, INT64_FORMAT ", ", s->qtt_requ);
 			appendStringInfo(&buf, "%i, ", s->np);
-			appendStringInfo(&buf, "%lli, ", s->qtt_prov);
+			appendStringInfo(&buf, INT64_FORMAT ", ", s->qtt_prov);
 		
 			if(internal)
-				appendStringInfo(&buf, "%lli:%lli)",s->qtt, s->flowr);
+				appendStringInfo(&buf,INT64_FORMAT ":" INT64_FORMAT ")",s->qtt, s->flowr);
 			else 
-				appendStringInfo(&buf, "%lli)", s->qtt);
+				appendStringInfo(&buf, INT64_FORMAT ")", s->qtt);
 		}
 	}
 	appendStringInfoChar(&buf, ']');
@@ -176,10 +176,10 @@ char *yflow_pathToStr(Tflow *yflow) {
 			appendStringInfo(&buf, "[%i, ", s->id);
 			appendStringInfo(&buf, "%i, ", s->own);
 			appendStringInfo(&buf, "%i, ", s->nr);
-			appendStringInfo(&buf, "%lli, ", s->qtt_requ);
+			appendStringInfo(&buf, INT64_FORMAT ", ", s->qtt_requ);
 			appendStringInfo(&buf, "%i, ", s->np);
-			appendStringInfo(&buf, "%lli, ", s->qtt_prov);
-			appendStringInfo(&buf, "%lli,%lli]",s->qtt, s->flowr);
+			appendStringInfo(&buf, INT64_FORMAT ", ", s->qtt_prov);
+			appendStringInfo(&buf, INT64_FORMAT ","INT64_FORMAT "]",s->qtt, s->flowr);
 		}
 	}
 	appendStringInfoChar(&buf, ']');

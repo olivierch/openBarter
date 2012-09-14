@@ -52,7 +52,7 @@ char *flowc_toStr(Tflow *box) {
 }
 static char *_flowc_maximum(Tflow *box,bool ret_str) {
 	short _dim = box->dim;
-	short _i,_ldim;
+	short _i; 
 	Tchemin chemin;
 	short _iExhausted;
 
@@ -69,10 +69,12 @@ static char *_flowc_maximum(Tflow *box,bool ret_str) {
 			 errmsg("max dimension reached for the flow")));
  
 	box->lastignore = box->x[_dim-1].qtt_requ == 0;
-	_ldim = (box->lastignore)?_dim-1:_dim; 
+	//  
 	/* when last ignore,
 		box->x[dim-1].qtt_prov and qtt_requ are ignored,
 		box->x[dim-1].qtt is the quantity maximum provided
+
+	short _ldim = (box->lastignore)?_dim-1:_dim;
 	*/
 		
 	obMRange(_i,_dim) 
@@ -626,7 +628,7 @@ char * flowc_cheminToStr(Tchemin *pchemin) {
 	
 		appendStringInfo(&buf, "]\nflow->flowr[.]=[");
 		obMRange(_n,_dim) {
-			appendStringInfo(&buf, "%lli, ", flow->x[_n].flowr);
+			appendStringInfo(&buf, INT64_FORMAT ", ", flow->x[_n].flowr);
 		}	
 		appendStringInfo(&buf, "]\n");
 	}
@@ -643,7 +645,7 @@ char * flowc_vecIntStr(short dim,int64 *vecInt) {
 	initStringInfo(&buf);
 	appendStringInfo(&buf, "[");
 	obMRange(_n,dim) {
-		appendStringInfo(&buf, "%lli, ", vecInt[_n]);
+		appendStringInfo(&buf,  INT64_FORMAT ", ", vecInt[_n]);
 	}	
 	appendStringInfo(&buf, "]");
 

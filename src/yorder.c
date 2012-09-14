@@ -57,7 +57,7 @@ yorder_in(PG_FUNCTION_ARGS)
 	int64	qtt,qtt_prov,qtt_requ;
 	Torder    *result;
 
-	if (sscanf(str, "(%i,%i,%i,%lli,%i,%lli,%lli)", &id, &own, &nr, &qtt_requ, &np, &qtt_prov, &qtt) != 7)
+	if (sscanf(str, "(%i,%i,%i," INT64_FORMAT ",%i," INT64_FORMAT "," INT64_FORMAT ")", &id, &own, &nr, &qtt_requ, &np, &qtt_prov, &qtt) != 7)
 		ereport(ERROR,
 				(errcode(ERRCODE_INVALID_TEXT_REPRESENTATION),
 				 errmsg("invalid input syntax for yorder: \"%s\"",
@@ -83,7 +83,7 @@ yorder_out(PG_FUNCTION_ARGS)
 	char	   *result;
 
 	result = (char *) palloc(100);
-	snprintf(result, 100, "(%i,%i,%i,%lli,%i,%lli,%lli)", 
+	snprintf(result, 100, "(%i,%i,%i," INT64_FORMAT ",%i," INT64_FORMAT "," INT64_FORMAT ")", 
 		order->id, order->own, 
 		order->nr, order->qtt_requ, 
 		order->np, order->qtt_prov, order->qtt);
