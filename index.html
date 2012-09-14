@@ -65,49 +65,40 @@
 
 <div>
 <h1>openBarter</h1>
+<aside>
+<p><i>Gold is fungible. Silver is fungible; that is, these metals are both so homogeneous that, if I get a pound of pure gold, for example, it is indifferent to me whether it be this pound or that pound, one is as good as another.</i></p>
+</aside>
+<p> Any fungible has a pecular quality and quantity. openBarter is a software - a barter market of such fungible.<p>
+<p>It is a <a href="http://en.wikipedia.org/wiki/Central_limit_order_book">central limit order book</a> where an order is an unilateral commitment of an owner to provide a fungible in exchange of an other.<p>
 
-<p>openBarter is a database schema defining primitives of a barter market. It is also an extension of the <a href="http://www.postgresql.org/">postgreSQL</a> database.</p>
-<p>It is an attempt to invent an alternative to the financial system supervising human economy, since archaic barter has always been the result of a crumbling financial system. openBarter that allow multilateral exchanges should be nearly as liquid as a regular market using money.</p>
-<p>It is impossible for a B747 pilot to land by using only a brake and a gas pedal. Likewise, money is mono-dimensional and cannot be the single command to restore ecologic stability of the planet. By considering value as multi-dimensional, openBarter proposes an allocation mean of a diversity of scarce ecological resources.</p>
-<p>It implements the economic mechanisms of a regular market and allows cyclic exchange between more than two partners (buyer and seller) in a single transaction. Even if competition is performed between bids  (exchange proposals) , it does not require any central monetary standard to quantify the value exchanged and express prices to be compared.</p>
-<p>The database finds possible relations between bids and submit draft agreements for approval by owners. When agreements are accepted by partners, the property of related values is exchanged between partners.</p>
+<p>The market does not require a central value standard to express prices. A ratio between quantity offered and quantity required is used by owners instead of a price. The same ratio is also used to perform competition between orders.</p>
+
+<p>openBarter allows cyclic exchange between up to 8 partners in a single transaction. The combinatorics is so rich that for a reasonable diversity of qualities, openBarter is nearly as liquid as a regular market.</p>
+
 <p>Mathematic principles of openbarter are detailed on this <a href="https://github.com/downloads/olivierch/openBarter/paper-ob.pdf">paper</a>.</p>
-<p><a href="./originsAndGoals.html">Origins and goals</a> of the project.</p>
 
-<h2>Development</h2>
-<p>You can fork the project on <a href="https://github.com/olivierch/openBarter">openBarter</a></p>
-<p>It has also been released on <a href="http://pgxn.org/dist/openbarter/">PGXN</a></p>
+<p>openBarter is an extension of the <a href="http://www.postgresql.org/">postgreSQL</a>, the linux of databases.</p>
+
     
 <h2>Releases</h2>
-<p>sources of releases can be dowload from this <a href="https://github.com/olivierch/openBarter/tags">page</a>.</p>
+<p>The latest releases can be dowload from this <a href="https://github.com/olivierch/openBarter/tags">page</a>.</p>
 
-<h3>release 0.4.0</h3>
-<p>Memory management optimized [Olivier Chaussavoine].</p>
-<p>quote and prequote added. [Olivier Chaussavoine].</p>
-<p>Order rejection mechanism added in order to avoid slower searching due to old orders that remain [Olivier Chaussavoine].</p>
+<h2>Origins</h2>
+<p>The difficulty of driving a system growns as it's complexity, due to the diversity of command signals that need to be carefully adjusted. Mankind is in charge of restoring the ecologic stability of the planet, but ecological economics is driven by a mono-dimensional signal that is money. openBarter provides a mean to control each dimension of the control signal independently.</p>
 
-<h3>release 0.2.2</h3>
-<p><a href="https://github.com/downloads/olivierch/openBarter/openbarter-doc-0.2.2.pdf">documentation</a></p>
-<p>ob_fget_omegas(np,nr) provides the list of all prices found, even those not requested. [Olivier Chaussavoine].</p>
-<p>Core algorithms optimized. Tests units are functional [Olivier Chaussavoine].</p>
-<h3>release 0.2.1</h3>
-<P><a href="https://github.com/downloads/olivierch/openBarter/openbarter-doc-0.2.1.pdf">documentation</a></p>
-<p>code cleaned, memory aligment problem corrected. All tests pass.</p>
-<h3>release 0.2.0</h3>
-<p><a href="https://github.com/downloads/olivierch/openBarter/openbarter-doc-0.2.0.pdf">documentation</a></p>
-<p>openbarter does not require berkeleydb anymore. All graph traversal are implemented using the <b>with</b> clause, and calculations related to a given draft agreement are implemented in <b>c</b> language using a special type <b>flow</b> in postgreSQL.</p>
-<h3>release 0.1.2</h3>
-<p><a href="https://github.com/downloads/olivierch/openBarter/openbarter-0.1.2.tar.gz">source</a><br>
-<p><a href="https://github.com/downloads/olivierch/openBarter/openbarter-doc-0.1.2.pdf">documentation</a></p>
-<h3>release 0.1.1</h3>
-<p><a href="https://github.com/downloads/olivierch/openBarter/openbarter-0.1.1.tar.gz">source</a><br>
-<a href="https://github.com/downloads/olivierch/openBarter/openbarter-doc-0.1.1.pdf">documentation</a></p>
-<h2>Author</h2>
-<p>Written by Olivier Chaussavoine &lt;<a href="mailto:olivier.chaussavoine@gmail.com">olivier.chaussavoine@gmail.com</a>&gt;</p>
+<p>To know more about origins and goals of the project go to this <a href="./originsAndGoals.html">page</a>.</p>
+
+<h2>Development</h2>
+<p>You can fork the project on <a href="https://github.com/olivierch/openBarter">github</a></p>
+<p>It has also been released on <a href="http://pgxn.org/dist/openbarter/">PGXN</a></p>
+
+
+<h2>Contributors</h2>
+<p>Olivier Chaussavoine &lt; olivier DOT chaussavoine AT gmail.com &gt;</p>
 
 
 <h2>Licence</h2>
-  <p>openBarter - The maximum wealth by the best allocation of resources and the minimum collective effort -
+  <p>openBarter - The maximum common wealth for the minimum collective effort -
     Copyright (C) 2008->2012 olivier Chaussavoine</p>
 
    <p> This program is free software: you can redistribute it and/or modify
@@ -161,7 +152,7 @@
 -->	
 	<footer>
 		
-		<p><small>&copy; Copyright Olivier Chaussavoine 2011. All Rights Reserved.</small></p>
+		<p><small>&copy; Copyright Olivier Chaussavoine 2012. All Rights Reserved.</small></p>
 		<a href='https://www.ohloh.net/accounts/126827?ref=Tiny'>
 <img alt='Ohloh profile for olchaussavoine' height='15' src='https://www.ohloh.net/accounts/126827/widgets/account_tiny.gif' width='80' />
 </a>
