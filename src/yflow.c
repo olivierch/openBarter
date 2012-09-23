@@ -47,6 +47,8 @@ PG_FUNCTION_INFO_V1(yflow_flr_omega);
 PG_FUNCTION_INFO_V1(yflow_to_matrix);
 PG_FUNCTION_INFO_V1(yflow_qtts);
 PG_FUNCTION_INFO_V1(yflow_get_last_order);
+PG_FUNCTION_INFO_V1(yflow_to_json);
+PG_FUNCTION_INFO_V1(yflows_array_to_json);
 
 Datum yflow_in(PG_FUNCTION_ARGS);
 Datum yflow_out(PG_FUNCTION_ARGS);
@@ -68,7 +70,8 @@ Datum yflow_flr_omega(PG_FUNCTION_ARGS);
 Datum yflow_to_matrix(PG_FUNCTION_ARGS);
 Datum yflow_qtts(PG_FUNCTION_ARGS);
 Datum yflow_get_last_order(PG_FUNCTION_ARGS);
-
+Datum yflow_to_json(PG_FUNCTION_ARGS);
+Datum yflows_array_to_json(PG_FUNCTION_ARGS);
 
 char *yflow_statusBoxToStr (Tflow *box);
 char *yflow_pathToStr(Tflow *yflow);
@@ -728,9 +731,92 @@ yflow_get_last_order(PG_FUNCTION_ARGS)
 	PG_FREE_IF_COPY(f,0);
 	PG_RETURN_TORDER(result);
 }
+/******************************************************************************
+******************************************************************************/
+static char *_yflow_to_json(StringInfoData *pbuf,Tflow *yflow) {
+	int	dim = yflow->dim;
+	int	i;
 
+	appendStringInfoChar(pbuf, '[');
+	if(dim >0) {
+		for (i = 0; i < dim; i++)
+		{	
+			Torder *s = &yflow->x[i];
+		
+			if(i != 0) appendStringInfoChar(pbuf, ',');
 
+			// id,nr,qtt_prov,qtt_requ,own,qtt,np and yflowr;
+			appendStringInfo(pbuf, "{\"id\":%i, ", s->id);
+			appendStringInfo(pbuf, "\"own\":%i, ", s->own);
+			appendStringInfo(pbuf, "\"nr\":%i, ", s->nr);
+			appendStringInfo(pbuf, "\"qtt_requ\":" INT64_FORMAT ", ", s->qtt_requ);
+			appendStringInfo(pbuf, "\"np\":%i, ", s->np);
+			appendStringInfo(pbuf, "\"qtt_prov\":" INT64_FORMAT ", ", s->qtt_prov);
+			appendStringInfo(pbuf, "\"qtt\":" INT64_FORMAT ", ", s->qtt);
+			appendStringInfo(pbuf, "\"flowr\":" INT64_FORMAT " }", s->flowr);
+		}
+	}
+	appendStringInfo(pbuf, "]\n");
+	
+	return pbuf->data;
+}
 
+/*****************************************************************************
+// provides a json string representing the flow
+ *****************************************************************************/
+Datum
+yflow_to_json(PG_FUNCTION_ARGS)
+{
+	Tflow	*_yflow;
+	StringInfoData 	_buf;
+	char 	*_res;
+	
+	initStringInfo(&_buf);
+	_yflow = PG_GETARG_TFLOW(0);					
+	_res = _yflow_to_json(&_buf,_yflow);
+
+	PG_RETURN_CSTRING(_res);
+}
+/*****************************************************************************
+// provides a json string representing the array of flows
+ *****************************************************************************/
+#define ARRPTR(x)  ( (int4 *) ARR_DATA_PTR(x) )
+#define ARRNELEMS(x)  ArrayGetNItems(ARR_NDIM(x), ARR_DIMS(x))
+#define CHECKARRVALID(x) \
+	do { \
+		if (ARR_HASNULL(x) && array_contains_nulls(x)) \
+			ereport(ERROR, \
+					(errcode(ERRCODE_NULL_VALUE_NOT_ALLOWED), \
+					 errmsg("array must not contain nulls"))); \
+	} while(0)
+Datum
+yflows_array_to_json(PG_FUNCTION_ARGS)
+{
+	ArrayType  *a = PG_GETARG_ARRAYTYPE_P(0);
+	int32	count,n;
+	//Tflow	*_yflow;
+	Tflow	*_yflow;
+	StringInfoData _buf;
+		
+	CHECKARRVALID(a);
+	count = ARRNELEMS(a);
+
+	_yflow = (Tflow *) ARR_DATA_PTR(a);
+	initStringInfo(&_buf);
+	appendStringInfo(&_buf, "[\n");
+
+	for (n = 0; n < count; n++) {
+		if(n!=0) 
+			appendStringInfo(&_buf, ",\n");
+		//(void) _yflow_to_json(&_buf,&(_yflow[n]));
+		(void) _yflow_to_json(&_buf,_yflow);
+		_yflow++;
+	}
+
+	appendStringInfo(&_buf, "]\n");
+	PG_FREE_IF_COPY(a, 0);
+	PG_RETURN_CSTRING(_buf.data);
+}
 
 
 

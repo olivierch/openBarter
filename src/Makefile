@@ -12,18 +12,10 @@ EXTRA_CLEAN = y.tab.c y.tab.h
 
 # SHLIB_LINK += $(filter -lm, $(LIBS)) `uuid-config --libs`
 
-ifdef USE_PGXS
 PG_CONFIG = pg_config
 PGXS := $(shell $(PG_CONFIG) --pgxs)
 PG91 = $shell $(PG_CONFIG) --version | grep -qE " 8\.| 9\.0" && echo no || echo yes 
 include $(PGXS)
-else
-subdir = contrib/openBarter/src
-top_builddir = ../../..
-include $(top_builddir)/src/Makefile.global
-include $(top_srcdir)/contrib/contrib-global.mk
-endif
-
 
 # flowscan is compiled as part of flowparse
 yflowparse.o: yflowscan.c

@@ -21,17 +21,15 @@ INSERT INTO tconst (name,value) VALUES
 	('MAXCYCLE',8),
 	('VERSION-X.y.z',0),
 	('VERSION-x.Y.y',4),
-	('VERSION-x.y.Z',0),
+	('VERSION-x.y.Z',1),
 	('INSERT_OWN_UNKNOWN',1), 
 	-- !=0, insert an owner when it is unknown
 	-- ==0, raise an error when the owner is unknown
 	('CHECK_QUALITY_OWNERSHIP',0), 
 	-- !=0, quality = user_name/quality_name prefix must match session_user
 	-- ==0, the name of quality can be any string
-	('MAXORDERFETCH',10000),
+	('MAXORDERFETCH',10000);
 	-- maximum number of paths of the set on which the competition occurs
-	('MAXTRY',10);
-	-- life time of an order for a given couple (np,nr)
 --------------------------------------------------------------------------------
 -- fetch a constant, and verify consistancy
 CREATE FUNCTION fgetconst(_name text) RETURNS int AS $$
@@ -185,19 +183,7 @@ comment on column tquality.qtt is 'total quantity on the market for this quality
 alter sequence tquality_id_seq owned by tquality.id;
 create index tquality_name_idx on tquality(name);
 SELECT _reference_time('tquality');
---------------------------------------------------------------------------------
--- TRELTRIED
---------------------------------------------------------------------------------
-create table treltried (
-	np int references tquality(id) NOT NULL, 
-	nr int references tquality(id) NOT NULL, 
-	cnt bigint DEFAULT 0,
-	PRIMARY KEY (np,nr),     
-	CHECK(	
-    		np!=nr AND 
-    		cnt >=0
-    	)
-);	
+	
 
 -- \copy tquality (depository,name) from data/ISO4217.data with delimiter '-'
 
@@ -503,7 +489,6 @@ SELECT _grant_read('vorderverif');
 --------------------------------------------------------------------------------
 -- TMVT
 --------------------------------------------------------------------------------
--- CREATE TYPE ymvt_origin AS ENUM ('EXECUTION', 'CANCEL');
 create table tmvt (
         id serial UNIQUE not NULL,
         nb int not NULL,
@@ -1008,7 +993,7 @@ CREATE TYPE yresprequote AS (
     qtt_in_sum int8,
     qtt_out_sum int8,
         
-    flows yflow[]
+    flows text -- json of yflow[]
 );
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
@@ -1018,7 +1003,7 @@ CREATE FUNCTION
 DECLARE
 	_pivot 		 torder%rowtype;
 	_ypatmax	 yflow;
-	_flows		 yflow[];
+	_flows		 text[];
 	_res	         int8[];
 	_idd		 int;
 	_q		 text[];
@@ -1054,7 +1039,8 @@ BEGIN
 	_pivot.qtt := _qttprovided;
 	
 	_r.own 		:= _pivot.own;
-	_r.flows 	:= ARRAY[]::yflow[];
+	-- _r.flows 	:= ARRAY[]::yflow[];
+	_flows		:= ARRAY[]::text[];
 	_r.nr 		:= _pivot.nr;
 	_r.np 		:= _pivot.np;
 	_r.qtt_prov 	:= _pivot.qtt_prov;
@@ -1067,7 +1053,7 @@ BEGIN
 	_r.qtt_out_sum := 0;
 	
 	FOR _ypatmax IN SELECT _patmax  FROM finsertflows(_pivot) LOOP
-		_r.flows := array_append(_r.flows,_ypatmax);
+		_flows := array_append(_flows,yflow_to_json(_ypatmax));
 		_res := yflow_qtts(_ypatmax); -- [in,out] of the last node
 		
 		_r.qtt_in_sum  := _r.qtt_in_sum + _res[1];
@@ -1086,6 +1072,7 @@ BEGIN
 			_om_max := _om;
 		END IF;
 	END LOOP;
+	_r.flows := array_to_json(_flows);
 
 	RETURN _r;
 END; 
@@ -1317,110 +1304,6 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  finsertorder(text,text,int8,int8,text) TO client_opened_role;
 
 --------------------------------------------------------------------------------
-/*
-Some orders that are frequently included in refused cycles are removed from the database with the following algorithm:
-
-1 - When a movement nr->np is created, a counter Q(np,nr)  is incremented
-	Q(np,nr) == treltried[np,nr].cnt +=1, 
-	done by fupdate_treltried(_commits int8[],_nbcommit int), called by vfexecute_flow()
-
-2- When an order nr->np is created, the counter Q(np,nr) is recorded at position P
-	torder[.].start = P = Q(np,nr)
-	done by fget_treltried() called by finsert_order_int()
-	
-3- orders are removed from the market when their torder[.].start is such as P+MAXTRY < Q, with MAXTRY defined in tconst [10]
-	This operation 3) is performed each time some movements are created.
-	done by finvalidate_treltried() called by fexecquote() and finsertorder()
-	
-4- treltried must be truncated at market opening
-	done by frenumbertables()
-	
-Ainsi, on permet à chaque offre d'être mis en concurrence MAXTRY fois sans pénaliser les couple (np,nr) plus rares. 
-Celà suppose que toutes les solutions soient parcourus, ce qui n'est pas le cas.
-	
-*/
---------------------------------------------------------------------------------
--- update treltried[np,nr].cnt
---------------------------------------------------------------------------------
-CREATE FUNCTION  fupdate_treltried(_commits int8[],_nbcommit int) RETURNS void AS $$
-DECLARE 
-	_i int;
-	_np int;
-	_nr int;
-	_MAXTRY 	int := fgetconst('MAXTRY');
-BEGIN
-	IF(_MAXTRY=0) THEN
-		RETURN;
-	END IF;
-	
-	FOR _i IN 1 .. _nbcommit LOOP
-		_nr	:= _commits[_i][3]::int;
-		_np	:= _commits[_i][5]::int;
-		LOOP
-			UPDATE treltried SET cnt = cnt + 1 WHERE np=_np AND nr=_nr;
-			IF FOUND THEN
-				EXIT;
-			ELSE
-				BEGIN
-					INSERT INTO treltried (np,nr,cnt) VALUES (_np,_nr,1);
-				EXCEPTION WHEN check_violation THEN
-					-- 
-				END;
-			END IF;
-		END LOOP;
-	END LOOP;
-
-	RETURN;
-END;
-$$ LANGUAGE PLPGSQL;
---------------------------------------------------------------------------------
--- sets torder[.].start
---------------------------------------------------------------------------------
-CREATE FUNCTION  fget_treltried(_np int,_nr int) RETURNS int8 AS $$
-DECLARE 
-	_cnt int8;
-	_MAXTRY 	int := fgetconst('MAXTRY');
-BEGIN
-	IF(_MAXTRY=0) THEN
-		RETURN 0;
-	END IF;
-	SELECT cnt into _cnt FROM treltried WHERE np=_np AND nr=_nr;
-	IF NOT FOUND THEN
-		_cnt := 0;
-	END IF;
-
-	RETURN _cnt;
-END;
-$$ LANGUAGE PLPGSQL;
---------------------------------------------------------------------------------
--- 
---------------------------------------------------------------------------------
-CREATE FUNCTION  finvalidate_treltried() RETURNS void AS $$
-DECLARE 
-	_o 	torder%rowtype;
-	_MAXTRY int := fgetconst('MAXTRY');
-	_res	int;
-	_mvt_id	int;
-BEGIN
-	IF(_MAXTRY=0) THEN
-		RETURN;
-	END IF;
-	
-	FOR _o IN SELECT o.* FROM torder o,treltried r 
-		WHERE o.np=r.np AND o.nr=r.nr AND o.start IS NOT NULL AND o.start + _MAXTRY < r.cnt LOOP
-		
-		INSERT INTO tmvt (nb,oruuid,grp,own_src,own_dst,qtt,nat,created) 
-			VALUES(1,_o.uuid,NULL,_o.own,_o.own,_o.qtt,_o.np,statement_timestamp()) 
-			RETURNING id INTO _mvt_id;
-			
-		-- the order order.qtt != 0
-		perform fremoveorder_int(_o.id);			
-	END LOOP;
-	RETURN;
-END;
-$$ LANGUAGE PLPGSQL;
-
---------------------------------------------------------------------------------
 -- admin
 --------------------------------------------------------------------------------
 
@@ -1476,254 +1359,7 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION fcreateuser(text) TO admin;
 
---------------------------------------------------------------------------------
-
-create table tmarket ( 
-    id serial UNIQUE not NULL,
-    created timestamp not NULL
-);
-alter sequence tmarket_id_seq owned by tmarket.id;
-SELECT _grant_read('tmarket');
---------------------------------------------------------------------------------
-CREATE TYPE ymarketaction AS ENUM ('init', 'open','stop','close','start');
-CREATE TYPE ymarketstatus AS ENUM ('INITIALIZING','OPENED', 'STOPPING','CLOSED','STARTING');
-CREATE VIEW vmarkethistory AS SELECT
-	id,
- 	(id+4)/4 as market_session,
- 	CASE 	WHEN (id-1)%4=0 THEN 'OPENED'::ymarketstatus 	
- 		WHEN (id-1)%4=1 THEN 'STOPPING'::ymarketstatus
- 		WHEN (id-1)%4=2 THEN 'CLOSED'::ymarketstatus
- 		WHEN (id-1)%4=3 THEN 'STARTING'::ymarketstatus
-	END AS market_status,
- 	created
-	FROM tmarket;
-SELECT _grant_read('vmarkethistory');
-CREATE VIEW vmarket AS SELECT * FROM  vmarkethistory ORDER BY ID DESC LIMIT 1; 
-SELECT _grant_read('vmarket');	
-
---------------------------------------------------------------------------------
-CREATE FUNCTION fchangestatemarket(_execute bool) RETURNS ymarketstatus AS $$
-DECLARE
-	_cnt int;
-	_hm tmarket%rowtype;
-	_action ymarketaction;
-	_prev_status ymarketstatus;
-	_res bool;
-	_new_status ymarketstatus;
-BEGIN
-
-	SELECT market_status INTO _prev_status FROM vmarket;
-	IF NOT FOUND THEN 
-		_action := 'init';
-		_prev_status := 'INITIALIZING';
-		_new_status := 'OPENED';
-		
-	ELSIF (_prev_status = 'STARTING') THEN		
-		_action := 'open';
-		_new_status := 'OPENED';
-		
-	ELSIF (_prev_status = 'OPENED') THEN
-		_action := 'stop';
-		_new_status := 'STOPPING';
-		
-	ELSIF (_prev_status = 'STOPPING') THEN
-		_action := 'close';
-		_new_status := 'CLOSED';
-		
-	ELSE -- _prev_status='CLOSED'
-		_action := 'start';
-		_new_status := 'STARTING';
-		RAISE INFO 'market_session = n->n+1';
-	END IF;
-	
-	RAISE INFO 'market_status %->%',_prev_status,_new_status;
-	IF NOT _execute THEN
-		RAISE INFO 'The next action will be: %',_action;
-		RAISE INFO 'market_status = % is unchanged.',_prev_status;
-		RETURN _new_status;
-	END IF;
-	
-	IF (_action = 'init' OR _action = 'open') THEN 		
-		GRANT client_opened_role TO client;
-		RAISE INFO 'The market is now opened for clients';		
-		
-	ELSIF (_action = 'stop') THEN
-		REVOKE client_opened_role FROM client;
-		GRANT  client_stopping_role TO client;	
-		RAISE INFO 'The market is now stopping for clients';		
-		
-	ELSIF (_action = 'close') THEN
-		REVOKE client_stopping_role FROM client;
-		_res := frenumbertables(false);
-		IF NOT _res THEN
-			RAISE EXCEPTION USING ERRCODE='YA001';
-		END IF;	
-					
-	ELSE -- _action='start'
-		_res := frenumbertables(true);
-		IF NOT _res THEN
-			RAISE EXCEPTION USING ERRCODE='YA001';
-		END IF;			
-
-	END IF;
-	
-	INSERT INTO tmarket (created) VALUES (statement_timestamp()) RETURNING * INTO _hm;
-	RETURN _new_status;
-	 
-END;
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fchangestatemarket(bool) TO admin;
-
---------------------------------------------------------------------------------
-CREATE FUNCTION fresetmarket_int() RETURNS void AS $$
-DECLARE
-	_prev_status ymarketstatus;
-BEGIN
-	SELECT market_status INTO _prev_status FROM vmarket; 
-	IF(_prev_status != 'STOPPING') THEN
-		RAISE INFO 'The market state is %!= STOPPING, abort.',_prev_status;
-		RAISE EXCEPTION USING ERRCODE='YU001';
-	END IF;
-	
-	TRUNCATE tmvt;
-	TRUNCATE torder;
-	TRUNCATE towner CASCADE;
-	TRUNCATE tquality CASCADE;
-	-- TRUNCATE tuser CASCADE;
-	-- PERFORM setval('tuser_id_seq',1,false);
-	RETURN;
-END;
-$$ LANGUAGE PLPGSQL;
-
---------------------------------------------------------------------------------
-CREATE FUNCTION fresetmarket() RETURNS void AS $$
-DECLARE
-	_prev_status 	ymarketstatus;
-	_new_status 	ymarketstatus;
-BEGIN
-	LOOP
-		_new_status := fchangestatemarket(true); 
-		IF(_new_status = 'STOPPING') THEN
-			perform fresetmarket_int();
-			CONTINUE WHEN true;
-		END IF;
-		EXIT WHEN _new_status = 'OPENED';
-	END LOOP;
-	RAISE INFO 'The market is reset and opened';
-	RETURN;
-END;
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION fresetmarket() TO admin;
-
---------------------------------------------------------------------------------
-CREATE FUNCTION frenumbertables(exec bool) RETURNS bool AS $$
-DECLARE
-	_cnt int;
-	_res bool;
-BEGIN
-	
-	SELECT count(*) INTO _cnt FROM tmvt;
-	IF (_cnt != 0) THEN
-		RAISE INFO 'tmvt must be cleared';
-		_res := false;
-	ELSE
-		_res := true;
-	END IF;
-		
-	IF NOT exec THEN
-		RETURN _res;
-	END IF;
-	
-	IF NOT _res THEN
-		RAISE WARNING 'tmvt must be cleared';
-		RAISE EXCEPTION USING ERRCODE='YU001';
-	END IF;
-	
-	-- desable triggers
-	ALTER TABLE towner DISABLE TRIGGER ALL;
-	ALTER TABLE tquality DISABLE TRIGGER ALL;
-	ALTER TABLE tuser DISABLE TRIGGER ALL;
-	
-	-- DROP CONSTRAINT ON UPDATE CASCADE on tables tquality,torder,tmvt
-    	ALTER TABLE tquality DROP CONSTRAINT ctquality_idd,ADD CONSTRAINT ctquality_idd FOREIGN KEY (idd) references tuser(id) ON UPDATE CASCADE;
-	ALTER TABLE tquality DROP CONSTRAINT ctquality_depository,ADD CONSTRAINT ctquality_depository FOREIGN KEY (depository) references tuser(name) ON UPDATE RESTRICT;  -- must not be changed
-	  			
-	ALTER TABLE torder DROP CONSTRAINT ctorder_own,ADD CONSTRAINT ctorder_own 	FOREIGN KEY (own) references towner(id) ON UPDATE CASCADE;
-	ALTER TABLE torder DROP CONSTRAINT ctorder_np,ADD CONSTRAINT ctorder_np 	FOREIGN KEY (np) references tquality(id) ON UPDATE CASCADE;
-	ALTER TABLE torder DROP CONSTRAINT ctorder_nr,ADD CONSTRAINT ctorder_nr 	FOREIGN KEY (nr) references tquality(id) ON UPDATE CASCADE;
-
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_grp,ADD CONSTRAINT ctmvt_grp 		FOREIGN KEY (grp) references tmvt(id) ON UPDATE CASCADE;
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_own_src,ADD CONSTRAINT ctmvt_own_src 	FOREIGN KEY (own_src) references towner(id) ON UPDATE CASCADE;
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_own_dst,ADD CONSTRAINT ctmvt_own_dst 	FOREIGN KEY (own_dst) references towner(id) ON UPDATE CASCADE;
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_nat,ADD CONSTRAINT ctmvt_nat 		FOREIGN KEY (nat) references tquality(id) ON UPDATE CASCADE;
-
-	TRUNCATE tquote;
-	PERFORM setval('tquote_id_seq',1,false);
-	
-	TRUNCATE tmvt;
-	PERFORM setval('tmvt_id_seq',1,false);
-	
-	-- remove unused qualities
-	DELETE FROM tquality q WHERE	q.id NOT IN (SELECT np FROM torder)	
-				AND	q.id NOT IN (SELECT nr FROM torder)
-				AND 	q.id NOT IN (SELECT nat FROM tmvt);	
-	-- renumbering qualities
-	PERFORM setval('tquality_id_seq',1,false);
-	WITH a AS (SELECT * FROM tquality ORDER BY id ASC)
-	UPDATE tquality SET id = nextval('tquality_id_seq') FROM a WHERE a.id = tquality.id;
-	
-	-- remove unused owners
-	DELETE FROM towner o WHERE o.id NOT IN (SELECT idd FROM tquality);
-	
-	-- renumbering owners
-	PERFORM setval('towner_id_seq',1,false);
-	WITH a AS (SELECT * FROM towner ORDER BY id ASC)
-	UPDATE towner SET id = nextval('towner_id_seq') FROM a WHERE a.id = towner.id;
-	
-	-- resetting quotas
-	UPDATE tuser SET spent = 0;
-		
-	-- renumbering orders
-	PERFORM setval('torder_id_seq',1,false);
-	WITH a AS (SELECT * FROM torder ORDER BY id ASC)
-	UPDATE torder SET id = nextval('torder_id_seq') FROM a WHERE a.id = torder.id;
-		
-	TRUNCATE torderremoved; -- does not reset associated sequence if any
-	TRUNCATE tmvtremoved;
-	TRUNCATE tquoteremoved;
-	TRUNCATE treltried;
-	
-	
-	-- reset of constraints
-    	ALTER TABLE tquality DROP CONSTRAINT ctquality_idd,ADD CONSTRAINT ctquality_idd FOREIGN KEY (idd) references tuser(id);
-    	ALTER TABLE tquality DROP CONSTRAINT ctquality_depository,ADD CONSTRAINT ctquality_depository FOREIGN KEY (depository) references tuser(name);
-    		
-	ALTER TABLE torder DROP CONSTRAINT ctorder_own,ADD CONSTRAINT ctorder_own 	FOREIGN KEY (own) references towner(id);
-	ALTER TABLE torder DROP CONSTRAINT ctorder_np,ADD CONSTRAINT ctorder_np 	FOREIGN KEY (np) references tquality(id);
-	ALTER TABLE torder DROP CONSTRAINT ctorder_nr,ADD CONSTRAINT ctorder_nr 	FOREIGN KEY (nr) references tquality(id);
-
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_grp,ADD CONSTRAINT ctmvt_grp 		FOREIGN KEY (grp) references tmvt(id);
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_own_src,ADD CONSTRAINT ctmvt_own_src 	FOREIGN KEY (own_src) references towner(id);
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_own_dst,ADD CONSTRAINT ctmvt_own_dst 	FOREIGN KEY (own_dst) references towner(id);
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_nat,ADD CONSTRAINT ctmvt_nat 		FOREIGN KEY (nat) references tquality(id);
-	
-	-- enable triggers
-	ALTER TABLE towner ENABLE TRIGGER ALL;
-	ALTER TABLE tquality ENABLE TRIGGER ALL;
-	ALTER TABLE tuser ENABLE TRIGGER ALL;
-	
-	RAISE INFO 'Run the command:'; 
-	RAISE INFO '	VACUUM FULL ANALYZE';
-	RAISE INFO 'before starting the market';
-	RETURN true;
-	 
-END;
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-
-
---------------------------------------------------------------------------------
--- user
---------------------------------------------------------------------------------
+\i sql/market.sql
 
 --------------------------------------------------------------------------------
 -- moves all movements of an exchange belonging to the user into tmvtremoved
@@ -1768,311 +1404,9 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fremoveagreement(int) TO client_opened_role,client_stopping_role;
 
-/*-------------------------------------------------------------------------------
--- QUOTA MANAGEMENT
+\i sql/quota.sql
 
-for long functions, the time spent to execute it is added to the time used by the user. 
-When the time spent reaches a limit, these functions become forbidden for this user.
-
-if this time is greater than a quota defined for this user at the beginning of the function, 
-the function is aborted.
-The time spent is cleared when the market starts. 
-
-The quota management can be disabled by resetting the quota of users globally or for each user.
-
--------------------------------------------------------------------------------*/
-create function fverifyquota() RETURNS int AS $$
-DECLARE 
-	_u	tuser%rowtype;
-BEGIN
-	SELECT * INTO _u FROM tuser WHERE name=session_user;
-	IF(_u.id is NULL) THEN
-		RAISE WARNING 'the user % is undefined',session_user;
-		RAISE EXCEPTION USING ERRCODE='YA005';
-	END IF;
-	UPDATE tuser SET last_in = statement_timestamp() WHERE name = session_user;
-	IF(_u.quota = 0 ) THEN
-		RETURN _u.id;
-	END IF;
-
-	IF(_u.quota < _u.spent) THEN
-		RAISE WARNING 'the quota is reached for the user %',session_user;
-		RAISE EXCEPTION USING ERRCODE='YU003';
-	END IF;
-	RETURN _u.id;
-
-END;		
-$$ LANGUAGE PLPGSQL;
-
---------------------------------------------------------------------------------
--- 
---------------------------------------------------------------------------------
-create function fspendquota(_time_begin timestamp) RETURNS bool AS $$
-DECLARE 
-	_t2	timestamp;
-BEGIN
-	_t2 := clock_timestamp();
-	UPDATE tuser SET spent = spent + extract (microseconds from (_t2-_time_begin)) WHERE name = session_user;
-	RETURN true;
-END;		
-$$ LANGUAGE PLPGSQL;
-
---------------------------------------------------------------------------------
--- stat
---------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
--- returns 0 when for each quality  tquality.qtt= sum(torder.qtt)+sum(tmvt.qtt)
---------------------------------------------------------------------------------
-create function fbalance() RETURNS int AS $$
-DECLARE 
-	_cnt 		int;
-BEGIN
-	WITH accounting_order AS (SELECT np,sum(qtt) AS qtt FROM torder GROUP BY np),
-	     accounting_mvt   AS (SELECT nat as np,sum(qtt) AS qtt FROM tmvt GROUP BY nat)
-	SELECT count(*) INTO _cnt FROM tquality,accounting_order,accounting_mvt
-	WHERE tquality.id=accounting_order.np AND tquality.id=accounting_mvt.np
-		AND tquality.qtt != accounting_order.qtt + accounting_mvt.qtt;
-	RETURN _cnt;
-END;		
-$$ LANGUAGE PLPGSQL;
-	
---------------------------------------------------------------------------------
-CREATE FUNCTION fgetstats(_details bool) RETURNS TABLE(_name text,cnt int8) AS $$
-DECLARE 
-	_i 		int;
-	_cnt 		int;
-BEGIN
-
-	_name := 'number of qualities';
-	select count(*) INTO cnt FROM tquality;
-	RETURN NEXT;
-	
-	_name := 'number of owners';
-	select count(*) INTO cnt FROM towner;
-	RETURN NEXT;
-	
-	_name := 'number of quotes';
-	select count(*) INTO cnt FROM tquote;
-	RETURN NEXT;
-			
-	_name := 'number of orders';
-	select count(*) INTO cnt FROM vorderverif;
-	RETURN NEXT;
-	
-	_name := 'number of movements';
-	select count(*) INTO cnt FROM vmvtverif;
-	RETURN NEXT;
-	
-	_name := 'number of quotes removed';
-	select count(*) INTO cnt FROM tquoteremoved;
-	RETURN NEXT;
-
-	_name := 'number of orders removed';
-	select count(*) INTO cnt FROM torderremoved;
-	RETURN NEXT;
-	
-	_name := 'number of movements removed';
-	select count(*) INTO cnt FROM tmvtremoved;	
-	RETURN NEXT;
-	
-	_name := 'number of agreements';
-	select count(distinct grp) INTO cnt FROM vmvtverif where nb!=1;	
-	RETURN NEXT;	
-	
-	_name := 'number of orders rejected';
-	select count(distinct grp) INTO cnt FROM vmvtverif where nb=1;	
-	RETURN NEXT;
-
-/*	
-	FOR _name,cnt IN SELECT name,value FROM tconst LOOP
-		RETURN NEXT;
-	END LOOP;
-*/		
-	
-	FOR _i,cnt IN select nb,count(distinct grp) FROM vmvtverif where nb!=1 GROUP BY nb LOOP
-		_name := 'agreements with ' || _i || ' partners';
-		RETURN NEXT;
-	END LOOP;
-
-	RETURN;
-END;
-$$ LANGUAGE PLPGSQL  SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fgetstats(bool) TO admin;
-
---------------------------------------------------------------------------------
-CREATE FUNCTION fgeterrs(_details bool) RETURNS TABLE(_name text,cnt int8) AS $$
-DECLARE 
-	_i 		int;
-	_cnt 		int;
-BEGIN		
-	_name := 'balance';
-	cnt := fbalance();	
-	RETURN NEXT;
-	
-	IF(_details) THEN
-	
-		_name := 'errors on quantities in mvts';
-		cnt := fverifmvt();
-		RETURN NEXT;
-	
-		_name := 'errors on agreements in mvts';
-		cnt := fverifmvt2();
-		RETURN NEXT;
-	END IF;
-	RETURN;
-END;
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fgeterrs(bool) TO admin;
---------------------------------------------------------------------------------
--- number of partners for the 100 last movements
--- select nb,count(distinct grp) from (select * from vmvtverif order by id desc limit 100) a group by nb;
---------------------------------------------------------------------------------
--- verifies that:
---	vorderverif.qtt_prov and vorderverif.nat are coherent with mvt
---------------------------------------------------------------------------------
-CREATE FUNCTION fverifmvt() RETURNS int AS $$
-DECLARE
-	_qtt_prov	 int8;
-	_qtt		 int8;
-	_uuid		 text;
-	_qtta		 int8;
-	_npa		 int;
-	_npb		 int;
-	_np		 int;
-	_cnterr		 int := 0;
-	_iserr		 bool;
-BEGIN
-	
-	FOR _qtt_prov,_qtt,_uuid,_np IN SELECT qtt_prov,qtt,uuid,np FROM vorderverif LOOP
-	
-		_iserr := false;
-	
-		SELECT sum(qtt),max(nat),min(nat) INTO _qtta,_npa,_npb 
-			FROM vmvtverif WHERE oruuid=_uuid GROUP BY oruuid;
-			
-		IF(	FOUND ) THEN 
-			IF(	(_qtt_prov != _qtta+_qtt) 
-				-- NOT vorderverif.qtt_prov == vorderverif.qtt + sum(mvt.qtt)
-				OR (_np != _npa)	
-				-- NOT mvt.nat == vorderverif.nat 
-				OR (_npa != _npb)
-				-- NOT all mvt.nat are the same 
-			)	THEN 
-				_iserr := true;
-				
-			END IF;	
-		END IF;
-		
-		IF(_iserr) THEN
-			_cnterr := _cnterr +1;
-			raise INFO 'error on uuid:%',_uuid;
-		END IF;
-	END LOOP;
-
-	RETURN _cnterr;
-END;
-$$ LANGUAGE PLPGSQL;
---------------------------------------------------------------------------------
-/* count error in movements when compared to orders  */
-CREATE FUNCTION fverifmvt2() RETURNS int AS $$
-DECLARE
-	_cnterr		 int := 0;
-	_cnterrtot	 int := 0;
-	_mvt		 tmvt%rowtype;
-	_mvtprec	 tmvt%rowtype;
-	_mvtfirst	 tmvt%rowtype;
-	_uuiderr	 text;
-	_cnt		 int;		-- count mvt in agreement
-BEGIN
-		
-	_mvtprec.grp := NULL;_mvtfirst.grp := NULL;
-	_uuiderr := NULL;
-	FOR _mvt IN SELECT * FROM vmvtverif ORDER BY grp,id ASC  LOOP
-		IF(_mvt.grp != _mvtprec.grp) THEN -- first mvt of agreement
-			--> finish last agreement
-			IF NOT (_mvtprec.grp IS NULL OR _mvtfirst.grp IS NULL) THEN
-				_cnterr := _cnterr + fverifmvt2_int(_mvtprec,_mvtfirst);
-				_cnt := _cnt +1;
-				
-				if(_cnt != _mvtprec.nb) THEN
-					_cnterr := _cnterr +1;
-					RAISE INFO 'wrong number of movements for agreement %',_mvtprec.oruuid;
-				END IF;
-				-- errors found
-				if(_cnterr != 0) THEN
-					_cnterrtot := _cnterr + _cnterrtot;
-					IF(_uuiderr IS NULL) THEN
-						_uuiderr := _mvtprec.oruuid;
-					END IF;
-				END IF;
-			END IF;
-			--< A
-			_mvtfirst := _mvt;
-			_cnt := 0;
-			_cnterr := 0;
-		ELSE
-			_cnterr := _cnterr + fverifmvt2_int(_mvtprec,_mvt);
-			_cnt := _cnt +1;
-		END IF;
-		_mvtprec := _mvt;
-	END LOOP;
-	--> finish last agreement
-	IF NOT (_mvtprec.grp IS NULL OR _mvtfirst.grp IS NULL) THEN
-		_cnterr := _cnterr + fverifmvt2_int(_mvtprec,_mvtfirst);
-		_cnt := _cnt +1;
-		
-		if(_cnt != _mvtprec.nb) THEN
-			_cnterr := _cnterr +1;
-			RAISE INFO 'wrong number of movements for agreement %',_mvtprec.oruuid;
-		END IF;
-		-- errors found
-		if(_cnterr != 0) THEN
-			_cnterrtot := _cnterr + _cnterrtot;
-			IF(_uuiderr IS NULL) THEN
-				_uuiderr := _mvtprec.oruuid;
-			END IF;
-		END IF;
-	END IF;
-	--< A
-	IF(_cnterrtot != 0) THEN
-		RAISE NOTICE 'mvt.oruuid= % is the first agreement where an error is found',_uuiderr;
-		RETURN _cnterrtot;
-	ELSE
-		RETURN 0;
-	END IF;
-END;
-$$ LANGUAGE PLPGSQL;
-
---------------------------------------------------------------------------------
-CREATE FUNCTION fverifmvt2_int(_mvtprec tmvt,_mvt tmvt) RETURNS int AS $$
-DECLARE
-	_o		vorderverif%rowtype;
-BEGIN
-	SELECT uuid,np,nr,qtt_prov,qtt_requ INTO _o.uuid,_o.np,_o.nr,_o.qtt_prov,_o.qtt_requ FROM vorderverif WHERE uuid = _mvt.oruuid;
-	IF (NOT FOUND) THEN
-		RAISE INFO 'order not found for vorderverif %',_mvt.oruuid;
-		RETURN 1;
-	END IF;
-
-	IF(_o.np != _mvt.nat OR _o.nr != _mvtprec.nat) THEN
-		RAISE INFO 'mvt.nat != np or mvtprec.nat!=nr';
-		RETURN 1;
-	END IF;
-	
-	-- _o.qtt_prov/_o.qtt_requ < _mvt.qtt/_mvtprec.qtt
-	IF(((_o.qtt_prov::float8) / (_o.qtt_requ::float8)) < ((_mvt.qtt::float8)/(_mvtprec.qtt::float8))) THEN
-		RAISE INFO 'order %->%, with  mvt %->%',_o.qtt_requ,_o.qtt_prov,_mvtprec.qtt,_mvt.qtt;
-		RAISE INFO '% < 1; should be >=1',(((_o.qtt_prov::float8) / (_o.qtt_requ::float8)) / ((_mvt.qtt::float8)/(_mvtprec.qtt::float8)));
-		RAISE INFO 'order.uuid %, with  mvtid %->%',_o.uuid,_mvtprec.id,_mvt.id;
-		RETURN 1;
-	END IF;
-
-
-	RETURN 0;
-END;
-$$ LANGUAGE PLPGSQL;
-
+\i sql/stat.sql
 --------------------------------------------------------------------------------
 /* agreement 
 for all owners : select * from fgetagr(1);
@@ -2115,7 +1449,7 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
-
+\i sql/reltried.sql
 CREATE FUNCTION _removepublic() RETURNS void AS $$
 BEGIN
 	EXECUTE 'REVOKE ALL ON DATABASE ' || current_catalog || ' FROM PUBLIC';
