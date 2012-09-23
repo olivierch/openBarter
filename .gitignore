@@ -2,6 +2,8 @@
 *.so
 *.dblite
 *.pyc
+.project
+.cproject
 /src/.deps/
 /results/
 /tmp_check/
