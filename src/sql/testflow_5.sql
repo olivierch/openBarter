@@ -5,6 +5,7 @@ SET client_min_messages = notice;
 set role admin;
 
 select fresetmarket();
+select id,market_session,market_status from vmarket;
 
 set role client;
 
@@ -12,7 +13,7 @@ select finsertorder('u','b',1000,1000,'a');
 select finsertorder('v','c',1000,1000,'b');
 select qtt_in,qtt_out from fgetquote('w','a',1000,0,'c');
 select finsertorder('w','a',1000,1000,'c');
-select id,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
+select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
 select fremoveagreement(1);
 select id,qtt from tquality;
 
@@ -22,7 +23,7 @@ select  qtt_in,qtt_out from fgetquote('w','a',500,0,'c');
 --select finsertorder('w','a',500,2000,'c');
 select qtt_in,qtt_out from fgetquote('w','a',500,2000,'c');
 select qtt_in,qtt_out from fexecquote('w',1);
-select id,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
+select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
 select fremoveagreement(4);
 
 select fgetquote('w','a',500,0,'b');
@@ -30,6 +31,7 @@ select finsertorder('w','a',500,1000,'b');
 
 set role admin;
 select * from fchangestatemarket(true);
+select id,market_session,market_status from vmarket;
 -- market is closed
 set role client;
 select fremoveagreement(7);
@@ -43,6 +45,7 @@ select * from fgeterrs(true) where cnt != 0;
 select * from fchangestatemarket(true);
 select * from fchangestatemarket(true);
 select * from fchangestatemarket(true);
+select id,market_session,market_status from vmarket;
 -- merket is opened
 select * from fgetstats(true);
 

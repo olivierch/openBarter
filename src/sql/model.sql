@@ -492,6 +492,7 @@ SELECT _grant_read('vorderverif');
 --------------------------------------------------------------------------------
 create table tmvt (
         id serial UNIQUE not NULL,
+        uuid text UNIQUE NOT NULL,
         nb int not NULL,
         -- origin ymvt_origin DEFAULT 'EXECUTION',
         oruuid text NOT NULL, -- refers to order uuid
@@ -517,8 +518,9 @@ create table tmvt (
 SELECT _grant_read('tmvt');
 
 comment on table tmvt is 'records a change of ownership';
+comment on column tmvt.uuid is 'uuid of this movement';
 comment on column tmvt.nb is 'number of movements of the exchange';
-comment on column tmvt.oruuid is 'order.uuid producing  this movement';
+comment on column tmvt.oruuid is 'order.uuid producing this movement';
 comment on column tmvt.grp is 'references the first movement of the exchange';
 comment on column tmvt.own_src is 'owner provider';
 comment on column tmvt.own_dst is 'owner receiver';
@@ -537,6 +539,7 @@ create index tmvt_own_dst_idx on tmvt(own_dst);
 CREATE VIEW vmvt AS 
 	SELECT 	m.id as id,
 		m.nb as nb,
+		m.uuid as uuid,
 		m.oruuid as oruuid,
 		m.grp as grp,
 		w_src.name as provider,
@@ -550,6 +553,7 @@ CREATE VIEW vmvt AS
 	INNER JOIN tquality q ON (m.nat = q.id); 	
 SELECT _grant_read('vmvt');
 COMMENT ON VIEW vmvt IS 'List of movements';
+COMMENT ON COLUMN vmvt.uuid IS 'reference this movement';
 COMMENT ON COLUMN vmvt.nb IS 'number of movements of the exchange';
 COMMENT ON COLUMN vmvt.oruuid IS 'reference to the exchange';
 COMMENT ON COLUMN vmvt.grp IS 'id of the first movement of the exchange';
@@ -562,6 +566,7 @@ COMMENT ON COLUMN vmvt.created IS 'time of the transaction';
 --------------------------------------------------------------------------------
 create table tmvtremoved (
         id int UNIQUE not NULL,
+        uuid text not NULL,
         nb int not null,
         oruuid text NOT NULL, -- refers to order uuid
     	grp int NOT NULL, 
@@ -577,9 +582,9 @@ create table tmvtremoved (
 SELECT _grant_read('tmvtremoved');
 --------------------------------------------------------------------------------
 CREATE VIEW vmvtverif AS
-	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvt where grp is not NULL
+	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvt where grp is not NULL
 	UNION ALL
-	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvtremoved where grp is not NULL;
+	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvtremoved where grp is not NULL;
 SELECT _grant_read('vmvtverif');
 
 --------------------------------------------------------------------------------
@@ -773,6 +778,7 @@ DECLARE
 	_mvt_id		int;
 	_qtt		int8;
 	_cnt 		int;
+	_oruuid		text;
 	_uuid		text;
 	_res		text;
 BEGIN
@@ -795,15 +801,17 @@ BEGIN
 		_flowr	:= _commits[_i][8];
 		
 		UPDATE torder set qtt = qtt - _flowr ,updated = statement_timestamp()
-			WHERE id = _oid AND _flowr <= qtt RETURNING uuid,qtt INTO _uuid,_qtt;
+			WHERE id = _oid AND _flowr <= qtt RETURNING uuid,qtt INTO _oruuid,_qtt;
 		IF(NOT FOUND) THEN
 			RAISE WARNING 'the flow is not in sync with the database torder[%] does not exist or torder.qtt < %',_oid,_flowr ;
 			RAISE EXCEPTION USING ERRCODE='YU002';
 		END IF;
 			
-		INSERT INTO tmvt (nb,oruuid,grp,own_src,own_dst,qtt,nat,created) 
-			VALUES(_nbcommit,_uuid,_first_mvt,_w_src,_w_dst,_flowr,_commits[_i][5]::int,statement_timestamp())
+		INSERT INTO tmvt (uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created) 
+			VALUES('',_nbcommit,_oruuid,_first_mvt,_w_src,_w_dst,_flowr,_commits[_i][5]::int,statement_timestamp())
 			RETURNING id INTO _mvt_id;
+		_uuid := fgetuuid(_mvt_id);
+		UPDATE tmvt SET uuid = _uuid WHERE id=_mvt_id;
 					
 		IF(_first_mvt IS NULL) THEN
 			_first_mvt := _mvt_id;
@@ -818,7 +826,7 @@ BEGIN
 		----------------------------------------------------------------
 	END LOOP;
 	-- RAISE NOTICE '_first_mvt=%',_first_mvt;
-	UPDATE tmvt SET grp = _first_mvt WHERE id = _first_mvt  AND (grp IS NULL); --done only for oruuid==_uuid	
+	UPDATE tmvt SET grp = _first_mvt WHERE id = _first_mvt  AND (grp IS NULL); --done only for oruuid==_oruuid	
 	IF(NOT FOUND) THEN
 		RAISE EXCEPTION 'the movement % does not exist',_first_mvt 
 			USING ERRCODE='YA003';
@@ -1395,7 +1403,7 @@ BEGIN
 		WITH a AS (DELETE FROM tmvt m USING tquality q WHERE m.nat=q.id AND 
 			((q.depository=session_user) OR (_CHECK_QUALITY_OWNERSHIP = 0)) 
 			AND m.grp=_grp RETURNING m.*) 
-		INSERT INTO tmvtremoved SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,statement_timestamp() as deleted FROM a;
+		INSERT INTO tmvtremoved SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,statement_timestamp() as deleted FROM a;
 
 	END IF;
 	
