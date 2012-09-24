@@ -1,9 +1,25 @@
 /*------------------------------------------------------------------------------
 MARKET
+						client role			action
+STARTING
 
+STARTING->OPENED (open)
+
+OPENED					client_opened_role
+
+OPENED->STOPPING (stop)
+
+STOPPING				client_stopping_role
+
+STOPPING->CLOSED (close)
+
+CLOSED
+
+CLOSED->STARTING (start)				frenumbertables()
 ------------------------------------------------------------------------------*/
 
 --------------------------------------------------------------------------
+CREATE TYPE ymarketstatus AS ENUM ('INITIALIZING','OPENED', 'STOPPING','CLOSED','STARTING');
 
 create table tmarket ( 
     id serial UNIQUE not NULL,
@@ -12,28 +28,33 @@ create table tmarket (
 alter sequence tmarket_id_seq owned by tmarket.id;
 SELECT _grant_read('tmarket');
 --------------------------------------------------------------------------------
-CREATE TYPE ymarketaction AS ENUM ('init', 'open','stop','close','start');
-CREATE TYPE ymarketstatus AS ENUM ('INITIALIZING','OPENED', 'STOPPING','CLOSED','STARTING');
+
+-- history of states of the market 
 CREATE VIEW vmarkethistory AS SELECT
 	id,
- 	(id+4)/4 as market_session,
- 	CASE 	WHEN (id-1)%4=0 THEN 'OPENED'::ymarketstatus 	
- 		WHEN (id-1)%4=1 THEN 'STOPPING'::ymarketstatus
- 		WHEN (id-1)%4=2 THEN 'CLOSED'::ymarketstatus
- 		WHEN (id-1)%4=3 THEN 'STARTING'::ymarketstatus
+	(id+4)/4 as market_session,
+	CASE 	WHEN (id-1)%4=0 THEN 'OPENED'::ymarketstatus 	
+		WHEN (id-1)%4=1 THEN 'STOPPING'::ymarketstatus
+		WHEN (id-1)%4=2 THEN 'CLOSED'::ymarketstatus
+		WHEN (id-1)%4=3 THEN 'STARTING'::ymarketstatus
 	END AS market_status,
- 	created
+	created
 	FROM tmarket;
 SELECT _grant_read('vmarkethistory');
+
+-- current state of market
 CREATE VIEW vmarket AS SELECT * FROM  vmarkethistory ORDER BY ID DESC LIMIT 1; 
 SELECT _grant_read('vmarket');	
 
 --------------------------------------------------------------------------------
+/* change state of the market with fchangestatemarket(true)
+otherwise, dry run
+*/
 CREATE FUNCTION fchangestatemarket(_execute bool) RETURNS ymarketstatus AS $$
 DECLARE
 	_cnt int;
 	_hm tmarket%rowtype;
-	_action ymarketaction;
+	_action text;
 	_prev_status ymarketstatus;
 	_res bool;
 	_new_status ymarketstatus;
@@ -60,24 +81,25 @@ BEGIN
 	ELSE -- _prev_status='CLOSED'
 		_action := 'start';
 		_new_status := 'STARTING';
-		RAISE INFO 'market_session = n->n+1';
+		RAISE NOTICE 'market_session = n->n+1';
 	END IF;
-	
-	RAISE INFO 'market_status %->%',_prev_status,_new_status;
+
+	RAISE NOTICE 'market_status %->%',_prev_status,_new_status;
+
 	IF NOT _execute THEN
-		RAISE INFO 'The next action will be: %',_action;
-		RAISE INFO 'market_status = % is unchanged.',_prev_status;
+		RAISE NOTICE 'The next action will be: %',_action;
+		RAISE NOTICE 'market_status = % is unchanged.',_prev_status;
 		RETURN _new_status;
 	END IF;
 	
 	IF (_action = 'init' OR _action = 'open') THEN 		
 		GRANT client_opened_role TO client;
-		RAISE INFO 'The market is now opened for clients';		
+		RAISE NOTICE 'The market is now opened for clients';		
 		
 	ELSIF (_action = 'stop') THEN
 		REVOKE client_opened_role FROM client;
 		GRANT  client_stopping_role TO client;	
-		RAISE INFO 'The market is now stopping for clients';		
+		RAISE NOTICE 'The market is now stopping for clients';		
 		
 	ELSIF (_action = 'close') THEN
 		REVOKE client_stopping_role FROM client;
@@ -108,7 +130,7 @@ DECLARE
 BEGIN
 	SELECT market_status INTO _prev_status FROM vmarket; 
 	IF(_prev_status != 'STOPPING') THEN
-		RAISE INFO 'The market state is %!= STOPPING, abort.',_prev_status;
+		RAISE NOTICE 'The market state is %!= STOPPING, abort.',_prev_status;
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
 	
@@ -136,7 +158,7 @@ BEGIN
 		END IF;
 		EXIT WHEN _new_status = 'OPENED';
 	END LOOP;
-	RAISE INFO 'The market is reset and opened';
+	RAISE NOTICE 'The market is reset and opened';
 	RETURN;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
@@ -151,7 +173,7 @@ BEGIN
 	
 	SELECT count(*) INTO _cnt FROM tmvt;
 	IF (_cnt != 0) THEN
-		RAISE INFO 'tmvt must be cleared';
+		RAISE NOTICE 'tmvt must be cleared';
 		_res := false;
 	ELSE
 		_res := true;
@@ -172,17 +194,50 @@ BEGIN
 	ALTER TABLE tuser DISABLE TRIGGER ALL;
 	
 	-- DROP CONSTRAINT ON UPDATE CASCADE on tables tquality,torder,tmvt
-    	ALTER TABLE tquality DROP CONSTRAINT ctquality_idd,ADD CONSTRAINT ctquality_idd FOREIGN KEY (idd) references tuser(id) ON UPDATE CASCADE;
-	ALTER TABLE tquality DROP CONSTRAINT ctquality_depository,ADD CONSTRAINT ctquality_depository FOREIGN KEY (depository) references tuser(name) ON UPDATE RESTRICT;  -- must not be changed
-	  			
-	ALTER TABLE torder DROP CONSTRAINT ctorder_own,ADD CONSTRAINT ctorder_own 	FOREIGN KEY (own) references towner(id) ON UPDATE CASCADE;
-	ALTER TABLE torder DROP CONSTRAINT ctorder_np,ADD CONSTRAINT ctorder_np 	FOREIGN KEY (np) references tquality(id) ON UPDATE CASCADE;
-	ALTER TABLE torder DROP CONSTRAINT ctorder_nr,ADD CONSTRAINT ctorder_nr 	FOREIGN KEY (nr) references tquality(id) ON UPDATE CASCADE;
+    	ALTER TABLE tquality 
+		DROP CONSTRAINT ctquality_idd,
+		ADD CONSTRAINT ctquality_idd FOREIGN KEY (idd) references tuser(id) 
+		ON UPDATE CASCADE;
 
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_grp,ADD CONSTRAINT ctmvt_grp 		FOREIGN KEY (grp) references tmvt(id) ON UPDATE CASCADE;
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_own_src,ADD CONSTRAINT ctmvt_own_src 	FOREIGN KEY (own_src) references towner(id) ON UPDATE CASCADE;
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_own_dst,ADD CONSTRAINT ctmvt_own_dst 	FOREIGN KEY (own_dst) references towner(id) ON UPDATE CASCADE;
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_nat,ADD CONSTRAINT ctmvt_nat 		FOREIGN KEY (nat) references tquality(id) ON UPDATE CASCADE;
+	ALTER TABLE tquality 
+		DROP CONSTRAINT ctquality_depository,
+		ADD CONSTRAINT ctquality_depository FOREIGN KEY (depository) references tuser(name) 
+		ON UPDATE RESTRICT;  -- must not be changed
+	  			
+	ALTER TABLE torder 
+		DROP CONSTRAINT ctorder_own,
+		ADD CONSTRAINT ctorder_own 	FOREIGN KEY (own) references towner(id) 
+		ON UPDATE CASCADE;
+
+	ALTER TABLE torder 
+		DROP CONSTRAINT ctorder_np,
+		ADD CONSTRAINT ctorder_np 	FOREIGN KEY (np) references tquality(id) 
+		ON UPDATE CASCADE;
+
+	ALTER TABLE torder 
+		DROP CONSTRAINT ctorder_nr,
+		ADD CONSTRAINT ctorder_nr 	FOREIGN KEY (nr) references tquality(id) 
+		ON UPDATE CASCADE;
+
+	ALTER TABLE tmvt 
+		DROP CONSTRAINT ctmvt_grp,
+		ADD CONSTRAINT ctmvt_grp 	FOREIGN KEY (grp) references tmvt(id) 
+		ON UPDATE CASCADE;
+
+	ALTER TABLE tmvt 
+		DROP CONSTRAINT ctmvt_own_src,
+		ADD CONSTRAINT ctmvt_own_src 	FOREIGN KEY (own_src) references towner(id) 
+		ON UPDATE CASCADE;
+
+	ALTER TABLE tmvt 
+		DROP CONSTRAINT ctmvt_own_dst,
+		ADD CONSTRAINT ctmvt_own_dst 	FOREIGN KEY (own_dst) references towner(id) 
+		ON UPDATE CASCADE;
+
+	ALTER TABLE tmvt 
+		DROP CONSTRAINT ctmvt_nat,
+		ADD CONSTRAINT ctmvt_nat 	FOREIGN KEY (nat) references tquality(id) 
+		ON UPDATE CASCADE;
 
 	TRUNCATE tquote;
 	PERFORM setval('tquote_id_seq',1,false);
@@ -193,7 +248,8 @@ BEGIN
 	-- remove unused qualities
 	DELETE FROM tquality q WHERE	q.id NOT IN (SELECT np FROM torder)	
 				AND	q.id NOT IN (SELECT nr FROM torder)
-				AND 	q.id NOT IN (SELECT nat FROM tmvt);	
+				AND 	q.id NOT IN (SELECT nat FROM tmvt);
+	
 	-- renumbering qualities
 	PERFORM setval('tquality_id_seq',1,false);
 	WITH a AS (SELECT * FROM tquality ORDER BY id ASC)
@@ -222,26 +278,50 @@ BEGIN
 	
 	
 	-- reset of constraints
-    	ALTER TABLE tquality DROP CONSTRAINT ctquality_idd,ADD CONSTRAINT ctquality_idd FOREIGN KEY (idd) references tuser(id);
-    	ALTER TABLE tquality DROP CONSTRAINT ctquality_depository,ADD CONSTRAINT ctquality_depository FOREIGN KEY (depository) references tuser(name);
-    		
-	ALTER TABLE torder DROP CONSTRAINT ctorder_own,ADD CONSTRAINT ctorder_own 	FOREIGN KEY (own) references towner(id);
-	ALTER TABLE torder DROP CONSTRAINT ctorder_np,ADD CONSTRAINT ctorder_np 	FOREIGN KEY (np) references tquality(id);
-	ALTER TABLE torder DROP CONSTRAINT ctorder_nr,ADD CONSTRAINT ctorder_nr 	FOREIGN KEY (nr) references tquality(id);
+    	ALTER TABLE tquality 
+		DROP CONSTRAINT ctquality_idd,
+		ADD CONSTRAINT ctquality_idd 	FOREIGN KEY (idd) references tuser(id);
 
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_grp,ADD CONSTRAINT ctmvt_grp 		FOREIGN KEY (grp) references tmvt(id);
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_own_src,ADD CONSTRAINT ctmvt_own_src 	FOREIGN KEY (own_src) references towner(id);
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_own_dst,ADD CONSTRAINT ctmvt_own_dst 	FOREIGN KEY (own_dst) references towner(id);
-	ALTER TABLE tmvt DROP CONSTRAINT ctmvt_nat,ADD CONSTRAINT ctmvt_nat 		FOREIGN KEY (nat) references tquality(id);
+    	ALTER TABLE tquality 
+		DROP CONSTRAINT ctquality_depository,
+		ADD CONSTRAINT ctquality_depository FOREIGN KEY (depository) references tuser(name);
+    		
+	ALTER TABLE torder 
+		DROP CONSTRAINT ctorder_own,
+		ADD CONSTRAINT ctorder_own 	FOREIGN KEY (own) references towner(id);
+
+	ALTER TABLE torder 
+		DROP CONSTRAINT ctorder_np,
+		ADD CONSTRAINT ctorder_np 	FOREIGN KEY (np) references tquality(id);
+
+	ALTER TABLE torder 
+		DROP CONSTRAINT ctorder_nr,
+		ADD CONSTRAINT ctorder_nr 	FOREIGN KEY (nr) references tquality(id);
+
+	ALTER TABLE tmvt 
+		DROP CONSTRAINT ctmvt_grp,
+		ADD CONSTRAINT ctmvt_grp 	FOREIGN KEY (grp) references tmvt(id);
+
+	ALTER TABLE tmvt 
+		DROP CONSTRAINT ctmvt_own_src,
+		ADD CONSTRAINT ctmvt_own_src 	FOREIGN KEY (own_src) references towner(id);
+
+	ALTER TABLE tmvt 
+		DROP CONSTRAINT ctmvt_own_dst,
+		ADD CONSTRAINT ctmvt_own_dst 	FOREIGN KEY (own_dst) references towner(id);
+
+	ALTER TABLE tmvt 
+		DROP CONSTRAINT ctmvt_nat,
+		ADD CONSTRAINT ctmvt_nat 	FOREIGN KEY (nat) references tquality(id);
 	
 	-- enable triggers
 	ALTER TABLE towner ENABLE TRIGGER ALL;
 	ALTER TABLE tquality ENABLE TRIGGER ALL;
 	ALTER TABLE tuser ENABLE TRIGGER ALL;
 	
-	RAISE INFO 'Run the command:'; 
-	RAISE INFO '	VACUUM FULL ANALYZE';
-	RAISE INFO 'before starting the market';
+	RAISE NOTICE 'Run the command:'; 
+	RAISE NOTICE '	VACUUM FULL ANALYZE';
+	RAISE NOTICE 'before starting the market';
 	RETURN true;
 	 
 END;

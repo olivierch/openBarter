@@ -1,10 +1,12 @@
-SET client_min_messages = warning;
 \set ECHO none
 /*
 drop schema if exists t cascade;
 create schema t;
 set schema 't';
 */
+SET client_min_messages = warning;
+SET log_error_verbosity = terse;
+
 drop extension if exists flow cascade;
 create extension flow;
 
@@ -91,7 +93,6 @@ $$ LANGUAGE PLPGSQL;
 
 SELECT _create_roles();
 DROP FUNCTION _create_roles();
-
 
 --------------------------------------------------------------------------------
 -- trigger before insert on some tables
@@ -366,7 +367,7 @@ BEGIN
 				RAISE EXCEPTION USING ERRCODE='YU001';
 			END IF;
 			INSERT INTO towner (name) VALUES (_name) RETURNING id INTO _wid;
-			RAISE INFO 'owner % created',_name;
+			RAISE NOTICE 'owner % created',_name;
 			return _wid;
 		EXCEPTION WHEN unique_violation THEN
 			--
@@ -655,7 +656,7 @@ BEGIN
 	RETURN _vo;
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
-	RAISE INFO 'ABORTED';
+	RAISE NOTICE 'ABORTED';
 	RETURN _vo; 
 END;		
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
@@ -721,7 +722,7 @@ DECLARE
 	_cnt int;
 BEGIN
 /*	DROP TABLE IF EXISTS _tmp;
-	RAISE INFO 'select * from fcreate_tmp(%,yorder_get%,%,%)',_id,_ord,_np,_nr;
+	RAISE NOTICE 'select * from fcreate_tmp(%,yorder_get%,%,%)',_id,_ord,_np,_nr;
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP  AS (
 */	
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
@@ -784,7 +785,7 @@ BEGIN
 	_nbcommit := yflow_dim(_flw); -- raise an error when flow->dim not in [2,8]
 	_first_mvt := NULL;
 	_exhausted := false;
-	-- RAISE INFO 'flow of % commits',_nbcommit;
+	-- RAISE NOTICE 'flow of % commits',_nbcommit;
 	_i := _nbcommit;	
 	FOR _next_i IN 1 .. _nbcommit LOOP
 		-- _commits[_next_i] follows _commits[_i]
@@ -816,7 +817,7 @@ BEGIN
 		_i := _next_i;
 		----------------------------------------------------------------
 	END LOOP;
-	-- RAISE INFO '_first_mvt=%',_first_mvt;
+	-- RAISE NOTICE '_first_mvt=%',_first_mvt;
 	UPDATE tmvt SET grp = _first_mvt WHERE id = _first_mvt  AND (grp IS NULL); --done only for oruuid==_uuid	
 	IF(NOT FOUND) THEN
 		RAISE EXCEPTION 'the movement % does not exist',_first_mvt 
@@ -1171,7 +1172,7 @@ BEGIN
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	-- PERFORM fremovequote_int(_idquote); 
-	-- RAISE INFO 'Abort; Quote removed';
+	-- RAISE NOTICE 'Abort; Quote removed';
 	RETURN _ro; 
 
 END; 
@@ -1296,7 +1297,7 @@ BEGIN
 	RETURN _ro;
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN 
-	RAISE INFO 'Abort';
+	RAISE NOTICE 'Abort';
 	RETURN _ro; 
 
 END; 
@@ -1333,8 +1334,8 @@ BEGIN
 		EXECUTE 'ALTER ROLE ' || _name || ' LOGIN CONNECTION LIMIT 1';
 	ELSE
 		IF(_super) THEN
-			-- RAISE INFO 'The role % is a super user.',_name;
-			RAISE INFO 'The role is a super user.';
+			-- RAISE NOTICE 'The role % is a super user.',_name;
+			RAISE NOTICE 'The role is a super user.';
 		ELSE
 			-- RAISE WARNING 'The user is not found but a role % already exists - unchanged.',_name;
 			RAISE WARNING 'The user is not found but the role already exists - unchanged.';
@@ -1344,12 +1345,12 @@ BEGIN
 	
 	SELECT market_status INTO _market_status FROM vmarket;
 	IF(_market_status = 'OPENED') THEN 
-		-- RAISE INFO 'The market is opened for this user %', _name;
-		RAISE INFO 'The market is opened for this user';
+		-- RAISE NOTICE 'The market is opened for this user %', _name;
+		RAISE NOTICE 'The market is opened for this user';
 		EXECUTE 'GRANT client_opened_role TO ' || _name;
 	ELSIF(_market_status = 'STOPPING') THEN
-		-- RAISE INFO 'The market is stopping for this user %', _name;
-		RAISE INFO 'The market is stopping for this user ';
+		-- RAISE NOTICE 'The market is stopping for this user %', _name;
+		RAISE NOTICE 'The market is stopping for this user ';
 		EXECUTE 'GRANT client_stopping_role TO ' || _name;	
 	END IF;
 	
@@ -1467,4 +1468,5 @@ SELECT * from fchangestatemarket(true);
 -- market is opened
 \set ECHO all
  RESET client_min_messages;
+ RESET log_error_verbosity;
 

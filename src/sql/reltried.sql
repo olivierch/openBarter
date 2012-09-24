@@ -1,17 +1,17 @@
 /*----------------------------------------------------------------------------
 
-Some orders that are frequently included in refused cycles are removed 
+Some orders that frequently belong to refused cycles are removed 
 from the database with the following algorithm:
 
 1 - When a movement nr->np is created, a counter Q(np,nr)  is incremented
-	Q(np,nr) == treltried[np,nr].cnt +=1, 
-	done by fupdate_treltried(_commits int8[],_nbcommit int), called by vfexecute_flow()
+	Q(np,nr) := treltried[np,nr].cnt +=1 
+	done by fupdate_treltried(_commits int8[],_nbcommit int), called by fexecute_flow()
 
-2- When an order nr->np is created, the counter Q(np,nr) is recorded at position P
-	torder[.].start = P = Q(np,nr)
-	done by fget_treltried() called by finsert_order_int()
+2- When an order nr->np is created, the counter Q(np,nr) is recorded at a position P
+	torder[.].start := Q(np,nr) == P
+	done by fget_treltried() called by finsert_toint() called by finsertorder() and fexecquote()
 	
-3- orders are removed from the market when their torder[.].start is such as P+MAXTRY < Q, with MAXTRY defined in tconst [10]
+3- orders are removed from the market when their torder[.].start +MAXTRY < Q(np,nr), with MAXTRY defined in tconst
 	This operation 3) is performed each time some movements are created.
 	done by finvalidate_treltried() called by fexecquote() and finsertorder()
 	

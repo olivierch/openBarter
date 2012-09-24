@@ -1,25 +1,11 @@
 /*------------------------------------------------------------------------------
 STAT
-
 ------------------------------------------------------------------------------*/
-
---------------------------------------------------------------------------------
--- returns 0 when for each quality  tquality.qtt= sum(torder.qtt)+sum(tmvt.qtt)
---------------------------------------------------------------------------------
-create function fbalance() RETURNS int AS $$
-DECLARE 
-	_cnt 		int;
-BEGIN
-	WITH accounting_order AS (SELECT np,sum(qtt) AS qtt FROM torder GROUP BY np),
-	     accounting_mvt   AS (SELECT nat as np,sum(qtt) AS qtt FROM tmvt GROUP BY nat)
-	SELECT count(*) INTO _cnt FROM tquality,accounting_order,accounting_mvt
-	WHERE tquality.id=accounting_order.np AND tquality.id=accounting_mvt.np
-		AND tquality.qtt != accounting_order.qtt + accounting_mvt.qtt;
-	RETURN _cnt;
-END;		
-$$ LANGUAGE PLPGSQL;
 	
---------------------------------------------------------------------------------
+/*------------------------------------------------------------------------------
+fgetstats() 
+	returns stats but not errors
+------------------------------------------------------------------------------*/
 CREATE FUNCTION fgetstats(_details bool) RETURNS TABLE(_name text,cnt int8) AS $$
 DECLARE 
 	_i 		int;
@@ -64,13 +50,7 @@ BEGIN
 	
 	_name := 'number of orders rejected';
 	select count(distinct grp) INTO cnt FROM vmvtverif where nb=1;	
-	RETURN NEXT;
-
-/*	
-	FOR _name,cnt IN SELECT name,value FROM tconst LOOP
-		RETURN NEXT;
-	END LOOP;
-*/		
+	RETURN NEXT;	
 	
 	FOR _i,cnt IN select nb,count(distinct grp) FROM vmvtverif where nb!=1 GROUP BY nb LOOP
 		_name := 'agreements with ' || _i || ' partners';
@@ -82,7 +62,10 @@ END;
 $$ LANGUAGE PLPGSQL  SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fgetstats(bool) TO admin;
 
---------------------------------------------------------------------------------
+/*------------------------------------------------------------------------------
+returns 3 records:
+the number of errors found with fbalance(),fverifmvt() and fverifmvt2()
+------------------------------------------------------------------------------*/
 CREATE FUNCTION fgeterrs(_details bool) RETURNS TABLE(_name text,cnt int8) AS $$
 DECLARE 
 	_i 		int;
@@ -106,13 +89,30 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fgeterrs(bool) TO admin;
---------------------------------------------------------------------------------
--- number of partners for the 100 last movements
--- select nb,count(distinct grp) from (select * from vmvtverif order by id desc limit 100) a group by nb;
---------------------------------------------------------------------------------
--- verifies that:
---	vorderverif.qtt_prov and vorderverif.nat are coherent with mvt
---------------------------------------------------------------------------------
+
+/*------------------------------------------------------------------------------
+fbalance() 
+	returns the number of qualities where:
+		tquality.qtt!=sum(torder.qtt)+sum(tmvt.qtt)
+	should return 0
+------------------------------------------------------------------------------*/
+create function fbalance() RETURNS int AS $$
+DECLARE 
+	_cnt 		int;
+BEGIN
+	WITH accounting_order AS (SELECT np,sum(qtt) AS qtt FROM torder GROUP BY np),
+	     accounting_mvt   AS (SELECT nat as np,sum(qtt) AS qtt FROM tmvt GROUP BY nat)
+	SELECT count(*) INTO _cnt FROM tquality,accounting_order,accounting_mvt
+	WHERE tquality.id=accounting_order.np AND tquality.id=accounting_mvt.np
+		AND tquality.qtt != accounting_order.qtt + accounting_mvt.qtt;
+	RETURN _cnt;
+END;		
+$$ LANGUAGE PLPGSQL;
+
+/*------------------------------------------------------------------------------
+-- verifies that for all orders:
+--	order.qtt_prov = sum(mvt.qtt) of movements related to that order
+------------------------------------------------------------------------------*/
 CREATE FUNCTION fverifmvt() RETURNS int AS $$
 DECLARE
 	_qtt_prov	 int8;
@@ -148,15 +148,17 @@ BEGIN
 		
 		IF(_iserr) THEN
 			_cnterr := _cnterr +1;
-			raise INFO 'error on uuid:%',_uuid;
+			RAISE NOTICE 'error on uuid:%',_uuid;
 		END IF;
 	END LOOP;
 
 	RETURN _cnterr;
 END;
 $$ LANGUAGE PLPGSQL;
---------------------------------------------------------------------------------
-/* count error in movements when compared to orders  */
+
+/*------------------------------------------------------------------------------
+-- verifies that for all agreements, movements comply with related orders.
+------------------------------------------------------------------------------*/
 CREATE FUNCTION fverifmvt2() RETURNS int AS $$
 DECLARE
 	_cnterr		 int := 0;
@@ -179,7 +181,7 @@ BEGIN
 				
 				if(_cnt != _mvtprec.nb) THEN
 					_cnterr := _cnterr +1;
-					RAISE INFO 'wrong number of movements for agreement %',_mvtprec.oruuid;
+					RAISE NOTICE 'wrong number of movements for agreement %',_mvtprec.oruuid;
 				END IF;
 				-- errors found
 				if(_cnterr != 0) THEN
@@ -206,7 +208,7 @@ BEGIN
 		
 		if(_cnt != _mvtprec.nb) THEN
 			_cnterr := _cnterr +1;
-			RAISE INFO 'wrong number of movements for agreement %',_mvtprec.oruuid;
+			RAISE NOTICE 'wrong number of movements for agreement %',_mvtprec.oruuid;
 		END IF;
 		-- errors found
 		if(_cnterr != 0) THEN
@@ -226,27 +228,29 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL;
 
---------------------------------------------------------------------------------
+/*------------------------------------------------------------------------------
+_mvtprec and _mvt are successive movements of an agreement
+------------------------------------------------------------------------------*/
 CREATE FUNCTION fverifmvt2_int(_mvtprec tmvt,_mvt tmvt) RETURNS int AS $$
 DECLARE
 	_o		vorderverif%rowtype;
 BEGIN
 	SELECT uuid,np,nr,qtt_prov,qtt_requ INTO _o.uuid,_o.np,_o.nr,_o.qtt_prov,_o.qtt_requ FROM vorderverif WHERE uuid = _mvt.oruuid;
 	IF (NOT FOUND) THEN
-		RAISE INFO 'order not found for vorderverif %',_mvt.oruuid;
+		RAISE NOTICE 'order not found for vorderverif %',_mvt.oruuid;
 		RETURN 1;
 	END IF;
 
 	IF(_o.np != _mvt.nat OR _o.nr != _mvtprec.nat) THEN
-		RAISE INFO 'mvt.nat != np or mvtprec.nat!=nr';
+		RAISE NOTICE 'mvt.nat != np or mvtprec.nat!=nr';
 		RETURN 1;
 	END IF;
 	
-	-- _o.qtt_prov/_o.qtt_requ < _mvt.qtt/_mvtprec.qtt
+	-- NOT(_o.qtt_prov/_o.qtt_requ >= _mvt.qtt/_mvtprec.qtt)
 	IF(((_o.qtt_prov::float8) / (_o.qtt_requ::float8)) < ((_mvt.qtt::float8)/(_mvtprec.qtt::float8))) THEN
-		RAISE INFO 'order %->%, with  mvt %->%',_o.qtt_requ,_o.qtt_prov,_mvtprec.qtt,_mvt.qtt;
-		RAISE INFO '% < 1; should be >=1',(((_o.qtt_prov::float8) / (_o.qtt_requ::float8)) / ((_mvt.qtt::float8)/(_mvtprec.qtt::float8)));
-		RAISE INFO 'order.uuid %, with  mvtid %->%',_o.uuid,_mvtprec.id,_mvt.id;
+		RAISE NOTICE 'order %->%, with  mvt %->%',_o.qtt_requ,_o.qtt_prov,_mvtprec.qtt,_mvt.qtt;
+		RAISE NOTICE '% < 1; should be >=1',(((_o.qtt_prov::float8) / (_o.qtt_requ::float8)) / ((_mvt.qtt::float8)/(_mvtprec.qtt::float8)));
+		RAISE NOTICE 'order.uuid %, with  mvtid %->%',_o.uuid,_mvtprec.id,_mvt.id;
 		RETURN 1;
 	END IF;
 
@@ -255,4 +259,7 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL;
 
+--------------------------------------------------------------------------------
+-- number of partners for the 100 last movements
+-- select nb,count(distinct grp) from (select * from vmvtverif order by id desc limit 100) a group by nb;
 

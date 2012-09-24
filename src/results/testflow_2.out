@@ -13,8 +13,8 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL;
 select fcreateuser(session_user);
-INFO:  The role is a super user.
-INFO:  The market is opened for this user
+NOTICE:  The role is a super user.
+NOTICE:  The market is opened for this user
 NOTICE:  role "olivier" is already a member of role "client_opened_role"
 CONTEXT:  SQL statement "GRANT client_opened_role TO olivier"
 PL/pgSQL function fcreateuser(text) line 40 at EXECUTE statement
@@ -25,7 +25,7 @@ PL/pgSQL function fcreateuser(text) line 40 at EXECUTE statement
 
 -- own,qual_prov,qtt_prov,qtt_requ,qual_requ
 select * from finsertorder('u',fq('b'),1000,1000,fq('a'));
-INFO:  owner u created
+NOTICE:  owner u created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
  id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
@@ -34,7 +34,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignme
 (1 row)
 
 select * from finsertorder('v',fq('c'),1000,1000,fq('b'));
-INFO:  owner v created
+NOTICE:  owner v created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
  id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
@@ -43,7 +43,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignme
 (1 row)
 
 select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fgetquote('w',fq('a'),1000,1000,fq('c')); 
-INFO:  owner w created
+NOTICE:  owner w created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function fgetquote(text,text,bigint,bigint,text) line 36 at assignment
  id | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                                               flows                                                

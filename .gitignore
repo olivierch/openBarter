@@ -8,3 +8,5 @@
 /results/
 /tmp_check/
 */.*
+*~
+*/*~

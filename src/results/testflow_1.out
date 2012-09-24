@@ -1,5 +1,4 @@
 \i sql/model.sql
-SET client_min_messages = warning;
 \set ECHO none
  _create_roles 
 ---------------
@@ -121,14 +120,15 @@ SET client_min_messages = warning;
  
 (1 row)
 
-psql:sql/model.sql:1466: INFO:  market_status INITIALIZING->OPENED
-psql:sql/model.sql:1466: INFO:  The market is now opened for clients
  fchangestatemarket 
 --------------------
  OPENED
 (1 row)
 
  RESET client_min_messages;
+ RESET log_error_verbosity;
+SET client_min_messages = notice;
+SET log_error_verbosity = terse;
  
 select '(1,2,3,4,5,6,7)'::yorder;
      yorder      

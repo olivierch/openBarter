@@ -1,5 +1,6 @@
 reset role;
-
+SET client_min_messages = notice;
+SET log_error_verbosity = terse;
 -- SELECT ftruncatetables();
 select fresetmarket();
 

@@ -1,6 +1,11 @@
+reset role;
+SET log_error_verbosity = terse;
+SET client_min_messages = notice;
+
 set role admin;
 
 select fresetmarket();
+
 set role client;
 
 select finsertorder('u','b',1000,1000,'a');

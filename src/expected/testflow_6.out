@@ -1,9 +1,11 @@
 reset role;
+SET client_min_messages = notice;
+SET log_error_verbosity = terse;
 -- SELECT ftruncatetables();
 select fresetmarket();
-INFO:  market_status OPENED->STOPPING
+NOTICE:  market_status OPENED->STOPPING
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  The market is now stopping for clients
+NOTICE:  The market is now stopping for clients
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 NOTICE:  truncate cascades to table "torder"
 CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
@@ -40,26 +42,26 @@ CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
 PL/pgSQL function fresetmarket_int() line 14 at SQL statement
 SQL statement "SELECT fresetmarket_int()"
 PL/pgSQL function fresetmarket() line 9 at PERFORM
-INFO:  market_status STOPPING->CLOSED
+NOTICE:  market_status STOPPING->CLOSED
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  market_session = n->n+1
+NOTICE:  market_session = n->n+1
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  market_status CLOSED->STARTING
+NOTICE:  market_status CLOSED->STARTING
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  Run the command:
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
+NOTICE:  Run the command:
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
 PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  	VACUUM FULL ANALYZE
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
+NOTICE:  	VACUUM FULL ANALYZE
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
 PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  before starting the market
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
+NOTICE:  before starting the market
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
 PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  market_status STARTING->OPENED
+NOTICE:  market_status STARTING->OPENED
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  The market is now opened for clients
+NOTICE:  The market is now opened for clients
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  The market is reset and opened
+NOTICE:  The market is reset and opened
  fresetmarket 
 --------------
  
@@ -69,7 +71,7 @@ INFO:  The market is reset and opened
 -- path (b)
 -- select finsertorder('A','x',25  ,100 ,'z');
 select finsertorder('A','z',200 ,200 ,'x');
-INFO:  owner A created
+NOTICE:  owner A created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
          finsertorder         
@@ -80,7 +82,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignme
 -- path (a)
 -- select finsertorder('B','x',25  ,200 ,'y');
 select finsertorder('B','y',200 ,25  ,'x');
-INFO:  owner B created
+NOTICE:  owner B created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
         finsertorder         
@@ -90,7 +92,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignme
 
 --select finsertorder('C','y',100 ,100 ,'z');
 select finsertorder('C','z',100 ,100 ,'y');
-INFO:  owner C created
+NOTICE:  owner C created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
          finsertorder         
@@ -106,7 +108,7 @@ select id,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
 
 --select finsertorder('D','z',250 ,250 ,'x');
 select finsertorder('D','x',250 ,250 ,'z');
-INFO:  owner D created
+NOTICE:  owner D created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
                                                                                        finsertorder                                                                                       

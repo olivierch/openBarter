@@ -1,7 +1,10 @@
 
-\i sql/testflow_1.sql
-\i sql/testflow_2.sql
-\i sql/testflow_3.sql
-\i sql/testflow_4.sql
-\i sql/testflow_5.sql
+CREATE OR REPLACE  FUNCTION ftest() RETURNS int AS $$
+BEGIN
+	-- SET client_min_messages = warning;
+	-- ne pas utiliser INFO!! mais DEBUG1,LOG,NOTICE*,WARNING,ERROR
+	RAISE NOTICE ' should be found';
+	RETURN 1;
+END; 
+$$ LANGUAGE PLPGSQL;
 

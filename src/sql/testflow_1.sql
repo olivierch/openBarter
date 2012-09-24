@@ -1,4 +1,6 @@
 \i sql/model.sql
+SET client_min_messages = notice;
+SET log_error_verbosity = terse;
  
 select '(1,2,3,4,5,6,7)'::yorder;
 select '(1,2,3,4,5,6,7)'::yorder='(1,5,6,7,8,9,10)'::yorder; --true

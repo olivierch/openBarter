@@ -1,8 +1,11 @@
+reset role;
+SET log_error_verbosity = terse;
+SET client_min_messages = notice;
 set role admin;
 select fresetmarket();
-INFO:  market_status OPENED->STOPPING
+NOTICE:  market_status OPENED->STOPPING
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  The market is now stopping for clients
+NOTICE:  The market is now stopping for clients
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 NOTICE:  truncate cascades to table "torder"
 CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
@@ -39,26 +42,26 @@ CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
 PL/pgSQL function fresetmarket_int() line 14 at SQL statement
 SQL statement "SELECT fresetmarket_int()"
 PL/pgSQL function fresetmarket() line 9 at PERFORM
-INFO:  market_status STOPPING->CLOSED
+NOTICE:  market_status STOPPING->CLOSED
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  market_session = n->n+1
+NOTICE:  market_session = n->n+1
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  market_status CLOSED->STARTING
+NOTICE:  market_status CLOSED->STARTING
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  Run the command:
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
+NOTICE:  Run the command:
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
 PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  	VACUUM FULL ANALYZE
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
+NOTICE:  	VACUUM FULL ANALYZE
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
 PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  before starting the market
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
+NOTICE:  before starting the market
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
 PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  market_status STARTING->OPENED
+NOTICE:  market_status STARTING->OPENED
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  The market is now opened for clients
+NOTICE:  The market is now opened for clients
 CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-INFO:  The market is reset and opened
+NOTICE:  The market is reset and opened
  fresetmarket 
 --------------
  
@@ -66,7 +69,7 @@ INFO:  The market is reset and opened
 
 set role client;
 select finsertorder('u','b',1000,1000,'a');
-INFO:  owner u created
+NOTICE:  owner u created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
           finsertorder          
@@ -75,7 +78,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignme
 (1 row)
 
 select finsertorder('v','c',1000,1000,'b');
-INFO:  owner v created
+NOTICE:  owner v created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
           finsertorder          
@@ -84,7 +87,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignme
 (1 row)
 
 select qtt_in,qtt_out from fgetquote('w','a',1000,0,'c');
-INFO:  owner w created
+NOTICE:  owner w created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function fgetquote(text,text,bigint,bigint,text) line 36 at assignment
  qtt_in | qtt_out 
@@ -179,8 +182,8 @@ select finsertorder('w','a',500,1000,'b');
 
 set role admin;
 select * from fchangestatemarket(true);
-INFO:  market_status OPENED->STOPPING
-INFO:  The market is now stopping for clients
+NOTICE:  market_status OPENED->STOPPING
+NOTICE:  The market is now stopping for clients
  fchangestatemarket 
 --------------------
  STOPPING
@@ -226,29 +229,29 @@ select * from fgeterrs(true) where cnt != 0;
 (0 rows)
 
 select * from fchangestatemarket(true);
-INFO:  market_status STOPPING->CLOSED
+NOTICE:  market_status STOPPING->CLOSED
  fchangestatemarket 
 --------------------
  CLOSED
 (1 row)
 
 select * from fchangestatemarket(true);
-INFO:  market_session = n->n+1
-INFO:  market_status CLOSED->STARTING
-INFO:  Run the command:
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
-INFO:  	VACUUM FULL ANALYZE
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
-INFO:  before starting the market
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 59 at assignment
+NOTICE:  market_session = n->n+1
+NOTICE:  market_status CLOSED->STARTING
+NOTICE:  Run the command:
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
+NOTICE:  	VACUUM FULL ANALYZE
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
+NOTICE:  before starting the market
+CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
  fchangestatemarket 
 --------------------
  STARTING
 (1 row)
 
 select * from fchangestatemarket(true);
-INFO:  market_status STARTING->OPENED
-INFO:  The market is now opened for clients
+NOTICE:  market_status STARTING->OPENED
+NOTICE:  The market is now opened for clients
  fchangestatemarket 
 --------------------
  OPENED
