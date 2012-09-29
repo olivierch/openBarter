@@ -171,22 +171,13 @@ DECLARE
 	_res bool;
 BEGIN
 	
-	SELECT count(*) INTO _cnt FROM tmvt;
-	IF (_cnt != 0) THEN
-		RAISE NOTICE 'tmvt must be cleared';
-		_res := false;
-	ELSE
-		_res := true;
-	END IF;
+	_res := true;
 		
 	IF NOT exec THEN
 		RETURN _res;
 	END IF;
 	
-	IF NOT _res THEN
-		RAISE WARNING 'tmvt must be cleared';
-		RAISE EXCEPTION USING ERRCODE='YU001';
-	END IF;
+	--TODO lier les id des *removed
 	
 	-- desable triggers
 	ALTER TABLE towner DISABLE TRIGGER ALL;
@@ -194,7 +185,7 @@ BEGIN
 	ALTER TABLE tuser DISABLE TRIGGER ALL;
 	
 	-- DROP CONSTRAINT ON UPDATE CASCADE on tables tquality,torder,tmvt
-    	ALTER TABLE tquality 
+    ALTER TABLE tquality 
 		DROP CONSTRAINT ctquality_idd,
 		ADD CONSTRAINT ctquality_idd FOREIGN KEY (idd) references tuser(id) 
 		ON UPDATE CASCADE;
@@ -218,12 +209,12 @@ BEGIN
 		DROP CONSTRAINT ctorder_nr,
 		ADD CONSTRAINT ctorder_nr 	FOREIGN KEY (nr) references tquality(id) 
 		ON UPDATE CASCADE;
-
+/*
 	ALTER TABLE tmvt 
 		DROP CONSTRAINT ctmvt_grp,
 		ADD CONSTRAINT ctmvt_grp 	FOREIGN KEY (grp) references tmvt(id) 
 		ON UPDATE CASCADE;
-
+*/
 	ALTER TABLE tmvt 
 		DROP CONSTRAINT ctmvt_own_src,
 		ADD CONSTRAINT ctmvt_own_src 	FOREIGN KEY (own_src) references towner(id) 
@@ -278,7 +269,7 @@ BEGIN
 	
 	
 	-- reset of constraints
-    	ALTER TABLE tquality 
+    ALTER TABLE tquality 
 		DROP CONSTRAINT ctquality_idd,
 		ADD CONSTRAINT ctquality_idd 	FOREIGN KEY (idd) references tuser(id);
 
@@ -297,11 +288,11 @@ BEGIN
 	ALTER TABLE torder 
 		DROP CONSTRAINT ctorder_nr,
 		ADD CONSTRAINT ctorder_nr 	FOREIGN KEY (nr) references tquality(id);
-
+/*
 	ALTER TABLE tmvt 
 		DROP CONSTRAINT ctmvt_grp,
 		ADD CONSTRAINT ctmvt_grp 	FOREIGN KEY (grp) references tmvt(id);
-
+*/
 	ALTER TABLE tmvt 
 		DROP CONSTRAINT ctmvt_own_src,
 		ADD CONSTRAINT ctmvt_own_src 	FOREIGN KEY (own_src) references towner(id);

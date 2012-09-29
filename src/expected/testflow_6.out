@@ -2,71 +2,8 @@ reset role;
 SET client_min_messages = notice;
 SET log_error_verbosity = terse;
 -- SELECT ftruncatetables();
-select fresetmarket();
-NOTICE:  market_status OPENED->STOPPING
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  The market is now stopping for clients
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  truncate cascades to table "torder"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function fresetmarket_int() line 13 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "tmvt"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function fresetmarket_int() line 13 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "tmvtremoved"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function fresetmarket_int() line 13 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "torder"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function fresetmarket_int() line 14 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "tmvt"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function fresetmarket_int() line 14 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "tmvtremoved"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function fresetmarket_int() line 14 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "treltried"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function fresetmarket_int() line 14 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  market_status STOPPING->CLOSED
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  market_session = n->n+1
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  market_status CLOSED->STARTING
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  Run the command:
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
-PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  	VACUUM FULL ANALYZE
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
-PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  before starting the market
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
-PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  market_status STARTING->OPENED
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  The market is now opened for clients
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  The market is reset and opened
- fresetmarket 
---------------
- 
-(1 row)
-
+-- select fresetmarket();
+SET role client;
 -- two concurrent paths, (a) is the best
 -- path (b)
 -- select finsertorder('A','x',25  ,100 ,'z');
@@ -76,7 +13,7 @@ CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
          finsertorder         
 ------------------------------
- (1,4-1,1,2,200,1,200,0,0,{})
+ (1,3-1,1,2,200,1,200,0,0,{})
 (1 row)
 
 -- path (a)
@@ -87,7 +24,7 @@ CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
         finsertorder         
 -----------------------------
- (2,4-2,2,2,25,3,200,0,0,{})
+ (2,3-2,2,2,25,3,200,0,0,{})
 (1 row)
 
 --select finsertorder('C','y',100 ,100 ,'z');
@@ -97,13 +34,13 @@ CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
          finsertorder         
 ------------------------------
- (3,4-3,3,3,100,1,100,0,0,{})
+ (3,3-3,3,3,100,1,100,0,0,{})
 (1 row)
 
 -- no exchange
-select id,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
- id | nb | oruuid | grp | provider | quality | qtt | receiver 
-----+----+--------+-----+----------+---------+-----+----------
+select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt order by uuid;
+ id | uuid | nb | oruuid | grp | provider | quality | qtt | receiver 
+----+------+----+--------+-----+----------+---------+-----+----------
 (0 rows)
 
 --select finsertorder('D','z',250 ,250 ,'x');
@@ -113,18 +50,18 @@ CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
                                                                                        finsertorder                                                                                       
 ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- (4,4-4,4,1,250,2,250,300,250,"{""[(2, 2, 2, 25, 3, 200, 200),(3, 3, 3, 100, 1, 100, 100),(4, 4, 1, 250, 2, 250, 250)]"",""[(1, 1, 2, 200, 1, 200, 200),(4, 4, 1, 250, 2, 250, 200)]""}")
+ (4,3-4,4,1,250,2,250,300,250,"{""[(2, 2, 2, 25, 3, 200, 200),(3, 3, 3, 100, 1, 100, 100),(4, 4, 1, 250, 2, 250, 250)]"",""[(1, 1, 2, 200, 1, 200, 200),(4, 4, 1, 250, 2, 250, 200)]""}")
 (1 row)
 
 --two exchanges in a single transaction
-select id,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
- id | nb | oruuid | grp | provider | quality | qtt | receiver 
-----+----+--------+-----+----------+---------+-----+----------
-  2 |  3 | 4-2    |   1 | B        | y       | 200 | C
-  3 |  3 | 4-3    |   1 | C        | z       | 100 | D
-  1 |  3 | 4-4    |   1 | D        | x       |  50 | B
-  5 |  2 | 4-1    |   4 | A        | z       | 200 | D
-  4 |  2 | 4-4    |   4 | D        | x       | 200 | A
+select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt order by uuid;
+ id | uuid | nb | oruuid | grp | provider | quality | qtt | receiver 
+----+------+----+--------+-----+----------+---------+-----+----------
+  1 | 3-1  |  3 | 3-4    | 3-1 | D        | x       |  50 | B
+  2 | 3-2  |  3 | 3-2    | 3-1 | B        | y       | 200 | C
+  3 | 3-3  |  3 | 3-3    | 3-1 | C        | z       | 100 | D
+  4 | 3-4  |  2 | 3-4    | 3-4 | D        | x       | 200 | A
+  5 | 3-5  |  2 | 3-1    | 3-4 | A        | z       | 200 | D
 (5 rows)
 
 select id,qtt from tquality;

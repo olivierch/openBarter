@@ -1,4 +1,5 @@
 /*----------------------------------------------------------------------------
+It is the garbadge collector of poor orders
 
 Some orders that frequently belong to refused cycles are removed 
 from the database with the following algorithm:
@@ -102,6 +103,7 @@ DECLARE
 	_MAXTRY int := fgetconst('MAXTRY');
 	_res	int;
 	_mvt_id	int;
+	_uuid   text;
 BEGIN
 	IF(_MAXTRY=0) THEN
 		RETURN;
@@ -110,9 +112,11 @@ BEGIN
 	FOR _o IN SELECT o.* FROM torder o,treltried r 
 		WHERE o.np=r.np AND o.nr=r.nr AND o.start IS NOT NULL AND o.start + _MAXTRY < r.cnt LOOP
 		
-		INSERT INTO tmvt (nb,oruuid,grp,own_src,own_dst,qtt,nat,created) 
-			VALUES(1,_o.uuid,NULL,_o.own,_o.own,_o.qtt,_o.np,statement_timestamp()) 
+		INSERT INTO tmvt (uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created) 
+			VALUES('',1,_o.uuid,NULL,_o.own,_o.own,_o.qtt,_o.np,statement_timestamp()) 
 			RETURNING id INTO _mvt_id;
+		_uuid := fgetuuid(_mvt_id);
+		UPDATE tmvt SET uuid = _uuid WHERE id=_mvt_id;
 			
 		-- the order order.qtt != 0
 		perform fremoveorder_int(_o.id);			

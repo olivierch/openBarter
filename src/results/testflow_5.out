@@ -1,70 +1,85 @@
 reset role;
 SET log_error_verbosity = terse;
 SET client_min_messages = notice;
+-- all orders removed
+CREATE FUNCTION swallow_orders() RETURNS int AS $$
+DECLARE
+	_i 		int;
+	_uuid	text;
+	_vo		vorder%rowtype;
+BEGIN
+	_i := 0;
+	FOR _uuid IN SELECT m.uuid FROM torder m LOOP
+		_vo :=  fremoveorder(_uuid);
+		_i := _i + 1;
+	END LOOP;
+	RETURN _i;
+END;
+$$ LANGUAGE PLPGSQL;
+-- all mvts removed
+CREATE FUNCTION swallow_agreements() RETURNS int AS $$
+DECLARE
+	_i 		int;
+	_uuid	text;
+	_CHECK_QUALITY_OWNERSHIP int := fgetconst('CHECK_QUALITY_OWNERSHIP');
+BEGIN
+	_i := 0;
+	FOR _uuid IN SELECT m.uuid FROM tmvt m, tquality q WHERE m.nat=q.id 
+		AND ((q.depository=session_user) OR (_CHECK_QUALITY_OWNERSHIP = 0)) 
+		GROUP BY m.uuid LOOP
+		_i := _i + fremovemvt(_uuid);
+	END LOOP;
+	RETURN _i;
+END;
+$$ LANGUAGE PLPGSQL;
+select swallow_orders();
+ swallow_orders 
+----------------
+              2
+(1 row)
+
+select swallow_agreements();
+ swallow_agreements 
+--------------------
+                 10
+(1 row)
+
 set role admin;
-select fresetmarket();
+select * from fchangestatemarket(true);
 NOTICE:  market_status OPENED->STOPPING
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 NOTICE:  The market is now stopping for clients
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  truncate cascades to table "torder"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function fresetmarket_int() line 13 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "tmvt"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function fresetmarket_int() line 13 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "tmvtremoved"
-CONTEXT:  SQL statement "TRUNCATE towner CASCADE"
-PL/pgSQL function fresetmarket_int() line 13 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "torder"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function fresetmarket_int() line 14 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "tmvt"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function fresetmarket_int() line 14 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "tmvtremoved"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function fresetmarket_int() line 14 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
-NOTICE:  truncate cascades to table "treltried"
-CONTEXT:  SQL statement "TRUNCATE tquality CASCADE"
-PL/pgSQL function fresetmarket_int() line 14 at SQL statement
-SQL statement "SELECT fresetmarket_int()"
-PL/pgSQL function fresetmarket() line 9 at PERFORM
+ fchangestatemarket 
+--------------------
+ STOPPING
+(1 row)
+
+select * from fchangestatemarket(true);
 NOTICE:  market_status STOPPING->CLOSED
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
+ fchangestatemarket 
+--------------------
+ CLOSED
+(1 row)
+
+select * from fchangestatemarket(true);
 NOTICE:  market_session = n->n+1
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 NOTICE:  market_status CLOSED->STARTING
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 NOTICE:  Run the command:
 CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
-PL/pgSQL function fresetmarket() line 7 at assignment
 NOTICE:  	VACUUM FULL ANALYZE
 CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
-PL/pgSQL function fresetmarket() line 7 at assignment
 NOTICE:  before starting the market
 CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
-PL/pgSQL function fresetmarket() line 7 at assignment
+ fchangestatemarket 
+--------------------
+ STARTING
+(1 row)
+
+select * from fchangestatemarket(true);
 NOTICE:  market_status STARTING->OPENED
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
 NOTICE:  The market is now opened for clients
-CONTEXT:  PL/pgSQL function fresetmarket() line 7 at assignment
-NOTICE:  The market is reset and opened
- fresetmarket 
---------------
- 
+ fchangestatemarket 
+--------------------
+ OPENED
 (1 row)
 
 select id,market_session,market_status from vmarket;
@@ -107,25 +122,37 @@ select finsertorder('w','a',1000,1000,'c');
  (3,2-3,3,3,1000,2,1000,1000,1000,"{""[(1, 1, 2, 1000, 1, 1000, 1000),(2, 2, 1, 1000, 3, 1000, 1000),(3, 3, 3, 1000, 2, 1000, 1000)]""}")
 (1 row)
 
-select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
+select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt order by uuid;
  id | uuid | nb | oruuid | grp | provider | quality | qtt  | receiver 
 ----+------+----+--------+-----+----------+---------+------+----------
-  2 | 2-2  |  3 | 2-1    |   1 | u        | b       | 1000 | v
-  3 | 2-3  |  3 | 2-2    |   1 | v        | c       | 1000 | w
-  1 | 2-1  |  3 | 2-3    |   1 | w        | a       | 1000 | u
+  1 | 2-1  |  3 | 2-3    | 2-1 | w        | a       | 1000 | u
+  2 | 2-2  |  3 | 2-1    | 2-1 | u        | b       | 1000 | v
+  3 | 2-3  |  3 | 2-2    | 2-1 | v        | c       | 1000 | w
 (3 rows)
 
-select fremoveagreement(1);
- fremoveagreement 
-------------------
-                3
+select fremovemvt('2-1');
+ fremovemvt 
+------------
+          1
+(1 row)
+
+select fremovemvt('2-2');
+ fremovemvt 
+------------
+          1
+(1 row)
+
+select fremovemvt('2-3');
+ fremovemvt 
+------------
+          1
 (1 row)
 
 select id,qtt from tquality;
  id | qtt 
 ----+-----
-  1 |   0
   2 |   0
+  1 |   0
   3 |   0
 (3 rows)
 
@@ -160,18 +187,30 @@ select qtt_in,qtt_out from fexecquote('w',1);
    2000 |     500
 (1 row)
 
-select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt;
+select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt order by uuid;
  id | uuid | nb | oruuid | grp | provider | quality | qtt  | receiver 
 ----+------+----+--------+-----+----------+---------+------+----------
-  5 | 2-5  |  3 | 2-4    |   4 | u        | b       | 1000 | v
-  6 | 2-6  |  3 | 2-5    |   4 | v        | c       | 2000 | w
-  4 | 2-4  |  3 | 2-6    |   4 | w        | a       |  500 | u
+  4 | 2-4  |  3 | 2-6    | 2-4 | w        | a       |  500 | u
+  5 | 2-5  |  3 | 2-4    | 2-4 | u        | b       | 1000 | v
+  6 | 2-6  |  3 | 2-5    | 2-4 | v        | c       | 2000 | w
 (3 rows)
 
-select fremoveagreement(4);
- fremoveagreement 
-------------------
-                3
+select fremovemvt('2-4');
+ fremovemvt 
+------------
+          1
+(1 row)
+
+select fremovemvt('2-5');
+ fremovemvt 
+------------
+          1
+(1 row)
+
+select fremovemvt('2-6');
+ fremovemvt 
+------------
+          1
 (1 row)
 
 select fgetquote('w','a',500,0,'b');
@@ -203,10 +242,16 @@ select id,market_session,market_status from vmarket;
 
 -- market is closed
 set role client;
-select fremoveagreement(7);
- fremoveagreement 
-------------------
-                2
+select fremovemvt('2-7');
+ fremovemvt 
+------------
+          1
+(1 row)
+
+select fremovemvt('2-8');
+ fremovemvt 
+------------
+          1
 (1 row)
 
 set role admin;
@@ -214,8 +259,8 @@ select id,qtt from tquality;
  id | qtt 
 ----+-----
   3 |   0
-  1 |   0
   2 |   0
+  1 |   0
 (3 rows)
 
 select * from fgetstats(true);

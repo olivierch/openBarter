@@ -57,18 +57,30 @@ select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fexecquote('w',1);
   3 |  3 |     1000 |  2 |     1000 |   1000 |    1000 | {"[(1, 1, 2, 1000, 1, 1000, 1000),(2, 2, 1, 1000, 3, 1000, 1000),(3, 3, 3, 1000, 2, 1000, 1000)]"}
 (1 row)
 
-select id,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt;
- id | nb | oruuid | grp | provider | fs | qtt  | receiver 
-----+----+--------+-----+----------+----+------+----------
-  2 |  3 | 1-1    |   1 | u        | b  | 1000 | v
-  3 |  3 | 1-2    |   1 | v        | c  | 1000 | w
-  1 |  3 | 1-3    |   1 | w        | a  | 1000 | u
+select id,uuid,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt order by uuid;
+ id | uuid | nb | oruuid | grp | provider | fs | qtt  | receiver 
+----+------+----+--------+-----+----------+----+------+----------
+  1 | 1-1  |  3 | 1-3    | 1-1 | w        | a  | 1000 | u
+  2 | 1-2  |  3 | 1-1    | 1-1 | u        | b  | 1000 | v
+  3 | 1-3  |  3 | 1-2    | 1-1 | v        | c  | 1000 | w
 (3 rows)
 
-select * from fremoveagreement(1);
- fremoveagreement 
-------------------
-                3
+select * from fremovemvt('1-1');
+ fremovemvt 
+------------
+          1
+(1 row)
+
+select * from fremovemvt('1-2');
+ fremovemvt 
+------------
+          1
+(1 row)
+
+select * from fremovemvt('1-3');
+ fremovemvt 
+------------
+          1
 (1 row)
 
 select * from finsertorder('u',fq('b'),2000,1000,fq('a'));
@@ -95,18 +107,30 @@ select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fexecquote('w',2);
   6 |  3 |     2000 |  2 |      500 |   2000 |     500 | {"[(4, 1, 2, 1000, 1, 2000, 2000),(5, 2, 1, 1000, 3, 2000, 2000),(6, 3, 3, 2000, 2, 500, 500)]"}
 (1 row)
 
-select id,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt;
- id | nb | oruuid | grp | provider | fs | qtt  | receiver 
-----+----+--------+-----+----------+----+------+----------
-  5 |  3 | 1-4    |   4 | u        | b  | 1000 | v
-  6 |  3 | 1-5    |   4 | v        | c  | 2000 | w
-  4 |  3 | 1-6    |   4 | w        | a  |  500 | u
+select id,uuid,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt order by uuid;
+ id | uuid | nb | oruuid | grp | provider | fs | qtt  | receiver 
+----+------+----+--------+-----+----------+----+------+----------
+  4 | 1-4  |  3 | 1-6    | 1-4 | w        | a  |  500 | u
+  5 | 1-5  |  3 | 1-4    | 1-4 | u        | b  | 1000 | v
+  6 | 1-6  |  3 | 1-5    | 1-4 | v        | c  | 2000 | w
 (3 rows)
 
-select * from fremoveagreement(4);
- fremoveagreement 
-------------------
-                3
+select * from fremovemvt('1-4');
+ fremovemvt 
+------------
+          1
+(1 row)
+
+select * from fremovemvt('1-5');
+ fremovemvt 
+------------
+          1
+(1 row)
+
+select * from fremovemvt('1-6');
+ fremovemvt 
+------------
+          1
 (1 row)
 
 select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fgetquote('w',fq('a'),500,1000,fq('b'));
@@ -121,25 +145,31 @@ select id,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows from fexecquote('w',3);
   7 |  1 |     1000 |  2 |      500 |   1000 |     500 | {"[(4, 1, 2, 1000, 1, 2000, 1000),(7, 3, 1, 1000, 2, 500, 500)]"}
 (1 row)
 
-select id,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt;
- id | nb | oruuid | grp | provider | fs | qtt  | receiver 
-----+----+--------+-----+----------+----+------+----------
-  8 |  2 | 1-4    |   7 | u        | b  | 1000 | w
-  7 |  2 | 1-7    |   7 | w        | a  |  500 | u
+select id,uuid,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt order by uuid;
+ id | uuid | nb | oruuid | grp | provider | fs | qtt  | receiver 
+----+------+----+--------+-----+----------+----+------+----------
+  7 | 1-7  |  2 | 1-7    | 1-7 | w        | a  |  500 | u
+  8 | 1-8  |  2 | 1-4    | 1-7 | u        | b  | 1000 | w
 (2 rows)
 
-select * from fremoveagreement(7);
- fremoveagreement 
-------------------
-                2
+select * from fremovemvt('1-7');
+ fremovemvt 
+------------
+          1
+(1 row)
+
+select * from fremovemvt('1-8');
+ fremovemvt 
+------------
+          1
 (1 row)
 
 select id,qtt from tquality;
  id | qtt 
 ----+-----
   3 |   0
-  1 |   0
   2 |   0
+  1 |   0
 (3 rows)
 
 select * from fgetstats(true);

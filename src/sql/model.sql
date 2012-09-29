@@ -496,7 +496,7 @@ create table tmvt (
         nb int not NULL,
         -- origin ymvt_origin DEFAULT 'EXECUTION',
         oruuid text NOT NULL, -- refers to order uuid
-    	grp int, 
+    	grp text, 
     	-- References the first mvt of an exchange.
     	-- can be NULL
 	own_src int not NULL, 
@@ -510,7 +510,7 @@ create table tmvt (
 	),
 	-- check do not covers grp==NULL AND nb !=0
 	-- since when inserting, grp is NULL for the first mvt 
-	CONSTRAINT ctmvt_grp 		FOREIGN KEY (grp) references tmvt(id),
+	-- CONSTRAINT ctmvt_grp 		FOREIGN KEY (grp) references tmvt(id),
 	CONSTRAINT ctmvt_own_src 	FOREIGN KEY (own_src) references towner(id),
 	CONSTRAINT ctmvt_own_dst 	FOREIGN KEY (own_dst) references towner(id),
 	CONSTRAINT ctmvt_nat 		FOREIGN KEY (nat) references tquality(id)
@@ -569,7 +569,7 @@ create table tmvtremoved (
         uuid text not NULL,
         nb int not null,
         oruuid text NOT NULL, -- refers to order uuid
-    	grp int NOT NULL, 
+    	grp text NOT NULL, 
     	-- References the first mvt of an exchange.
     	-- can be NULL
 	own_src int references towner(id)  not null, 
@@ -773,7 +773,8 @@ DECLARE
 	_w_src		int;
 	_w_dst		int;
 	_flowr		int8;
-	_first_mvt	int;
+	_first_mvt_uuid	text;
+	_first_mvt  int;
 	_exhausted	bool;
 	_mvt_id		int;
 	_qtt		int8;
@@ -789,6 +790,7 @@ BEGIN
 	-- id,own,nr,qtt_requ,np,qtt_prov,qtt,flowr
 	
 	_nbcommit := yflow_dim(_flw); -- raise an error when flow->dim not in [2,8]
+	_first_mvt_uuid := NULL;
 	_first_mvt := NULL;
 	_exhausted := false;
 	-- RAISE NOTICE 'flow of % commits',_nbcommit;
@@ -808,14 +810,16 @@ BEGIN
 		END IF;
 			
 		INSERT INTO tmvt (uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created) 
-			VALUES('',_nbcommit,_oruuid,_first_mvt,_w_src,_w_dst,_flowr,_commits[_i][5]::int,statement_timestamp())
+			VALUES('',_nbcommit,_oruuid,'',_w_src,_w_dst,_flowr,_commits[_i][5]::int,statement_timestamp())
 			RETURNING id INTO _mvt_id;
 		_uuid := fgetuuid(_mvt_id);
-		UPDATE tmvt SET uuid = _uuid WHERE id=_mvt_id;
 					
-		IF(_first_mvt IS NULL) THEN
+		IF(_first_mvt_uuid IS NULL) THEN
+			_first_mvt_uuid := _uuid;
 			_first_mvt := _mvt_id;
 		END IF;
+		
+		UPDATE tmvt SET uuid = _uuid, grp = _first_mvt_uuid WHERE id=_mvt_id;
 		
 		IF(_qtt=0) THEN
 			perform fremoveorder_int(_oid);
@@ -826,7 +830,7 @@ BEGIN
 		----------------------------------------------------------------
 	END LOOP;
 	-- RAISE NOTICE '_first_mvt=%',_first_mvt;
-	UPDATE tmvt SET grp = _first_mvt WHERE id = _first_mvt  AND (grp IS NULL); --done only for oruuid==_oruuid	
+	-- UPDATE tmvt SET grp = _first_mvt WHERE uuid = _first_mvt  AND (grp IS NULL); --done only for oruuid==_oruuid	
 	IF(NOT FOUND) THEN
 		RAISE EXCEPTION 'the movement % does not exist',_first_mvt 
 			USING ERRCODE='YA003';
@@ -1371,47 +1375,41 @@ GRANT EXECUTE ON FUNCTION fcreateuser(text) TO admin;
 \i sql/market.sql
 
 --------------------------------------------------------------------------------
--- moves all movements of an exchange belonging to the user into tmvtremoved
+-- moves a movement of an exchange belonging to the user into tmvtremoved
 -- returns the number of movements moved
 CREATE FUNCTION 
-	fremoveagreement(_grp int) 
+	fremovemvt(_uuid text) 
 	RETURNS int AS $$
 DECLARE 
-	_nat int;
-	_scntq	int;
-	_cntm	int;
-	_scntm	int;
 	_qtt int8;
 	_qlt tquality%rowtype;
+	_mvt tmvt%rowtype;
 	_CHECK_QUALITY_OWNERSHIP int := fgetconst('CHECK_QUALITY_OWNERSHIP');
 BEGIN
-	_scntq := 0;_scntm := 0;
-	FOR _nat,_qtt,_cntm IN SELECT m.nat,sum(m.qtt),count(m.id) FROM tmvt m, tquality q 
-		WHERE m.nat=q.id AND 
-		((q.depository=session_user) OR (_CHECK_QUALITY_OWNERSHIP = 0)) AND 
-		m.grp=_grp GROUP BY m.nat LOOP
-		
-		_scntq := _scntq +1;
-		_scntm := _scntm + _cntm;
-		UPDATE tquality SET qtt = qtt - _qtt WHERE id = _nat RETURNING qtt INTO _qlt;
-		-- constraint  tquality.qtt >=0	
-	END LOOP;
-	
-	IF (_scntm=0) THEN
-		RAISE WARNING 'The agreement "%" does not exist or no movement of this agreement belongs to the user %',_grp,session_user;
-	ELSE
-		WITH a AS (DELETE FROM tmvt m USING tquality q WHERE m.nat=q.id AND 
-			((q.depository=session_user) OR (_CHECK_QUALITY_OWNERSHIP = 0)) 
-			AND m.grp=_grp RETURNING m.*) 
-		INSERT INTO tmvtremoved SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,statement_timestamp() as deleted FROM a;
 
+	SELECT m.* INTO _mvt FROM tmvt m WHERE m.uuid=_uuid;
+	IF NOT FOUND THEN
+		RAISE WARNING 'The movement "%" does not exist',_uuid;
+		RETURN 0;
 	END IF;
 	
-	RETURN _scntm;
+	SELECT q.* INTO _qlt FROM tquality q WHERE q.id=_mvt.nat AND 
+		((q.depository=session_user) OR (_CHECK_QUALITY_OWNERSHIP = 0)); 
+	IF NOT FOUND THEN
+		RAISE WARNING 'The movement "%" does not belong to the user "%""',_uuid,session_user;
+		RETURN 0;
+	END IF;
+	
+	UPDATE tquality SET qtt = qtt - _mvt.qtt WHERE id = _mvt.nat RETURNING qtt INTO _qtt;
+	
+	WITH a AS (DELETE FROM tmvt m  WHERE  m.uuid=_uuid RETURNING m.*) 
+	INSERT INTO tmvtremoved SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,statement_timestamp() as deleted FROM a;	
+
+	RETURN 1;
 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fremoveagreement(int) TO client_opened_role,client_stopping_role;
+GRANT EXECUTE ON FUNCTION  fremovemvt(text) TO client_opened_role,client_stopping_role;
 
 \i sql/quota.sql
 
@@ -1421,7 +1419,7 @@ GRANT EXECUTE ON FUNCTION  fremoveagreement(int) TO client_opened_role,client_st
 for all owners : select * from fgetagr(1);
 for a given owner: select * from fgetagr(1) where _own='1';
 */
-CREATE FUNCTION fgetagr(_grp int) RETURNS TABLE(_own text,_natp text,_qtt_prov int8,_qtt_requ int8,_natr text) AS $$
+CREATE FUNCTION fgetagr(_grp text) RETURNS TABLE(_own text,_natp text,_qtt_prov int8,_qtt_requ int8,_natr text) AS $$
 DECLARE 
 	_fnat	 text;
 	_fqtt	 int8;
