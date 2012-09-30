@@ -794,14 +794,22 @@ yflows_array_to_json(PG_FUNCTION_ARGS)
 {
 	ArrayType  *a = PG_GETARG_ARRAYTYPE_P(0);
 	int32	count,n;
-	//Tflow	*_yflow;
+	
+	int16		typlen;
+	bool		typbyval;
+	char		typalign;
+
 	Tflow	*_yflow;
 	StringInfoData _buf;
+	char *_p;
 		
 	CHECKARRVALID(a);
+	
 	count = ARRNELEMS(a);
+	get_typlenbyvalalign(ARR_ELEMTYPE(a),&typlen, &typbyval, &typalign);
 
-	_yflow = (Tflow *) ARR_DATA_PTR(a);
+	//_yflow = (Tflow *) 
+	_p = ARR_DATA_PTR(a);
 	initStringInfo(&_buf);
 	appendStringInfo(&_buf, "[\n");
 
@@ -809,8 +817,11 @@ yflows_array_to_json(PG_FUNCTION_ARGS)
 		if(n!=0) 
 			appendStringInfo(&_buf, ",\n");
 		//(void) _yflow_to_json(&_buf,&(_yflow[n]));
+		_yflow = (Tflow *) fetch_att(_p, typbyval, typlen);//PointerGetDatum(_p);
 		(void) _yflow_to_json(&_buf,_yflow);
-		_yflow++;
+		
+		_p = att_addlength_pointer(_p,typlen,_p);
+		_p = (char *) att_align_nominal(_p,typalign);
 	}
 
 	appendStringInfo(&_buf, "]\n");
