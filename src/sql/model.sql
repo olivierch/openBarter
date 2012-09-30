@@ -179,6 +179,7 @@ create table tquality (
 SELECT _grant_read('tquality');
 comment on table tquality is 'description of qualities';
 comment on column tquality.name is 'name of depository/name of quality ';
+comment on column tquality.idd is 'id of the depository';
 comment on column tquality.depository is 'name of depository (user)';
 comment on column tquality.qtt is 'total quantity on the market for this quality';
 alter sequence tquality_id_seq owned by tquality.id;
@@ -481,9 +482,9 @@ CREATE VIEW vorderremoved AS
 SELECT _grant_read('vorderremoved');
 --------------------------------------------------------------------------------
 CREATE VIEW vorderverif AS
-	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt FROM torder
+	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt,false AS removed FROM torder
 	UNION
-	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt FROM torderremoved;
+	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt,true AS removed FROM torderremoved;
 	
 SELECT _grant_read('vorderverif');
 
@@ -535,6 +536,7 @@ create index tmvt_own_dst_idx on tmvt(own_dst);
 
 --------------------------------------------------------------------------------
 -- vmvt 
+-- id,nb,uuid,oruuid,grp,provider,quality,qtt,receiver,created
 --------------------------------------------------------------------------------
 CREATE VIEW vmvt AS 
 	SELECT 	m.id as id,
@@ -565,8 +567,8 @@ COMMENT ON COLUMN vmvt.created IS 'time of the transaction';
 
 --------------------------------------------------------------------------------
 create table tmvtremoved (
-        id int UNIQUE not NULL,
-        uuid text not NULL,
+        id int not NULL,
+        uuid text UNIQUE not NULL,
         nb int not null,
         oruuid text NOT NULL, -- refers to order uuid
     	grp text NOT NULL, 
@@ -582,9 +584,9 @@ create table tmvtremoved (
 SELECT _grant_read('tmvtremoved');
 --------------------------------------------------------------------------------
 CREATE VIEW vmvtverif AS
-	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvt where grp is not NULL
+	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,false AS removed FROM tmvt where grp is not NULL
 	UNION ALL
-	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM tmvtremoved where grp is not NULL;
+	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,true AS removed FROM tmvtremoved where grp is not NULL;
 SELECT _grant_read('vmvtverif');
 
 --------------------------------------------------------------------------------

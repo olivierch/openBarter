@@ -90,27 +90,18 @@ select id,market_session,market_status from vmarket;
 
 set role client;
 select finsertorder('u','b',1000,1000,'a');
-NOTICE:  owner u created
-CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
           finsertorder          
 --------------------------------
- (1,2-1,1,2,1000,1,1000,0,0,{})
+ (1,2-1,1,5,1000,4,1000,0,0,{})
 (1 row)
 
 select finsertorder('v','c',1000,1000,'b');
-NOTICE:  owner v created
-CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
           finsertorder          
 --------------------------------
- (2,2-2,2,1,1000,3,1000,0,0,{})
+ (2,2-2,2,4,1000,6,1000,0,0,{})
 (1 row)
 
 select qtt_in,qtt_out from fgetquote('w','a',1000,0,'c');
-NOTICE:  owner w created
-CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function fgetquote(text,text,bigint,bigint,text) line 36 at assignment
  qtt_in | qtt_out 
 --------+---------
    1000 |    1000
@@ -119,7 +110,7 @@ PL/pgSQL function fgetquote(text,text,bigint,bigint,text) line 36 at assignment
 select finsertorder('w','a',1000,1000,'c');
                                                                finsertorder                                                               
 ------------------------------------------------------------------------------------------------------------------------------------------
- (3,2-3,3,3,1000,2,1000,1000,1000,"{""[(1, 1, 2, 1000, 1, 1000, 1000),(2, 2, 1, 1000, 3, 1000, 1000),(3, 3, 3, 1000, 2, 1000, 1000)]""}")
+ (3,2-3,3,6,1000,5,1000,1000,1000,"{""[(1, 1, 5, 1000, 4, 1000, 1000),(2, 2, 4, 1000, 6, 1000, 1000),(3, 3, 6, 1000, 5, 1000, 1000)]""}")
 (1 row)
 
 select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt order by uuid;
@@ -151,21 +142,27 @@ select fremovemvt('2-3');
 select id,qtt from tquality;
  id | qtt 
 ----+-----
-  2 |   0
   1 |   0
+  2 |   0
   3 |   0
-(3 rows)
+  7 |   0
+  8 |   0
+  9 |   0
+  5 |   0
+  4 |   0
+  6 |   0
+(9 rows)
 
 select finsertorder('u','b',2000,1000,'a');
           finsertorder          
 --------------------------------
- (4,2-4,1,2,1000,1,2000,0,0,{})
+ (4,2-4,1,5,1000,4,2000,0,0,{})
 (1 row)
 
 select finsertorder('v','c',2000,1000,'b');
           finsertorder          
 --------------------------------
- (5,2-5,2,1,1000,3,2000,0,0,{})
+ (5,2-5,2,4,1000,6,2000,0,0,{})
 (1 row)
 
 select  qtt_in,qtt_out from fgetquote('w','a',500,0,'c');
@@ -216,13 +213,13 @@ select fremovemvt('2-6');
 select fgetquote('w','a',500,0,'b');
                                            fgetquote                                           
 -----------------------------------------------------------------------------------------------
- (0,3,1,0,2,500,1000,500,"{""[(4, 1, 2, 1000, 1, 2000, 1000),(0, 3, 1, 0, 2, 500, 500)]""}",,)
+ (0,3,4,0,5,500,1000,500,"{""[(4, 1, 5, 1000, 4, 2000, 1000),(0, 3, 4, 0, 5, 500, 500)]""}",,)
 (1 row)
 
 select finsertorder('w','a',500,1000,'b');
                                              finsertorder                                              
 -------------------------------------------------------------------------------------------------------
- (7,2-7,3,1,1000,2,500,1000,500,"{""[(4, 1, 2, 1000, 1, 2000, 1000),(7, 3, 1, 1000, 2, 500, 500)]""}")
+ (7,2-7,3,4,1000,5,500,1000,500,"{""[(4, 1, 5, 1000, 4, 2000, 1000),(7, 3, 4, 1000, 5, 500, 500)]""}")
 (1 row)
 
 set role admin;
@@ -258,26 +255,32 @@ set role admin;
 select id,qtt from tquality;
  id | qtt 
 ----+-----
-  3 |   0
-  2 |   0
   1 |   0
-(3 rows)
+  2 |   0
+  3 |   0
+  7 |   0
+  8 |   0
+  9 |   0
+  6 |   0
+  5 |   0
+  4 |   0
+(9 rows)
 
 select * from fgetstats(true);
             _name            | cnt 
 -----------------------------+-----
- number of qualities         |   3
- number of owners            |   3
+ number of qualities         |   9
+ number of owners            |   7
  number of quotes            |   0
- number of orders            |   7
- number of movements         |   8
- number of quotes removed    |   1
- number of orders removed    |   7
- number of movements removed |   8
- number of agreements        |   3
+ number of orders            |  24
+ number of movements         |  26
+ number of quotes removed    |   5
+ number of orders removed    |  24
+ number of movements removed |  26
+ number of agreements        |  10
  number of orders rejected   |   0
- agreements with 2 partners  |   1
- agreements with 3 partners  |   2
+ agreements with 2 partners  |   4
+ agreements with 3 partners  |   6
 (12 rows)
 
 select * from fgeterrs(true) where cnt != 0;
@@ -324,15 +327,17 @@ select id,market_session,market_status from vmarket;
 select * from fgetstats(true);
             _name            | cnt 
 -----------------------------+-----
- number of qualities         |   0
- number of owners            |   0
+ number of qualities         |   9
+ number of owners            |   7
  number of quotes            |   0
- number of orders            |   0
- number of movements         |   0
- number of quotes removed    |   0
- number of orders removed    |   0
- number of movements removed |   0
- number of agreements        |   0
+ number of orders            |  24
+ number of movements         |  26
+ number of quotes removed    |   5
+ number of orders removed    |  24
+ number of movements removed |  26
+ number of agreements        |  10
  number of orders rejected   |   0
-(10 rows)
+ agreements with 2 partners  |   4
+ agreements with 3 partners  |   6
+(12 rows)
 

@@ -29,14 +29,16 @@ INSERT INTO tconst (name,value) VALUES 	('MAXTRY',10);
 -- TRELTRIED
 --------------------------------------------------------------------------------
 create table treltried (
-	np int references tquality(id) NOT NULL, 
-	nr int references tquality(id) NOT NULL, 
+	np int, 
+	nr int, 
 	cnt bigint DEFAULT 0,
 	PRIMARY KEY (np,nr),     
 	CHECK(	
     		np!=nr AND 
     		cnt >=0
-    	)
+    	),
+    CONSTRAINT creltried_np FOREIGN KEY (np) references tquality(id),
+    CONSTRAINT creltried_nr FOREIGN KEY (nr) references tquality(id)
 );
 
 --------------------------------------------------------------------------------

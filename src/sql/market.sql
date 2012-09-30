@@ -122,7 +122,7 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION fchangestatemarket(bool) TO admin;
-
+/*
 --------------------------------------------------------------------------------
 CREATE FUNCTION fresetmarket_int() RETURNS void AS $$
 DECLARE
@@ -163,7 +163,7 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION fresetmarket() TO admin;
-
+*/
 --------------------------------------------------------------------------------
 CREATE FUNCTION frenumbertables(exec bool) RETURNS bool AS $$
 DECLARE
@@ -230,43 +230,51 @@ BEGIN
 		ADD CONSTRAINT ctmvt_nat 	FOREIGN KEY (nat) references tquality(id) 
 		ON UPDATE CASCADE;
 
+	-- tquote truncated
 	TRUNCATE tquote;
 	PERFORM setval('tquote_id_seq',1,false);
-	
+/*	
 	TRUNCATE tmvt;
 	PERFORM setval('tmvt_id_seq',1,false);
-	
+*/
 	-- remove unused qualities
-	DELETE FROM tquality q WHERE	q.id NOT IN (SELECT np FROM torder)	
-				AND	q.id NOT IN (SELECT nr FROM torder)
-				AND 	q.id NOT IN (SELECT nat FROM tmvt);
+	DELETE FROM tquality q WHERE	q.id NOT IN (SELECT np FROM torder UNION SELECT np FROM torderremoved )	
+				AND	q.id NOT IN (SELECT nr FROM torder UNION SELECT nr FROM torderremoved )
+				AND 	q.id NOT IN (SELECT nat FROM tmvt UNION SELECT nat FROM tmvtremoved );
 	
 	-- renumbering qualities
 	PERFORM setval('tquality_id_seq',1,false);
 	WITH a AS (SELECT * FROM tquality ORDER BY id ASC)
 	UPDATE tquality SET id = nextval('tquality_id_seq') FROM a WHERE a.id = tquality.id;
+/*	
+	-- remove unused users
+	DELETE FROM tuser o WHERE o.id NOT IN (SELECT idd FROM tquality);
 	
-	-- remove unused owners
-	DELETE FROM towner o WHERE o.id NOT IN (SELECT idd FROM tquality);
-	
-	-- renumbering owners
-	PERFORM setval('towner_id_seq',1,false);
-	WITH a AS (SELECT * FROM towner ORDER BY id ASC)
-	UPDATE towner SET id = nextval('towner_id_seq') FROM a WHERE a.id = towner.id;
-	
+	-- renumbering users
+	PERFORM setval('tuser_id_seq',1,false);
+	WITH a AS (SELECT * FROM tuser ORDER BY id ASC)
+	UPDATE tuser SET id = nextval('tuser_id_seq') FROM a WHERE a.id = tuser.id;
+*/	
 	-- resetting quotas
 	UPDATE tuser SET spent = 0;
+	-- remove quotas of unused qualities
+	DELETE FROM treltried r WHERE np NOT IN (SELECT id FROM tquality) OR nr NOT IN (SELECT id FROM tquality);
 		
 	-- renumbering orders
 	PERFORM setval('torder_id_seq',1,false);
 	WITH a AS (SELECT * FROM torder ORDER BY id ASC)
 	UPDATE torder SET id = nextval('torder_id_seq') FROM a WHERE a.id = torder.id;
-		
+	
+	-- renumbering movements
+	PERFORM setval('tmvt_id_seq',1,false);
+	WITH a AS (SELECT * FROM tmvt ORDER BY id ASC)
+	UPDATE tmvt SET id = nextval('tmvt_id_seq') FROM a WHERE a.id = tmvt.id;
+
+/*		
 	TRUNCATE torderremoved; -- does not reset associated sequence if any
 	TRUNCATE tmvtremoved;
 	TRUNCATE tquoteremoved;
-	TRUNCATE treltried;
-	
+*/
 	
 	-- reset of constraints
     ALTER TABLE tquality 

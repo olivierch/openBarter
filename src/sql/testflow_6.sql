@@ -25,4 +25,5 @@ select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt order by uu
 
 select id,qtt from tquality;
 select * from fgetstats(true);
+select * from fgeterrs(true);
 

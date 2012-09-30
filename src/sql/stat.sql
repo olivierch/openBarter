@@ -172,7 +172,7 @@ BEGIN
 		
 	_mvtprec.grp := NULL;_mvtfirst.grp := NULL;
 	_uuiderr := NULL;
-	FOR _mvt IN SELECT * FROM vmvtverif ORDER BY grp,id ASC  LOOP
+	FOR _mvt IN SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM vmvtverif ORDER BY grp,uuid ASC  LOOP
 		IF(_mvt.grp != _mvtprec.grp) THEN -- first mvt of agreement
 			--> finish last agreement
 			IF NOT (_mvtprec.grp IS NULL OR _mvtfirst.grp IS NULL) THEN
