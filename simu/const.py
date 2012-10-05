@@ -6,5 +6,5 @@ DB_PWD=''
 DB_HOST='localhost'
 DB_PORT=5432
 
-MAX_OWNER=100
-MAX_QLT=100
+MAX_OWNER=100 # maximum number of owners
+MAX_QLT=100  # maximum number  of qualities

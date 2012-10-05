@@ -1,5 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf8 -*-
+
 import util
 import const
 		
@@ -37,7 +38,6 @@ class ExecQuote(util.Cmde):
 		self.res = [e for e in cursor]
 		return self.res
 
-		
 class InsertOrder(util.Cmde):
 	def __init__(self,params):
 		owner,nr,qtt_r,qtt_p,np = params
@@ -52,6 +52,7 @@ class InsertOrder(util.Cmde):
 		self.res = [e for e in cursor]
 		return self.res
 		
+#################################################################################		
 def getErrs(cde,cursor):
 	cursor.execute("SELECT * from fgeterrs(true) ")
 	for e in cursor:
@@ -61,9 +62,8 @@ def getErrs(cde,cursor):
 	return
 	
 def initDb():
+	""" remove then creates a database with the model """ 
 	import subprocess
-
-
 	subprocess.call(['dropdb',const.DB_NAME])
 	subprocess.call(['createdb',const.DB_NAME])
 	p1 = subprocess.Popen(['more','../src/sql/model.sql'], stdout=subprocess.PIPE)
@@ -77,20 +77,17 @@ def initDb():
 def execSql(fil):
 	import subprocess
 
-
 	p1 = subprocess.Popen(['more',fil], stdout=subprocess.PIPE)
 	p2 = subprocess.Popen(['psql', const.DB_NAME], stdin=p1.stdout,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 	p2.communicate()
 	# print 'done'
 	return p2.returncode == 0
-
 	
 def isOpened(cursor):
 	cursor.execute("SELECT state FROM vmarket ")
 	res = [e[0] for e in cursor]
 	# print res[0]	
 	return (res[0] == "OPENED")
-	
 	
 def verif(cursor):
 	cursor.callproc('fgetconnected',[1])
@@ -101,7 +98,6 @@ def verif(cursor):
 		print '%i = fgetconnected()' % (len(res),)
 	return l
 
-	
 def getNbAgreement(cursor):
 	cursor.execute("SELECT count(distinct grp) FROM tmvt WHERE nb!=1 ")
 	res = [e[0] for e in cursor]

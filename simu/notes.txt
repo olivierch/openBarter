@@ -1,0 +1,25 @@
+
+module réalisant les stats:
+
+la tache de fond:
+	il lance une instance de base sur un port particulier
+		arret si une autre instance est lancée
+	intialise la base
+		arret si cette base existe
+	initialise les stats
+	régulièrement
+		parcours le marché
+		et écrit les statistiques (peut être avec django)
+		
+affiche la stat:
+	des pages web django affichent les stats
+	lecture des données fournissant les stats
+	
+TYPES DE STATS:
+pour un couple (np,nr) donné:
+	graphe de l'historique des transactions (1 omega, 2 volume) 
+	
+3 matrice (np,nr) des transaction les plus fréquentes sur un interval de temps et à partir d'une date
+np fixé,
+
+

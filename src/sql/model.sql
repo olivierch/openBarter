@@ -8,7 +8,9 @@ SET client_min_messages = warning;
 SET log_error_verbosity = terse;
 
 drop extension if exists flow cascade;
-create extension flow;
+create extension flow with version '1.0';
+-- to read the version of the extension
+-- select version from pg_available_extension_versions where name='flow';
 
 --------------------------------------------------------------------------------
 -- main constants of the model
@@ -18,12 +20,14 @@ create table tconst(
 	value	int,
 	PRIMARY KEY (name)
 );
+
 --------------------------------------------------------------------------------
 INSERT INTO tconst (name,value) VALUES 
 	('MAXCYCLE',8),
+	-- it is the version of the model, not that of the extension
 	('VERSION-X.y.z',0),
 	('VERSION-x.Y.y',4),
-	('VERSION-x.y.Z',1),
+	('VERSION-x.y.Z',2),
 	('INSERT_OWN_UNKNOWN',1), 
 	-- !=0, insert an owner when it is unknown
 	-- ==0, raise an error when the owner is unknown
@@ -310,7 +314,7 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 create table towner (
     id serial UNIQUE not NULL,
-    name text not NULL,
+    name text UNIQUE not NULL,
     PRIMARY KEY (id),
     UNIQUE(name),
     CHECK(	

@@ -148,7 +148,10 @@ CREATE OPERATOR = (
    restrict = eqsel, join = eqjoinsel
 );
 
-/* yflow_get */
+
+--------------------------------------------------------------------------------
+-- yflow_get
+--------------------------------------------------------------------------------
 
 CREATE FUNCTION yflow_get(yorder)
 RETURNS yflow
@@ -166,7 +169,9 @@ AS 'MODULE_PATHNAME','yflow_get_yflow_yorder'
 LANGUAGE C IMMUTABLE STRICT;
 
 
-/* yflow_follow */
+--------------------------------------------------------------------------------
+-- yflow_follow
+--------------------------------------------------------------------------------
 
 CREATE FUNCTION yflow_follow(int,yorder,yflow)
 RETURNS bool
@@ -183,6 +188,9 @@ RETURNS int
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
 
+--------------------------------------------------------------------------------
+-- AGGREGATE yflow_max(yflow) and yflow_min(yflow)
+--------------------------------------------------------------------------------
 CREATE FUNCTION yflow_maxg(yflow,yflow)
 RETURNS yflow
 AS 'MODULE_PATHNAME'
@@ -206,7 +214,7 @@ sfunc = yflow_ming,
 stype = yflow,
 initcond = '[]'
 );
-
+--------------------------------------------------------------------------------
 CREATE FUNCTION yflow_qtts(yflow)
 RETURNS int8[]
 AS 'MODULE_PATHNAME'

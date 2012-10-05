@@ -27,10 +27,9 @@ import sys
 import util
 import prims
 
-
 # diviser le temps en intervalles
 def getIntTime(c):
-	def maxi(a,b):
+	def union(a,b):
 		r = [None,None]
 		if(a[0] < b[0]): r[0] = a[0]
 		else: r[0] = b[0]
@@ -39,7 +38,7 @@ def getIntTime(c):
 		return r		
 	res1 = prims.getSelect(c,"SELECT min(created),max(created) FROM tmvt",[])
 	res2 = prims.getSelect(c,"SELECT min(created),max(created) FROM torder",[])
-	return maxi(res1[0],res2[0])
+	return union(res1[0],res2[0])
 
 # pour chaque intervalle:
 def genIntervals(c,options):
@@ -90,7 +89,6 @@ def statg(options):
 		
 	except KeyboardInterrupt:
 		print 'interrupted by user' 	
-			
 
 	finally:
 		try:
@@ -113,6 +111,7 @@ from optparse import OptionParser
 def main():
 	usage = "usage: %prog [options]"
 	parser = OptionParser(usage)
+
 	"""
 	parser.add_option("-i", "--iteration",type="int", dest="iteration",help="number of iteration",default=0)	
 	parser.add_option("-r", "--reset",action="store_true", dest="reset",help="database is reset",default=False)
@@ -125,17 +124,10 @@ def main():
 	parser.add_option("--MAXTRY",type="int",dest="MAXTRY",help="reset MAXTRY")
 	parser.add_option("--MAXORDERFETCH",type="int",dest="MAXORDERFETCH",help="reset MAXORDERFETCH")
 	"""
-	
-		
+			
 	(options, args) = parser.parse_args()
 	statg(options)
 
 if __name__ == "__main__":
 	main()
-	"""
-	l = len(sys.argv)
-	if(l==1):
-		statg()
-	else:
-		print 'usage %s()' % (sys.argv[0],)
-	"""
+

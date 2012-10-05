@@ -46,13 +46,11 @@ class Work(object):
 				cde2 = prims.InsertOrder(self.params)
 				cde2.execute(cursor)
 			"""
-			#print self.params
 			cde2 = prims.InsertOrder(self.params)
 			cde2.execute(cursor)	
 			self.secs += cde2.getDelay()
 			
 			self.iOper +=1
-			#prims.getErrs(cde2,cursor)	
 			return
 			
 		except util.PrimException, e:
@@ -67,7 +65,6 @@ class Work(object):
 		
 	def __str__(self):
 		return "[work iOper=%i]"%self.iOper
-		
 		
 def iterer(cursor,options):
 	if(not options.seed is None):
@@ -95,13 +92,11 @@ def iterer(cursor,options):
 			res[k] = end[k] - v
 		print "done: %s " % res
 	return w
-
 		
 def simu(options):
 	if(options.reset):
 		if(not prims.initDb()):
 			raise util.SimuException("Market not opened")
-	#print 'debut simu'
 		
 	dbcon = util.connect()
 	cursor = dbcon.cursor()
@@ -133,14 +128,14 @@ def simu(options):
 			cursor.close()
 			# print "cursor closed"
 		except Exception,e:
-			print "Exception while trying to close the cursor"
-		try:
-			dbcon.close()
-			# print "DB close"
-		except Exception,e:
-			print "Exception while trying to close the connexion"
+			print "Exception while closing the cursor"
+		finally:
+			try:
+				dbcon.close()
+				# print "DB close"
+			except Exception,e:
+				print "Exception while closing the connexion"
 		
-	
 	if(w is not None):
 		d = w.getDelay()
 		n = w.getIOper()
@@ -163,8 +158,6 @@ def main():
 	parser.add_option("--MAXCYCLE",type="int",dest="MAXCYCLE",help="reset MAXCYCLE")
 	parser.add_option("--MAXTRY",type="int",dest="MAXTRY",help="reset MAXTRY")
 	parser.add_option("--MAXORDERFETCH",type="int",dest="MAXORDERFETCH",help="reset MAXORDERFETCH")
-	
-	
 		
 	(options, args) = parser.parse_args()
 	simu(options)

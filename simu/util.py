@@ -8,8 +8,6 @@ import const
 class SimuException(Exception):
 	pass 
 
-		
-
 def connect():
 	dbcon = psycopg2.connect(
 				database  = const.DB_NAME,
@@ -21,12 +19,11 @@ def connect():
 	dbcon.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
 	return dbcon
 
-
 #############################################################################
 import random	# random.randint(a,b) gives N such as a<=N<=b
 	
 def getRandQtt():
-	max_qtt = 10000 #sys.maxint
+	max_qtt = 10000 #sys.maxint = pow(2,63)-1
 	#qtt = random.randint(max_qtt,max_qtt*2)
 	qtt = random.randint(1,max_qtt)
 	return qtt
@@ -37,9 +34,11 @@ def getRandOwner():
 def getQltName(user,id):
 	return user+'/q'+str(id)
 
-	
 def getDistinctRandQlt():
-	# a couple (inr,inp) such as inr != inp
+	""" return a couple (inr,inp) such as:
+		 inr != inp
+		 inr and inr in [1,const.MAX_QLT]
+	"""
 	inr = random.randint(1,const.MAX_QLT)
 	inp = inr
 	while inp == inr:
@@ -50,6 +49,8 @@ def getDistinctRandQlt():
 from datetime import datetime
 
 def duree(begin,end):
+	""" returns a float; the number of seconds elapsed between begin and end 
+	"""
 	if(not isinstance(begin,datetime)): raise SimuException('begin is not datetime object')
 	if(not isinstance(end,datetime)): raise SimuException('end is not datetime object')
 	duration = end - begin
@@ -65,6 +66,8 @@ def getDelai(time):
 #############################################################################
 
 class PrimException(SimuException):
+	""" an exception wrapping the work that was in progree when it occured 
+	"""
 	def __init__(self,cmd,e):
 		self.work = None
 		self.cmd = cmd
@@ -78,7 +81,8 @@ class PrimException(SimuException):
 	
 	def getWork(self):
 		return self.work
-	
+#############################################################################
+
 class Cmde(object):
 	def __init__(self):
 		# start and stop time when done
@@ -116,9 +120,11 @@ class Cmde(object):
 		except TypeError,e:
 			res += "ERROR: Could not format the primitive"
 		return res	
+#############################################################################
 
-
-def writeMaxOptions(cursor,options):	
+def writeMaxOptions(cursor,options):
+	""" maxoptions are written if redefined 
+	"""	
 	sql = "UPDATE tconst SET value=%i WHERE name=\'%s\'"
 	if(not options.MAXCYCLE is None):
 		cursor.execute(sql % (int(options.MAXCYCLE),"MAXCYCLE"))
@@ -156,7 +162,7 @@ def getAvct(cursor):
 
 	cursor.execute("SELECT count(*) FROM tmvt WHERE nb = 1")
 	res = [e[0] for e in cursor]
-	avct["nbMvtLeak"] = res[0]
+	avct["nbMvtGarbadge"] = res[0]
 
 	cursor.execute("SELECT count(*) FROM torder ")
 	res = [e[0] for e in cursor]

@@ -1,7 +1,7 @@
 CREATE OR REPLACE VIEW vmvtverif AS
 	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat,created FROM tmvt where grp is not NULL
 	UNION ALL
-	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat,created FROM tmvtremoved where grp is not null;	
+	SELECT id,nb,oruuid,grp,own_src,own_dst,qtt,nat,created FROM tmvtremoved where grp is not NULL;	
 --------------------------------------------------------------------------------
 CREATE OR REPLACE VIEW vorderverif AS
 	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt,created FROM torder
