@@ -17,18 +17,18 @@
 	<title>openBarter</title>
 	
 	<meta name="title" content="openBarter">
-	<meta name="description" content="barter market place">
+	<meta name="description" content="barter market plac of fungible">
 	<!-- Google will often use this as its description of your page/site. Make it good. -->
 	
 	<meta name="google-site-verification" content="">
 	<!-- Speaking of Google, don't forget to set your site up: http://google.com/webmasters -->
 	
 	<meta name="author" content="Olivier Chaussavoine">
-	<meta name="Copyright" content="Copyright Olivier Chaussavoine 2011. All Rights Reserved.">
+	<meta name="Copyright" content="Copyright Olivier Chaussavoine 2001->2012. All Rights Reserved.">
 
 	<!-- Dublin Core Metadata : http://dublincore.org/ -->
 	<meta name="DC.title" content="openBarter">
-	<meta name="DC.subject" content="barter market place.">
+	<meta name="DC.subject" content="barter market place of fungible.">
 	<meta name="DC.creator" content="Olivier Chaussavoine.">
 	
 	<!--  Mobile Viewport Fix
@@ -65,20 +65,23 @@
 
 <div>
 <h1>openBarter</h1>
-<aside>
-<p><i>Gold is fungible. Silver is fungible; that is, these metals are both so homogeneous that, if I get a pound of pure gold, for example, it is indifferent to me whether it be this pound or that pound, one is as good as another.</i></p>
-</aside>
-<p> Any fungible has a pecular quality and quantity. openBarter is a software - a barter market of such fungible.<p>
-<p>It is a <a href="http://en.wikipedia.org/wiki/Central_limit_order_book">central limit order book</a> where an order is an unilateral commitment of an owner to provide a fungible in exchange of an other.<p>
+<p> openBarter is the model of a barter market of fungible values. It is organized as a <a href="http://en.wikipedia.org/wiki/Central_limit_order_book">central limit order book</a>.<p>
 
-<p>The market does not require a central value standard to express prices. A ratio between quantity offered and quantity required is used by owners instead of a price. The same ratio is also used to perform competition between orders.</p>
+<div class="verseblock">
+<div class="verseblock-content">Gold is <em>fungible</em>. Silver is fungible; that is, these metals are both so homogeneous that,if I get a pound 
+of pure gold, for example, it is indifferent to me whether it be this pound or that pound,one is as good as another.
+</div>
+</div>
 
-<p>openBarter allows cyclic exchange between up to 8 partners in a single transaction. The combinatorics is so rich that for a reasonable diversity of qualities, openBarter is nearly as liquid as a regular market.</p>
-
-<p>Mathematic principles of openbarter are detailed on this <a href="https://github.com/downloads/olivierch/openBarter/paper-ob.pdf">paper</a>.</p>
-
-<p>openBarter is an extension of the <a href="http://www.postgresql.org/">postgreSQL</a>, the linux of databases.</p>
-
+<p>Each fungible value has a pecular <em>quality</em> and <em>quantity</em>. An order is an unilateral commitment to provide a fungible in exchange of an other.<p>
+<p>The ratio between quantity offered and quantity required is used instead of a price to perform competition between orders.</p>
+<p>openBarter allows cyclic exchange between up to <em>8</em> partners in a single transaction.</p>
+<div class="verseblock">
+<p><em> The combinatorics is so rich that for a reasonable diversity of qualities, openBarter is nearly as liquid as a regular market.</p>
+<p>The market does not require a central value standard to express prices.</em><p>
+</div>
+<p>Mathematic principles of openbarter are detailed on this <a href="https://github.com/downloads/olivierch/openBarter/paper-ob.pdf">paper</a>. openBarter uses <a href="http://www.postgresql.org/">postgreSQL</a>, the linux of databases. A special extension of this database allows fast execution of the primitives of the model.</p>
+ 
     
 <h2>Releases</h2>
 <p>The latest releases can be dowload from this <a href="https://github.com/olivierch/openBarter/tags">page</a>.</p>
