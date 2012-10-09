@@ -28,12 +28,25 @@
 </head>
 <body>
 
-<h2>Vision</h2>
-<p>When values are exchanged, it is not the physical value that change hands. It is the information attached to the value that is swapped<p>
-<div class="imageblock">
-<img  align="right" src="static/images/reseau.svg"></img>
-<p> If openBarter is organized as a central limit order book, a depositories (green) can use several markets (red), forming a web of decentralized exchange. The centrality of the order book just means that competition occurs on orders it contains.</p>
-</div>
+<h2>Elements of architecture</h2>
+
+<img width="200" align="right" src="static/images/reseau.svg"></img>
+<h3>Decentralized</h3>
+<p> If openBarter is organized as a central limit order book, a depository (green) can use several markets (red). The centrality of the order book means that competition occurs on all orders it contains, but the web of exchange is decentralized.</p>
+<h3>Depository</h3>
+<p>A common trusted digital depository stores the representation of values (quality and quantity) with the name of the owner, that is a <em>depository</em>. When values are exchanged, names of owners are just swapped. It is not physical values that change hands.<p>
+<p>A quality is a measurement standard represented by a name of the form <tt>depositoryName/qualityName.</tt></p>
+<p>A quantity is an integer.<p>
+<p>A couple (quality,quantity) can represent any fungible value such as mineral, money, or Joule.</p>
+<p>An owner can record a value on a depository that accept this quality.</p>
+<h3>Relation between market and depositories</h3>
+<p>The schema represents the back office on the left, and the front office on the right.<p>
+<img width="400" align="right" src="static/images/barterMarket.svg"></img>
+<p>The market executes orders entered by owners. The movements produced are then executed to the depositories.</p>
+<p>A common authentication such as <a href="http://en.wikipedia.org/wiki/OAuth">oAuth</a> is used to authenticate users. They  act as owners on the depositories and on the market. This way, a user can receive a value even if he is not yet known as an owner by the depository managing this value.</p>
+<p>Market users have access to the history of past transactions using statistics prepared with a stat engine providing a <a href="http://en.wikipedia.org/wiki/Technical_analysis">technical analysis</a> of the market extended to multilateral exchanges.</p>
+<p>
+
 
 
 <p> <a href="./index.html">Go back to the main page</a>.</p>
