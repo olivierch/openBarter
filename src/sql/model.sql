@@ -44,7 +44,7 @@ DECLARE
 BEGIN
 	SELECT value INTO _ret FROM tconst WHERE name=_name;
 	IF(NOT FOUND) THEN
-		RAISE 'the const % should be found',_name;
+		RAISE WARNING 'the const % is not found',_name USING ERRCODE= 'YA002';
 		RAISE EXCEPTION USING ERRCODE='YA002';
 	END IF;
 	IF(_name = 'MAXCYCLE' AND _ret >8) THEN
@@ -1147,6 +1147,8 @@ BEGIN
 		END IF;
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
+	
+	lock table torder in share row exclusive mode;
 		
 	-- _q.qtt_requ != 0		
 	_qtt_requ := _q.qtt_requ;
@@ -1214,7 +1216,8 @@ DECLARE
 	_id		 int;
 	_uuid		 text;
 	_start		 int8;
-BEGIN	
+BEGIN
+		
 	perform fupdate_quality(_np,_qtt_prov);	
 		
 	INSERT INTO torder (uuid,qtt,nr,np,qtt_prov,qtt_requ,own,created,updated) 
@@ -1256,7 +1259,7 @@ DECLARE
 	_res	        int8[];
 	_first_mvt	int;
 BEGIN
-	
+	lock table torder in share row exclusive mode;
 	_idd := fverifyquota();
 	_q.own := fgetowner(_owner,true); -- inserted if not found
 	
@@ -1313,10 +1316,7 @@ BEGIN
 	PERFORM finvalidate_treltried();
 	
 	RETURN _ro;
-	
-EXCEPTION WHEN SQLSTATE 'YU001' THEN 
-	RAISE NOTICE 'Abort';
-	RETURN _ro; 
+
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
@@ -1333,13 +1333,13 @@ DECLARE
 	_market_status	text;
 BEGIN
 	IF( _name IN ('admin','client','client_opened_role','client_stopping_role')) THEN
-		RAISE WARNING 'The name % is not allowed',_name;
+		RAISE WARNING 'The name % is not allowed',_name USING ERRCODE='YU001';
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
 	
 	SELECT * INTO _user FROM tuser WHERE name=_name;
 	IF FOUND THEN
-		RAISE WARNING 'The user % exists',_name;
+		RAISE WARNING 'The user % exists',_name USING ERRCODE='YU001';
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
 	
@@ -1347,29 +1347,24 @@ BEGIN
 	
 	SELECT rolsuper INTO _super FROM pg_authid where rolname=_name;
 	IF NOT FOUND THEN
+		_super := false;
 		EXECUTE 'CREATE ROLE ' || _name;
-		EXECUTE 'ALTER ROLE ' || _name || ' NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION'; 
-		EXECUTE 'ALTER ROLE ' || _name || ' LOGIN CONNECTION LIMIT 1';
 	ELSE
 		IF(_super) THEN
 			-- RAISE NOTICE 'The role % is a super user.',_name;
 			RAISE NOTICE 'The role is a super user.';
 		ELSE
 			-- RAISE WARNING 'The user is not found but a role % already exists - unchanged.',_name;
-			RAISE WARNING 'The user is not found but the role already exists - unchanged.';
-			RAISE EXCEPTION USING ERRCODE='YU001';				
+			RAISE NOTICE 'The user is not found but the role already exists - unchanged.';
+			-- RAISE EXCEPTION USING ERRCODE='YU001';	
+			
 		END IF;
 	END IF;
 	
-	SELECT market_status INTO _market_status FROM vmarket;
-	IF(_market_status = 'OPENED') THEN 
-		-- RAISE NOTICE 'The market is opened for this user %', _name;
-		RAISE NOTICE 'The market is opened for this user';
-		EXECUTE 'GRANT client_opened_role TO ' || _name;
-	ELSIF(_market_status = 'STOPPING') THEN
-		-- RAISE NOTICE 'The market is stopping for this user %', _name;
-		RAISE NOTICE 'The market is stopping for this user ';
-		EXECUTE 'GRANT client_stopping_role TO ' || _name;	
+	IF (NOT _super) THEN
+		EXECUTE 'GRANT client TO ' || _name;
+		EXECUTE 'ALTER ROLE ' || _name || ' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION'; 
+		EXECUTE 'ALTER ROLE ' || _name || ' LOGIN CONNECTION LIMIT 1';	
 	END IF;
 	
 	RETURN;
@@ -1466,6 +1461,7 @@ $$ LANGUAGE PLPGSQL;
 CREATE FUNCTION _removepublic() RETURNS void AS $$
 BEGIN
 	EXECUTE 'REVOKE ALL ON DATABASE ' || current_catalog || ' FROM PUBLIC';
+	EXECUTE 'GRANT CONNECT,TEMPORARY ON DATABASE ' || current_catalog || 'TO client'; 
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL;

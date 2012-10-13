@@ -31,19 +31,38 @@ def getRandQtt():
 def getRandOwner():
 	return 'w'+str(random.randint(1,const.MAX_OWNER))
 	
+def getRandDepository(threads):
+	if(threads==1):
+		return const.DB_USER
+	return nameUser(random.randint(0,threads-1))
+
+def nameUser(thread):
+	return 'user'+str(thread)
+
+def nameUsers(thread):
+	for j in range(thread):
+		yield nameUser(j+1)
+
+def nameUserRand(thread):
+	return nameUser(random.randint(1,thread))
+	
 def getQltName(user,id):
 	return user+'/q'+str(id)
 
-def getDistinctRandQlt():
-	""" return a couple (inr,inp) such as:
-		 inr != inp
-		 inr and inr in [1,const.MAX_QLT]
+def getDistinctRandQlt(thread,user):
+	""" return a couple (nr,np) such as:
+		 nr != np
 	"""
-	inr = random.randint(1,const.MAX_QLT)
-	inp = inr
-	while inp == inr:
-		inp = random.randint(1,const.MAX_QLT)
-	return inp,inr
+	maxQlt = const.MAX_QLT // thread
+	if(maxQlt <2):
+		print "const.MAX_QLT // thread not consistent"
+		exit(-2)
+	
+	np = getQltName(user,random.randint(1,maxQlt))
+	nr = np
+	while np == nr:
+		nr = getQltName(nameUserRand(thread),random.randint(1,maxQlt))
+	return np,nr
 
 #############################################################################	
 from datetime import datetime
@@ -82,7 +101,12 @@ class PrimException(SimuException):
 	def getWork(self):
 		return self.work
 #############################################################################
+import logging
 
+####################################################################################
+logging.basicConfig(level=logging.DEBUG,
+                    format='(%(threadName)-10s) %(message)s',
+                    )
 class Cmde(object):
 	def __init__(self):
 		# start and stop time when done
@@ -104,12 +128,14 @@ class Cmde(object):
 		
 		if(self.params is None or self.proc is None):
 			raise PrimException(self,None)
+
 		try:
 			cursor.callproc(self.proc,self.params)
+			#logging.debug( "execute:%s" % str(self))
 		except Exception,e:
+			logging.debug(e)
 			raise PrimException(self,e)
-		finally:
-			self.stop = now()
+
 
 			
 	def __str__(self):
@@ -132,6 +158,12 @@ def writeMaxOptions(cursor,options):
 		cursor.execute(sql % (int(options.MAXTRY),"MAXTRY"))
 	if(not options.MAXORDERFETCH is None):
 		cursor.execute(sql % (int(options.MAXORDERFETCH),"MAXORDERFETCH"))
+		
+def setQualityOwnership(cursor,check):
+	val =0
+	if(check): val =1
+	sql = "UPDATE tconst SET value=%i WHERE name=\'CHECK_QUALITY_OWNERSHIP\'"
+	cursor.execute(sql % (val,))	
 
 def readMaxOptions(cursor):
 	r = []
@@ -169,5 +201,84 @@ def getAvct(cursor):
 	avct["nbOrder"] = res[0]
 	
 	return avct
+	
+####################################################################################
+import os,sys
+	
+class Chdir:
+	""" usage:
+	with Chdir(path):
+		do sthing
+	"""         
+	def __init__( self, newPath ):
+		self.path = newPath
+	
+	def __enter__(self):  
+		self.savedPath = os.getcwd()
+		os.chdir(self.path)
+
+	def __exit__(self, type, value, traceback):
+		os.chdir( self.savedPath )
+		
+class DbConn:
+	""" usage:
+	with DbConn(const) as con:
+		do sthing
+	"""         
+	def __init__( self, params,user=None ):
+		self.params = params
+		self.user = user
+		if(user==None):
+			self.user = params.DB_USER
+	
+	def __enter__(self): 
+		try:
+			self.con = psycopg2.connect(
+						database  = self.params.DB_NAME,
+						password  = self.params.DB_PWD,
+						user = self.user,
+						host = self.params.DB_HOST,
+						port = self.params.DB_PORT
+			)
+		except psycopg2.OperationalError,e:
+			print "Cannot connect to the db %s" % const.DB_NAME
+			print "ABORT"
+			sys.exit(-1)
+		self.con.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT) 
+		
+		return self.con
+
+	def __exit__(self, type, value, traceback):	
+		try:
+			self.con.close()
+			#print "DB close"
+		except Exception,e:
+			print "Exception while closing the connexion"
+		return False #exception of caller propagated
+		
+		
+class DbCursor:
+	""" usage:
+	with DbConn(params) as con:
+		with DbCursor(con) as cur:
+			do sthing
+	"""         
+	def __init__( self, con ):
+		self.con = con
+	
+	def __enter__(self):  
+		self.cursor = self.con.cursor()
+		return self.cursor
+
+	def __exit__(self, type, value, traceback):	
+		try:
+			self.cursor.close()
+			#print "cursor closed"
+		except Exception,e:
+			print "Exception while closing the cursor"
+		return False #exception of caller propagated
+				
+				
+				
 		
 	

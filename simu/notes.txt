@@ -22,4 +22,30 @@ pour un couple (np,nr) donné:
 3 matrice (np,nr) des transaction les plus fréquentes sur un interval de temps et à partir d'une date
 np fixé,
 
+################################################################################################
+protocole TLS (transport security layer)
+messages json
+besoins: 
+	pas de duplication
+	pas de pertes
+	pas de nécessité de synchro des horloges
+	messages ayant des clef anormales rejetées
+
+=> messages numéroté
+reprise depuis le dernier numéro bien reçu
+
+pb:
+	horloges 
+	les timestamp sont notés au départ D.
+		les messages sont datés en relatif à D
+		
+	dictionnaires admissibles
+		expression régulière
+		
+twisted
+gnutls
+python-gnutls
+twisted
+
+	
 

@@ -6,9 +6,9 @@ import const
 		
 class GetQuote(util.Cmde):
 	def __init__(self,params):
-		owner,nr,qtt_r,qtt_p,np = params
+		owner,np,qtt_p,qtt_r,nr = params
 		super(util.Cmde)
-		self.params = [owner,nr,qtt_r,qtt_p,np]
+		self.params = [owner,np,qtt_p,qtt_r,nr]
 		self.str = 'SELECT fgetquote(\'%s\',\'%s\',%i,%i,\'%s\');'
 		self.proc = 'fgetquote'
 		self.res = None
@@ -40,9 +40,9 @@ class ExecQuote(util.Cmde):
 
 class InsertOrder(util.Cmde):
 	def __init__(self,params):
-		owner,nr,qtt_r,qtt_p,np = params
+		owner,np,qtt_p,qtt_r,nr = params
 		super(util.Cmde)
-		self.params = [owner,nr,qtt_r,qtt_p,np]
+		self.params = [owner,np,qtt_p,qtt_r,nr]
 		self.str = 'SELECT finsertorder(\'%s\',\'%s\',%i,%i,\'%s\');'
 		self.proc = 'finsertorder'
 		self.res = None
@@ -66,10 +66,11 @@ def initDb():
 	import subprocess
 	subprocess.call(['dropdb',const.DB_NAME])
 	subprocess.call(['createdb',const.DB_NAME])
-	p1 = subprocess.Popen(['more','../src/sql/model.sql'], stdout=subprocess.PIPE)
-	p2 = subprocess.Popen(['psql', const.DB_NAME], stdin=p1.stdout,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-	p2.communicate()
-	# print 'done'
+	with util.Chdir(const.PATH_SRC):
+		p1 = subprocess.Popen(['more','sql/model.sql'], stdout=subprocess.PIPE)
+		p2 = subprocess.Popen(['psql', const.DB_NAME], stdin=p1.stdout,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+		p2.communicate()
+	print 'database was reset'
 	return p2.returncode == 0
 
 	# subprocess.Popen(['psql '+ const.DB_NAME +' < ../src/sql/model.sql'],shell=True)

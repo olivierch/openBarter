@@ -6,13 +6,15 @@ import sys
 import const
 import util
 import random
+import psycopg2
+import sys
 # import curses
 
-#stdscr = curses.initscr()
-
 class Work(object):
-	def __init__(self,w):
+	def __init__(self,w,options,user):
 		self.cdes = []
+		self.options = options
+		self.user = user
 		self.params = self.getParams()
 		if(w is not None):
 			self.secs = w.getDelay()
@@ -20,37 +22,45 @@ class Work(object):
 		else:
 			self.secs = 0.
 			self.iOper = 0
-	
+
 	def getParams(self):
 		owner = util.getRandOwner()
 		qtt_r = util.getRandQtt()
 		qtt_p = util.getRandQtt()
 
 		# a couple (inr,inp) such as inr != inp
+		"""
 		inr,inp = util.getDistinctRandQlt()
-		nr = util.getQltName(const.DB_USER,inr)
-		np = util.getQltName(const.DB_USER,inp)
-		return (owner,nr,qtt_r,qtt_p,np)
+		if(self.options.threads==1):
+		else:
+			nr = util.getQltName(getRandDepository(self.options.threads),inr)
+			np = util.getQltName(const.DB_USER,inp)
+		"""
+		np,nr = util.getDistinctRandQlt(self.options.threads,self.user)
+		return (owner,np,qtt_p,qtt_r,nr)
 		
 	def execute(self,cursor):
 		try:
-			"""
-			cde = prims.GetQuote(self.params)
-			cde.execute(cursor)
-			self.secs += cde.getDelay()
+			begin = util.now()
+			if(self.options.scenario == "quote"):
+				cde = prims.GetQuote(self.params)
+				cde.execute(cursor)
 			
-			if(cde.getIdQuote()!=0):
-				cde2 = prims.ExecQuote(cde.getOwner(),cde.getIdQuote())
-				cde2.execute(cursor)
-			else:
+				if(cde.getIdQuote()!=0):
+					cde2 = prims.ExecQuote(cde.getOwner(),cde.getIdQuote())
+					cde2.execute(cursor)
+				else:
+					cde2 = prims.InsertOrder(self.params)
+					cde2.execute(cursor)
+			
+			if(self.options.scenario == "basic"):
+				# print self.iOper
 				cde2 = prims.InsertOrder(self.params)
-				cde2.execute(cursor)
-			"""
-			cde2 = prims.InsertOrder(self.params)
-			cde2.execute(cursor)	
-			self.secs += cde2.getDelay()
-			
+				cde2.execute(cursor)	
+
+			self.secs += util.duree(begin,util.now())
 			self.iOper +=1
+			
 			return
 			
 		except util.PrimException, e:
@@ -66,83 +76,101 @@ class Work(object):
 	def __str__(self):
 		return "[work iOper=%i]"%self.iOper
 		
-def iterer(cursor,options):
+def iterer(cursor,options,user):
 	if(not options.seed is None):
 		random.seed(options.seed) #for reproductibility of playings
 	
 	w = None
-	begin = util.getAvct(cursor)
+
 	while True:
-		w = Work(w)
+		w = Work(w,options,user)
 		if(w.getIOper() >= options.iteration):
-			"""
-			print 'Ended before:\n%s'% (str(w),)
-			print "next command would be:"
-			print "SELECT * from fgetquote(\'%s\',\'%s\',%i,%i,\'%s\')" % w.params
-			"""
 			break
 		w.execute(cursor)
 
 	if options.maxparams:
 		print "max_options:%s, nbAgr:%i " % (util.readMaxOptions(cursor),prims.getNbAgreement(cursor))
-	if(w.getIOper()!=0):
-		end =util.getAvct(cursor)
-		res = {}
-		for k,v in begin.iteritems():
-			res[k] = end[k] - v
-		print "done: %s " % res
+
 	return w
+
+def createUser(cursor,user=const.DB_USER):
+	try:
+		cursor.execute("SELECT fcreateuser(%s)",[user])
+	except StandardError,e:
+		if e.pgcode!="YU001":
+			raise e
+	return
+	
+
+def simuInt(args):
+	options,user = args
+	with util.DbConn(const,user) as dbcon:
+		with util.DbCursor(dbcon) as cursor:
+			util.writeMaxOptions(cursor,options)
+	
+			w = None
+	
+			try:
+				w = iterer(cursor,options,user)
+				if(options.verif):
+					util.runverif(cursor)
 		
+			except KeyboardInterrupt:
+				print 'interrupted by user' 
+		
+			except util.PrimException,se:
+				w = se.getWork()
+				cde = se.getCmd()
+				print 'Failed on command: %s' % (str(se.getCmd()),)	
+
+	return 
+		
+import threa
 def simu(options):
+	itera = 0
+	_begin = util.now()
 	if(options.reset):
 		if(not prims.initDb()):
-			raise util.SimuException("Market not opened")
-		
-	dbcon = util.connect()
-	cursor = dbcon.cursor()
-	if(options.reset):
-		cursor.execute("SELECT fcreateuser(%s)",[const.DB_USER])
-	util.writeMaxOptions(cursor,options)
+			raise util.SimuException("Market is not opened")
 
-	w = None
+	with util.DbConn(const) as dbcon:
+		with util.DbCursor(dbcon) as cursor:
+			begin = util.getAvct(cursor)
 	
-	try:
-		w = iterer(cursor,options)
-		if(options.verif):
-			util.runverif(cursor)
+	if(options.threads==1):		
+		with util.DbConn(const) as dbcon:
+			with util.DbCursor(dbcon) as cursor:
+				createUser(cursor)
+			simuInt((options,const.DB_USER))
+			itera = options.iteration
+	else:
 		
-	except KeyboardInterrupt:
-		print 'interrupted by user' 
-		
-	except util.PrimException,se:
-		w = se.getWork()
-		cde = se.getCmd()
-		print 'Failed on command: %s' % (str(se.getCmd()),)	
-		"""		
-		except Exception,e:
-			print "Unidentified Exception:",e
-		"""
-	finally:
-		
-		try:
-			cursor.close()
-			# print "cursor closed"
-		except Exception,e:
-			print "Exception while closing the cursor"
-		finally:
-			try:
-				dbcon.close()
-				# print "DB close"
-			except Exception,e:
-				print "Exception while closing the connexion"
-		
-	if(w is not None):
-		d = w.getDelay()
-		n = w.getIOper()
-		if(n!=0):
-			print 'simu terminated after %.6f seconds (%.6f secs/oper)' % (d,d/w.getIOper())
-	
-	return 
+		with util.DbConn(const) as dbcon:
+			with util.DbCursor(dbcon) as cursor:
+				for user in util.nameUsers(options.threads):
+					createUser(cursor,user)
+				util.setQualityOwnership(cursor,True)
+				
+		ts = []	
+		for user in util.nameUsers(options.threads):
+			t = threa.ThreadWithArgs(func=simuInt,args=(options,user),name=user)
+			t.start()
+			ts.append(t)
+		for t in ts:
+			t.join()
+		itera = options.iteration * options.threads
+			
+	if(itera):
+		with util.DbConn(const) as dbcon:
+			with util.DbCursor(dbcon) as cursor:
+				end =util.getAvct(cursor)
+				res = {}
+				for k,v in begin.iteritems():
+					res[k] = end[k] - v
+				print "done: %s " % res
+		secs = util.duree(_begin,util.now())	
+		print 'simu terminated after %.6f seconds (%.6f secs/oper)' % (secs,secs/itera)
+	return
 	
 
 from optparse import OptionParser
@@ -154,12 +182,20 @@ def main():
 	parser.add_option("-r", "--reset",action="store_true", dest="reset",help="database is reset",default=False)
 	parser.add_option("-v", "--verif",action="store_true", dest="verif",help="fgeterrs run after",default=False)
 	parser.add_option("-m", "--maxparams",action="store_true", dest="maxparams",help="print max parameters",default=False)
+	parser.add_option("-t", "--threads",type="int", dest="threads",help="number of threads",default=1)
 	parser.add_option("--seed",type="int",dest="seed",help="reset random seed")
 	parser.add_option("--MAXCYCLE",type="int",dest="MAXCYCLE",help="reset MAXCYCLE")
 	parser.add_option("--MAXTRY",type="int",dest="MAXTRY",help="reset MAXTRY")
 	parser.add_option("--MAXORDERFETCH",type="int",dest="MAXORDERFETCH",help="reset MAXORDERFETCH")
+	parser.add_option("-s","--scenario",type="string",action="store",dest="scenario",help="the scenario choosen",default="basic")
 		
 	(options, args) = parser.parse_args()
+	
+	possible_scenario = ["basic","quote"]	
+	if(options.scenario not in possible_scenario):
+		raise Exception("The scenario does'nt exist")
+	
+	
 	simu(options)
 
 if __name__ == "__main__":

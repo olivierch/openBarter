@@ -112,18 +112,8 @@ def main():
 	usage = "usage: %prog [options]"
 	parser = OptionParser(usage)
 
-	"""
-	parser.add_option("-i", "--iteration",type="int", dest="iteration",help="number of iteration",default=0)	
-	parser.add_option("-r", "--reset",action="store_true", dest="reset",help="database is reset",default=False)
-	parser.add_option("-v", "--verif",action="store_true", dest="verif",help="fgeterrs run after",default=False)
-	parser.add_option("-m", "--maxparams",action="store_true", dest="maxparams",help="print max parameters",default=False)
-	parser.add_option("--seed",type="int",dest="seed",help="reset random seed") """
-	parser.add_option("--INTERVALS",type="int",dest="INTERVALS",help="define the number of intervals",default=100)
-	parser.add_option("-f","--file",type="string",action="store",dest="filename",help="file name for the result",default="test.csv")
-	"""
-	parser.add_option("--MAXTRY",type="int",dest="MAXTRY",help="reset MAXTRY")
-	parser.add_option("--MAXORDERFETCH",type="int",dest="MAXORDERFETCH",help="reset MAXORDERFETCH")
-	"""
+	parser.add_option("--INTERVALS",type="int",dest="INTERVALS",help="define the number of intervals [100]",default=100)
+	parser.add_option("-f","--file",type="string",action="store",dest="filename",help="file name for the result [test.csv]",default="test.csv")
 			
 	(options, args) = parser.parse_args()
 	statg(options)
