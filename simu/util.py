@@ -27,7 +27,10 @@ def getRandQtt():
 	#qtt = random.randint(max_qtt,max_qtt*2)
 	qtt = random.randint(1,max_qtt)
 	return qtt
-	
+
+def getMediumQtt():
+	return 5000
+		
 def getRandOwner():
 	return 'w'+str(random.randint(1,const.MAX_OWNER))
 	
@@ -49,20 +52,14 @@ def nameUserRand(thread):
 def getQltName(user,id):
 	return user+'/q'+str(id)
 
-def getDistinctRandQlt(thread,user):
+def getDistinctRandQlt(thread,maxQlt,user,np):
 	""" return a couple (nr,np) such as:
 		 nr != np
 	"""
-	maxQlt = const.MAX_QLT // thread
-	if(maxQlt <2):
-		print "const.MAX_QLT // thread not consistent"
-		exit(-2)
-	
-	np = getQltName(user,random.randint(1,maxQlt))
 	nr = np
 	while np == nr:
 		nr = getQltName(nameUserRand(thread),random.randint(1,maxQlt))
-	return np,nr
+	return nr
 
 #############################################################################	
 from datetime import datetime

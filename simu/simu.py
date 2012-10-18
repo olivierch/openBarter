@@ -15,28 +15,28 @@ class Work(object):
 		self.cdes = []
 		self.options = options
 		self.user = user
-		self.params = self.getParams()
+		
 		if(w is not None):
 			self.secs = w.getDelay()
 			self.iOper = w.getIOper()
 		else:
 			self.secs = 0.
 			self.iOper = 0
+		self.params = self.getParams()
 
 	def getParams(self):
 		owner = util.getRandOwner()
+		qtt_p = util.getMediumQtt() # 5000
 		qtt_r = util.getRandQtt()
-		qtt_p = util.getRandQtt()
 
 		# a couple (inr,inp) such as inr != inp
-		"""
-		inr,inp = util.getDistinctRandQlt()
-		if(self.options.threads==1):
-		else:
-			nr = util.getQltName(getRandDepository(self.options.threads),inr)
-			np = util.getQltName(const.DB_USER,inp)
-		"""
-		np,nr = util.getDistinctRandQlt(self.options.threads,self.user)
+		maxQlt = const.MAX_QLT // self.options.threads
+		if(maxQlt <2):
+			print "const.MAX_QLT // thread not consistent"
+			exit(-2)
+	
+		np = util.getQltName(self.user,1+(self.iOper % maxQlt))
+		nr = util.getDistinctRandQlt(self.options.threads,maxQlt,self.user,np)
 		return (owner,np,qtt_p,qtt_r,nr)
 		
 	def execute(self,cursor):
@@ -106,7 +106,7 @@ def simuInt(args):
 	options,user = args
 	with util.DbConn(const,user) as dbcon:
 		with util.DbCursor(dbcon) as cursor:
-			util.writeMaxOptions(cursor,options)
+			
 	
 			w = None
 	
@@ -135,7 +135,9 @@ def simu(options):
 
 	with util.DbConn(const) as dbcon:
 		with util.DbCursor(dbcon) as cursor:
+			util.writeMaxOptions(cursor,options)
 			begin = util.getAvct(cursor)
+			
 	
 	if(options.threads==1):		
 		with util.DbConn(const) as dbcon:
@@ -143,8 +145,7 @@ def simu(options):
 				createUser(cursor)
 			simuInt((options,const.DB_USER))
 			itera = options.iteration
-	else:
-		
+	else:		
 		with util.DbConn(const) as dbcon:
 			with util.DbCursor(dbcon) as cursor:
 				for user in util.nameUsers(options.threads):
@@ -159,18 +160,45 @@ def simu(options):
 		for t in ts:
 			t.join()
 		itera = options.iteration * options.threads
+		
+	class Results:
+		pass
 			
 	if(itera):
+		res = {}
 		with util.DbConn(const) as dbcon:
 			with util.DbCursor(dbcon) as cursor:
 				end =util.getAvct(cursor)
-				res = {}
 				for k,v in begin.iteritems():
 					res[k] = end[k] - v
 				print "done: %s " % res
 		secs = util.duree(_begin,util.now())	
 		print 'simu terminated after %.6f seconds (%.6f secs/oper)' % (secs,secs/itera)
+		
+		results = Results()
+		res['dureeSecs'] = int(secs)
+		res['nbOper'] = itera
+		for k,v in res.iteritems():
+			setattr(results,k,v)
+		storeOptions('options',options)
+		storeOptions('results',results)
+			
 	return
+	
+def storeOptions(prefix,options):
+	with util.DbConn(const) as dbcon:
+		with util.DbCursor(dbcon) as cursor:
+			for k, v in [(x, getattr(options, x)) for x in dir(options) if not x.startswith('_')]:	
+				if(not isinstance(v,int)): continue
+				if(isinstance(v,bool)):
+					if(v): v = 1
+					else: v = 0
+				
+				name = prefix+'.'+k
+				try:
+					cursor.execute('INSERT INTO tconst (name,value) VALUES (%s,%s)',[name,v])
+				except Exception,e:
+					cursor.execute("UPDATE tconst SET value=%s WHERE name=%s",[v,name])
 	
 
 from optparse import OptionParser
@@ -196,8 +224,17 @@ def main():
 		raise Exception("The scenario does'nt exist")
 	
 	
+	
+	
 	simu(options)
 
 if __name__ == "__main__":
 	main()
+	
+"""
+base simu_r1
+ ./simu.py -i 10000 -t 10
+done: {'nbAgreement': 75000L, 'nbMvtAgr': 240865L, 'nbMvtGarbadge': 11152L, 'nbOrder': 13836L} 
+simu terminated after 28519.220312 seconds (0.285192 secs/oper)
+"""
 

@@ -43,7 +43,7 @@ def getIntTime(c):
 # pour chaque intervalle:
 def genIntervals(c,options):
 	""" usage:
-		intervals = genIntervals(cursor)
+		intervals = genIntervals(cursor,options)
 		for i,mini,maxi in intervals:
 			print i,mini,maxi
 	"""
@@ -105,17 +105,29 @@ def statg(options):
 	print 'file %s written with %i intervals' %(options.filename,options.INTERVALS) 
 	print 'and cols: %s' % cols
 	return
-	
 
+import os.path
+import random
+def gettmpfile():
+	found = False
+	while(not found):
+		fil = '/tmp/statg'+str(int(random.random()*10000000))+'.csv'	
+		if(not os.path.exists(fil)): found = True
+	return fil
+	
 from optparse import OptionParser
+import tempfile
 def main():
 	usage = "usage: %prog [options]"
 	parser = OptionParser(usage)
 
 	parser.add_option("--INTERVALS",type="int",dest="INTERVALS",help="define the number of intervals [100]",default=100)
-	parser.add_option("-f","--file",type="string",action="store",dest="filename",help="file name for the result [test.csv]",default="test.csv")
-			
+	parser.add_option("-f","--file",type="string",action="store",dest="filename",help="file name for the result [test.csv]",default=None)
+		
 	(options, args) = parser.parse_args()
+	if(options.filename is None):
+		options.filename = gettmpfile()
+		
 	statg(options)
 
 if __name__ == "__main__":

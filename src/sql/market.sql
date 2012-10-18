@@ -50,7 +50,7 @@ SELECT _grant_read('vmarket');
 /* change state of the market with fchangestatemarket(true)
 otherwise, dry run
 */
-CREATE FUNCTION fchangestatemarket(_execute bool) RETURNS ymarketstatus AS $$
+CREATE FUNCTION fchangestatemarket(_execute bool) RETURNS  TABLE (_market_session int,_market_status ymarketstatus) AS $$
 DECLARE
 	_cnt int;
 	_hm tmarket%rowtype;
@@ -60,7 +60,8 @@ DECLARE
 	_new_status ymarketstatus;
 BEGIN
 
-	SELECT market_status INTO _prev_status FROM vmarket;
+	SELECT market_status,market_session INTO _prev_status,_market_session FROM vmarket;
+	_market_status := _prev_status;
 	IF NOT FOUND THEN 
 		_action := 'init';
 		_prev_status := 'INITIALIZING';
@@ -81,43 +82,48 @@ BEGIN
 	ELSE -- _prev_status='CLOSED'
 		_action := 'start';
 		_new_status := 'STARTING';
-		RAISE NOTICE 'market_session = n->n+1';
 	END IF;
 
-	RAISE NOTICE 'market_status %->%',_prev_status,_new_status;
+	-- RAISE NOTICE 'market_status %->%',_prev_status,_new_status;
 
 	IF NOT _execute THEN
-		RAISE NOTICE 'The next action will be: %',_action;
-		RAISE NOTICE 'market_status = % is unchanged.',_prev_status;
-		RETURN _new_status;
-	END IF;
-	
-	IF (_action = 'init' OR _action = 'open') THEN 		
-		GRANT client_opened_role TO client;
-		RAISE NOTICE 'The market is now opened for clients';		
-		
-	ELSIF (_action = 'stop') THEN
-		REVOKE client_opened_role FROM client;
-		GRANT  client_stopping_role TO client;	
-		RAISE NOTICE 'The market is now stopping for clients';		
-		
-	ELSIF (_action = 'close') THEN
-		REVOKE client_stopping_role FROM client;
-		_res := frenumbertables(false);
-		IF NOT _res THEN
-			RAISE EXCEPTION USING ERRCODE='YA001';
-		END IF;	
-					
-	ELSE -- _action='start'
-		_res := frenumbertables(true);
-		IF NOT _res THEN
-			RAISE EXCEPTION USING ERRCODE='YA001';
-		END IF;			
-
+		RAISE NOTICE 'The next market state will be %',_new_status;
+		RETURN NEXT;
+		RETURN;
 	END IF;
 	
 	INSERT INTO tmarket (created) VALUES (statement_timestamp()) RETURNING * INTO _hm;
-	RETURN _new_status;
+	SELECT market_status,market_session INTO _new_status,_market_session FROM vmarket;
+	_market_status := _new_status;
+	
+	IF (_action = 'init' OR _action = 'open') THEN
+		-- INITIALIZING	->OPENED
+		-- STARTING		->OPENED 		
+		GRANT client_opened_role TO client;
+				
+	ELSIF (_action = 'stop') THEN
+		-- OPENED		->STOPPING
+		REVOKE client_opened_role FROM client;
+		GRANT  client_stopping_role TO client;			
+		
+	ELSIF (_action = 'close') THEN
+		-- STOPPING		->CLOSED 
+		REVOKE client_stopping_role FROM client;
+		RAISE NOTICE 'Connexions by clients are forbidden. The role admin has exclusive access to the market.';
+					
+	ELSE -- _action='start'
+		-- CLOSED		->STARTING
+		_res := frenumbertables(true);
+		IF NOT _res THEN
+			RAISE EXCEPTION USING ERRCODE='YA001';
+		END IF;	
+		RAISE NOTICE 'A new market session is created. Run the command: VACUUM FULL ANALYZE before changing the market state to OPENED.';		
+
+	END IF;
+	
+	
+	RETURN NEXT;
+	RETURN;
 	 
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
@@ -317,10 +323,7 @@ BEGIN
 	ALTER TABLE towner ENABLE TRIGGER ALL;
 	ALTER TABLE tquality ENABLE TRIGGER ALL;
 	ALTER TABLE tuser ENABLE TRIGGER ALL;
-	
-	RAISE NOTICE 'Run the command:'; 
-	RAISE NOTICE '	VACUUM FULL ANALYZE';
-	RAISE NOTICE 'before starting the market';
+
 	RETURN true;
 	 
 END;

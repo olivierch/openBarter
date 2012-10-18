@@ -1148,7 +1148,8 @@ BEGIN
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
 	
-	lock table torder in share row exclusive mode;
+	-- lock table torder in share row exclusive mode; 
+	lock table torder in share update exclusive mode;
 		
 	-- _q.qtt_requ != 0		
 	_qtt_requ := _q.qtt_requ;
@@ -1259,7 +1260,8 @@ DECLARE
 	_res	        int8[];
 	_first_mvt	int;
 BEGIN
-	lock table torder in share row exclusive mode;
+	--lock table torder in share row exclusive mode;
+	lock table torder in share update exclusive mode;
 	_idd := fverifyquota();
 	_q.own := fgetowner(_owner,true); -- inserted if not found
 	
@@ -1461,7 +1463,7 @@ $$ LANGUAGE PLPGSQL;
 CREATE FUNCTION _removepublic() RETURNS void AS $$
 BEGIN
 	EXECUTE 'REVOKE ALL ON DATABASE ' || current_catalog || ' FROM PUBLIC';
-	EXECUTE 'GRANT CONNECT,TEMPORARY ON DATABASE ' || current_catalog || 'TO client'; 
+	EXECUTE 'GRANT CONNECT,TEMPORARY ON DATABASE ' || current_catalog || ' TO client'; 
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL;
