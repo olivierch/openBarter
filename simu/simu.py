@@ -11,10 +11,11 @@ import sys
 # import curses
 
 class Work(object):
-	def __init__(self,w,options,user):
+	def __init__(self,w,options,user,maxUser):
 		self.cdes = []
 		self.options = options
 		self.user = user
+		self.maxUser = maxUser
 		
 		if(w is not None):
 			self.secs = w.getDelay()
@@ -28,15 +29,24 @@ class Work(object):
 		owner = util.getRandOwner()
 		qtt_p = util.getMediumQtt() # 5000
 		qtt_r = util.getRandQtt()
-
-		# a couple (inr,inp) such as inr != inp
-		maxQlt = const.MAX_QLT // self.options.threads
+		
+		# define a couple (nr,np) such as nr != np
+		_user,_other = None,None
+		maxQlt = const.MAX_QLT
+		if(self.options.CHECKQUALITYOWNERSHIP):
+			_user = self.user
+			_other = util.nameUser(random.randint(0,self.maxUser-1))
+			maxQlt = const.MAX_QLT //self.maxUser
+			
 		if(maxQlt <2):
-			print "const.MAX_QLT // thread not consistent"
-			exit(-2)
+			sys.exit(-1)
 	
-		np = util.getQltName(self.user,1+(self.iOper % maxQlt))
-		nr = util.getDistinctRandQlt(self.options.threads,maxQlt,self.user,np)
+		np = util.getQltName(_user,random.randint(0,maxQlt-1))
+		nr = np
+		while np == nr:
+			nr = util.getQltName(_other,random.randint(0,maxQlt-1))
+		#####
+		
 		return (owner,np,qtt_p,qtt_r,nr)
 		
 	def execute(self,cursor):
@@ -75,23 +85,6 @@ class Work(object):
 		
 	def __str__(self):
 		return "[work iOper=%i]"%self.iOper
-		
-def iterer(cursor,options,user):
-	if(not options.seed is None):
-		random.seed(options.seed) #for reproductibility of playings
-	
-	w = None
-
-	while True:
-		w = Work(w,options,user)
-		if(w.getIOper() >= options.iteration):
-			break
-		w.execute(cursor)
-
-	if options.maxparams:
-		print "max_options:%s, nbAgr:%i " % (util.readMaxOptions(cursor),prims.getNbAgreement(cursor))
-
-	return w
 
 def createUser(cursor,user=const.DB_USER):
 	try:
@@ -103,15 +96,24 @@ def createUser(cursor,user=const.DB_USER):
 	
 
 def simuInt(args):
-	options,user = args
+	options,user,maxUser = args
+	
+	if(not options.seed is None):
+		random.seed(options.seed) #for reproductibility of playings
+		
 	with util.DbConn(const,user) as dbcon:
 		with util.DbCursor(dbcon) as cursor:
-			
-	
 			w = None
-	
 			try:
-				w = iterer(cursor,options,user)
+				while True:
+					w = Work(w,options,user,maxUser)
+					if(w.getIOper() >= options.iteration):
+						break
+					w.execute(cursor)
+
+				if options.maxparams:
+					print "max_options:%s, nbAgr:%i " % (util.readMaxOptions(cursor),prims.getNbAgreement(cursor))
+
 				if(options.verif):
 					util.runverif(cursor)
 		
@@ -135,31 +137,31 @@ def simu(options):
 
 	with util.DbConn(const) as dbcon:
 		with util.DbCursor(dbcon) as cursor:
+		
 			util.writeMaxOptions(cursor,options)
 			begin = util.getAvct(cursor)
-			
+
+			for user in util.nameUsers():
+				createUser(cursor,user)
+				
+			if(options.CHECKQUALITYOWNERSHIP):
+				util.setQualityOwnership(cursor,True)
 	
 	if(options.threads==1):		
-		with util.DbConn(const) as dbcon:
-			with util.DbCursor(dbcon) as cursor:
-				createUser(cursor)
-			simuInt((options,const.DB_USER))
-			itera = options.iteration
-	else:		
-		with util.DbConn(const) as dbcon:
-			with util.DbCursor(dbcon) as cursor:
-				for user in util.nameUsers(options.threads):
-					createUser(cursor,user)
-				util.setQualityOwnership(cursor,True)
-				
+		simuInt((options,util.nameUser(0),1))
+	else:
+		# run in theads		
 		ts = []	
-		for user in util.nameUsers(options.threads):
-			t = threa.ThreadWithArgs(func=simuInt,args=(options,user),name=user)
+		for i in range(options.threads):
+			user = util.nameUser(i)
+			maxUser = options.threads
+			t = threa.ThreadWithArgs(func=simuInt,args=(options,user,maxUser),name=user)
 			t.start()
 			ts.append(t)
 		for t in ts:
 			t.join()
-		itera = options.iteration * options.threads
+			
+	itera = options.iteration * options.threads
 		
 	class Results:
 		pass
@@ -215,6 +217,7 @@ def main():
 	parser.add_option("--MAXCYCLE",type="int",dest="MAXCYCLE",help="reset MAXCYCLE")
 	parser.add_option("--MAXTRY",type="int",dest="MAXTRY",help="reset MAXTRY")
 	parser.add_option("--MAXORDERFETCH",type="int",dest="MAXORDERFETCH",help="reset MAXORDERFETCH")
+	parser.add_option("--CHECKQUALITYOWNERSHIP",action="store_true",dest="CHECKQUALITYOWNERSHIP",help="set CHECK_QUALITY_OWNERSHIP",default=False)
 	parser.add_option("-s","--scenario",type="string",action="store",dest="scenario",help="the scenario choosen",default="basic")
 		
 	(options, args) = parser.parse_args()
@@ -222,9 +225,9 @@ def main():
 	possible_scenario = ["basic","quote"]	
 	if(options.scenario not in possible_scenario):
 		raise Exception("The scenario does'nt exist")
-	
-	
-	
+		
+	#provisoire
+	options.CHECKQUALITYOWNERSHIP = True
 	
 	simu(options)
 

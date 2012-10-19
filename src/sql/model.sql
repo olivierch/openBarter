@@ -1366,7 +1366,7 @@ BEGIN
 	IF (NOT _super) THEN
 		EXECUTE 'GRANT client TO ' || _name;
 		EXECUTE 'ALTER ROLE ' || _name || ' NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION'; 
-		EXECUTE 'ALTER ROLE ' || _name || ' LOGIN CONNECTION LIMIT 1';	
+		EXECUTE 'ALTER ROLE ' || _name || ' LOGIN ';	
 	END IF;
 	
 	RETURN;
@@ -1477,6 +1477,6 @@ DROP FUNCTION _reference_time(text);
 SELECT * from fchangestatemarket(true); 
 -- market is opened
 \set ECHO all
- RESET client_min_messages;
- RESET log_error_verbosity;
+RESET client_min_messages;
+RESET log_error_verbosity;
 

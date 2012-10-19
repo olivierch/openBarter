@@ -33,33 +33,26 @@ def getMediumQtt():
 		
 def getRandOwner():
 	return 'w'+str(random.randint(1,const.MAX_OWNER))
+
+def nameUser(i):
+	# i should be in [0,const.MAX_USER]
+	j = i % const.MAX_USER
+	return 'user'+str(j)
+
+def nameUsers():
+	for j in range(const.MAX_USER):
+		yield nameUser(j)
+
+def nameUserRand():
+	return nameUser(random.randint(1,const.MAX_USER)-1)
 	
-def getRandDepository(threads):
-	if(threads==1):
-		return const.DB_USER
-	return nameUser(random.randint(0,threads-1))
+def getQltName(user,i):
+	q = 'q'+str(i)
+	if(user is None):
+		return q
+	q = user+'/'+q
+	return q
 
-def nameUser(thread):
-	return 'user'+str(thread)
-
-def nameUsers(thread):
-	for j in range(thread):
-		yield nameUser(j+1)
-
-def nameUserRand(thread):
-	return nameUser(random.randint(1,thread))
-	
-def getQltName(user,id):
-	return user+'/q'+str(id)
-
-def getDistinctRandQlt(thread,maxQlt,user,np):
-	""" return a couple (nr,np) such as:
-		 nr != np
-	"""
-	nr = np
-	while np == nr:
-		nr = getQltName(nameUserRand(thread),random.randint(1,maxQlt))
-	return nr
 
 #############################################################################	
 from datetime import datetime
