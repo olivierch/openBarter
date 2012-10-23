@@ -23,7 +23,6 @@ select finsertorder('D','x',250 ,250 ,'z');
 --two exchanges in a single transaction
 select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt order by uuid;
 
-select id,qtt from tquality;
 select * from fgetstats(true);
-select * from fgeterrs(true);
+select * from fgeterrs();
 

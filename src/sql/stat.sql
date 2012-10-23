@@ -66,48 +66,22 @@ GRANT EXECUTE ON FUNCTION  fgetstats(bool) TO admin;
 returns 3 records:
 the number of errors found with fbalance(),fverifmvt() and fverifmvt2()
 ------------------------------------------------------------------------------*/
-CREATE FUNCTION fgeterrs(_details bool) RETURNS TABLE(_name text,cnt int8) AS $$
+CREATE FUNCTION fgeterrs() RETURNS TABLE(_name text,cnt int8) AS $$
 DECLARE 
 	_i 		int;
 	_cnt 		int;
 BEGIN		
-	_name := 'balance';
-	cnt := fbalance();	
+	_name := 'errors on quantities in mvts';
+	cnt := fverifmvt();
 	RETURN NEXT;
-	
-	IF(_details) THEN
-	
-		_name := 'errors on quantities in mvts';
-		cnt := fverifmvt();
-		RETURN NEXT;
-	
-		_name := 'errors on agreements in mvts';
-		cnt := fverifmvt2();
-		RETURN NEXT;
-	END IF;
+
+	_name := 'errors on agreements in mvts';
+	cnt := fverifmvt2();
+	RETURN NEXT;
 	RETURN;
 END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fgeterrs(bool) TO admin;
-
-/*------------------------------------------------------------------------------
-fbalance() 
-	returns the number of qualities where:
-		tquality.qtt!=sum(torder.qtt)+sum(tmvt.qtt)
-	should return 0
-------------------------------------------------------------------------------*/
-create function fbalance() RETURNS int AS $$
-DECLARE 
-	_cnt 		int;
-BEGIN
-	WITH accounting_order AS (SELECT np,sum(qtt) AS qtt FROM torder GROUP BY np),
-	     accounting_mvt   AS (SELECT nat as np,sum(qtt) AS qtt FROM tmvt GROUP BY nat)
-	SELECT count(*) INTO _cnt FROM tquality,accounting_order,accounting_mvt
-	WHERE tquality.id=accounting_order.np AND tquality.id=accounting_mvt.np
-		AND tquality.qtt != accounting_order.qtt + accounting_mvt.qtt;
-	RETURN _cnt;
-END;		
-$$ LANGUAGE PLPGSQL;
+GRANT EXECUTE ON FUNCTION  fgeterrs() TO admin;
 
 /*------------------------------------------------------------------------------
 -- verifies that for all orders:
@@ -262,4 +236,26 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- number of partners for the 100 last movements
 -- select nb,count(distinct grp) from (select * from vmvtverif order by id desc limit 100) a group by nb;
+
+-- performances
+
+-- list - cnt of agreement created at date increasing
+CREATE VIEW vgrp (id,cnt,created) AS SELECT max(id),count(distinct grp) as cnt,max(created) as created from tmvt group by created order by created;
+
+-- same list with delays 
+CREATE VIEW vgrp_delay (id,cnt,delay) AS select id,cnt,created-(lag(created) over(order by created)) as delay from vgrp;
+
+-- list of ten groups
+-- nbtransactions number of transactions
+-- nbcycles 	number of cycles
+-- delaymin		min duration of transaction
+-- delaymax		max duration of transaction
+-- avg			average duration of cycles
+
+-- for 1000 last transactions
+CREATE VIEW vperf1000(nbtransactions,nbgrp,delaymin,delaymax,avg) AS select count(*),sum(cnt) as grps,min(delay),max(delay),sum(delay)/sum(cnt) from (select cnt,delay,ntile(10) over(order by delay desc) as n from (select * from vgrp_delay order by id desc limit 1000) as t2) as t group by n order by min desc;
+
+-- distribution of cycles by number of partners for 1000 last cycles
+CREATE VIEW vnbgrp1000(nb,cnt) AS SELECT nb,count(*) as cnt from (SELECT max(id) as gid,grp,max(nb) as nb from tmvt group by grp order by gid desc limit 1000) as t group by nb order by nb asc;
+
 

@@ -8,17 +8,6 @@ import const
 class SimuException(Exception):
 	pass 
 
-def connect():
-	dbcon = psycopg2.connect(
-				database  = const.DB_NAME,
-				password  = const.DB_PWD,
-				user = const.DB_USER,
-				host = const.DB_HOST,
-				port = const.DB_PORT
-	)
-	dbcon.set_isolation_level(psycopg2.extensions.ISOLATION_LEVEL_AUTOCOMMIT)
-	return dbcon
-
 #############################################################################
 import random	# random.randint(a,b) gives N such as a<=N<=b
 	
@@ -29,7 +18,8 @@ def getRandQtt():
 	return qtt
 
 def getMediumQtt():
-	return 5000
+	return 9973 # biggest prime number < 10 000
+getMediumQtt.const = True
 		
 def getRandOwner():
 	return 'w'+str(random.randint(1,const.MAX_OWNER))
@@ -73,70 +63,31 @@ def getDelai(time):
 	return duree(time,now())
 
 #############################################################################
-
-class PrimException(SimuException):
-	""" an exception wrapping the work that was in progree when it occured 
-	"""
-	def __init__(self,cmd,e):
-		self.work = None
-		self.cmd = cmd
-		self.e = e
+                    
+def getParameters(options,user):
+	owner = getRandOwner()
+	qtt_p = getMediumQtt() 
+	qtt_r = getRandQtt()
 	
-	def getCmd(self):
-		return self.cmd
+	# define a couple (nr,np) such as nr != np
+	_user,_other = None,None
+
+	if(options.CHECKQUALITYOWNERSHIP):
+		_user = user
+		_other = nameUser(random.randint(0,options.maxUser-1))
+		maxQlt = const.MAX_QLT //options.maxUser
+	else:
+		maxQlt = const.MAX_QLT		
+	if(maxQlt <2):
+		sys.exit(-1)
+
+	np = getQltName(_user,random.randint(0,maxQlt-1))
+	nr = np
+	while np == nr:
+		nr = getQltName(_other,random.randint(0,maxQlt-1))
 		
-	def setWork(self,work):
-		self.work = work
+	return (owner,np,qtt_p,qtt_r,nr)
 	
-	def getWork(self):
-		return self.work
-#############################################################################
-import logging
-
-####################################################################################
-logging.basicConfig(level=logging.DEBUG,
-                    format='(%(threadName)-10s) %(message)s',
-                    )
-class Cmde(object):
-	def __init__(self):
-		# start and stop time when done
-		self.start = None
-		self.stop = None
-		
-		self.params = None # vector of params
-		self.proc = None # primitive name
-		self.str = None # string format of params
-
-		
-	def getDelay(self):
-		if(self.start is None or self.stop is None):
-			return 0.
-		return duree(self.start,self.stop)
-	
-	def execproc(self,cursor):
-		self.start = now()
-		
-		if(self.params is None or self.proc is None):
-			raise PrimException(self,None)
-
-		try:
-			cursor.callproc(self.proc,self.params)
-			#logging.debug( "execute:%s" % str(self))
-		except Exception,e:
-			logging.debug(e)
-			raise PrimException(self,e)
-
-
-			
-	def __str__(self):
-		res = '' #'[iOper= %i]' % self.nit
-		try:
-			res += self.str % tuple(self.params)
-			# raise TypeError if incorrect formatting
-		except TypeError,e:
-			res += "ERROR: Could not format the primitive"
-		return res	
-#############################################################################
 
 def writeMaxOptions(cursor,options):
 	""" maxoptions are written if redefined 
@@ -149,7 +100,7 @@ def writeMaxOptions(cursor,options):
 	if(not options.MAXORDERFETCH is None):
 		cursor.execute(sql % (int(options.MAXORDERFETCH),"MAXORDERFETCH"))
 		
-def setQualityOwnership(cursor,check):
+def setQualityOwnership(cursor,check=True):
 	val =0
 	if(check): val =1
 	sql = "UPDATE tconst SET value=%i WHERE name=\'CHECK_QUALITY_OWNERSHIP\'"
@@ -171,26 +122,83 @@ def runverif(cursor):
 		print "fgeterrs Errors found: %s" % res
 	else:
 		print "fgeterrs No errors found"
+
+	
+def getSelect(cursor,sql,pars=[]):
+	cursor.execute(sql,pars)	
+	return [e for e in cursor]	
+
+def getCycles(cursor,idmvt):	
+	sql = """SELECT nb,count(*) as cnt from (
+		SELECT max(id) as gid,grp,max(nb) as nb from tmvt where id>%s group by grp
+	) as t group by nb order by nb asc"""
+	r = 8*[0]
+	res = getSelect(cursor,sql,[idmvt])
+	for nb,cnt in res:
+		r[nb-1]=cnt
+	return r
+	
+def getVolumes(cursor):
+	""" for each quality, sum of(tmvt,tvmtremoved,torder) """
+	_volumes = getSelect(cursor,"""SELECT q.name,sum(m.qtt) FROM (
+		SELECT qtt,nat from tmvt 
+		UNION ALL SELECT qtt,nat from tmvtremoved
+		UNION ALL SELECT qtt as qtt,np as nat from torder
+	) m INNER JOIN tquality q ON(q.id=m.nat) GROUP BY q.name ORDER BY q.name""")
+	#print _volumes
+	return _volumes	
+
+def getAvct(begin):
+
+	def _getAvct(cursor):
+		avct={}
+		res = getSelect(cursor,"SELECT count(*),count(distinct grp) FROM tmvt WHERE nb != 1")
+		res = res[0]
+		avct["nbMvt"] = res[0]
+		avct["nbAgreement"] = res[1]
+
+		res = getSelect(cursor,"SELECT count(*) FROM tmvt WHERE nb = 1")
+		avct["nbMvtGarbadge"] = res[0][0]
+		
+		res = getSelect(cursor,"SELECT max(id) FROM tmvt ")
+		res = res[0][0]
+		if(res is None): res = 0
+		avct["maxMvtId"] = res
+
+		res = getSelect(cursor,"SELECT max(id) FROM torder ")
+		res = res[0][0]
+		if(res is None): res = 0
+		avct["nbOrder"] = res
+	
+		return avct
 		
 	
-def getAvct(cursor):
-	#nbAgreements
-	avct={}
-	cursor.execute("SELECT count(*),count(distinct grp) FROM tmvt WHERE nb != 1")
-	res = [e for e in cursor]
-	res = res[0]
-	avct["nbMvtAgr"] = res[0]
-	avct["nbAgreement"] = res[1]
+	with DbConn(const) as dbcon:
+		with DbCursor(dbcon) as cursor:
+			res = {}
+			if(begin is None):
+				res =  _getAvct(cursor)
+			else:
+				end = _getAvct(cursor)
+				for k,v in begin.iteritems():
+					res[k] = end[k] - v
+				res["cycles"] = getCycles(cursor,begin["maxMvtId"])
+				del(begin["maxMvtId"])
+				print "done: %s " % res	
 
-	cursor.execute("SELECT count(*) FROM tmvt WHERE nb = 1")
-	res = [e[0] for e in cursor]
-	avct["nbMvtGarbadge"] = res[0]
+	return res
 
-	cursor.execute("SELECT count(*) FROM torder ")
-	res = [e[0] for e in cursor]
-	avct["nbOrder"] = res[0]
 	
-	return avct
+def getDictInt(obj):
+	""" retourne un dico qui représente les attributs entiers de l'objet """
+	res ={}
+	for k, v in [(x, getattr(obj, x)) for x in dir(obj) if not x.startswith('_')]:	
+		if(not isinstance(v,int)): continue
+		if(isinstance(v,bool)):
+			if(v): v = 1
+			else: v = 0
+		res[k]=v
+	return res
 	
 ####################################################################################
 import os,sys

@@ -14,10 +14,6 @@ END;
 $$ LANGUAGE PLPGSQL;
 select fcreateuser(session_user);
 NOTICE:  The role is a super user.
-NOTICE:  The market is opened for this user
-NOTICE:  role "olivier" is already a member of role "client_opened_role"
-CONTEXT:  SQL statement "GRANT client_opened_role TO olivier"
-PL/pgSQL function fcreateuser(text) line 40 at EXECUTE statement
  fcreateuser 
 -------------
  
@@ -27,7 +23,7 @@ PL/pgSQL function fcreateuser(text) line 40 at EXECUTE statement
 select * from finsertorder('u',fq('b'),1000,1000,fq('a'));
 NOTICE:  owner u created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 21 at assignment
  id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
 ----+------+-----+----+----------+----+----------+--------+---------+-------
   1 | 1-1  |   1 |  2 |     1000 |  1 |     1000 |      0 |       0 | {}
@@ -36,7 +32,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignme
 select * from finsertorder('v',fq('c'),1000,1000,fq('b'));
 NOTICE:  owner v created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 20 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 21 at assignment
  id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
 ----+------+-----+----+----------+----+----------+--------+---------+-------
   2 | 1-2  |   2 |  1 |     1000 |  3 |     1000 |      0 |       0 | {}
@@ -164,14 +160,6 @@ select * from fremovemvt('1-8');
           1
 (1 row)
 
-select id,qtt from tquality;
- id | qtt 
-----+-----
-  3 |   0
-  2 |   0
-  1 |   0
-(3 rows)
-
 select * from fgetstats(true);
             _name            | cnt 
 -----------------------------+-----
@@ -189,11 +177,10 @@ select * from fgetstats(true);
  agreements with 3 partners  |   2
 (12 rows)
 
-select * from fgeterrs(true);
+select * from fgeterrs();
             _name             | cnt 
 ------------------------------+-----
- balance                      |   0
  errors on quantities in mvts |   0
  errors on agreements in mvts |   0
-(3 rows)
+(2 rows)
 

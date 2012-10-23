@@ -110,23 +110,18 @@
  
 (1 row)
 
- _grant_read 
--------------
- 
-(1 row)
-
  _removepublic 
 ---------------
  
 (1 row)
 
- fchangestatemarket 
---------------------
- OPENED
+ _market_session | _market_status 
+-----------------+----------------
+               1 | OPENED
 (1 row)
 
- RESET client_min_messages;
- RESET log_error_verbosity;
+RESET client_min_messages;
+RESET log_error_verbosity;
 SET client_min_messages = notice;
 SET log_error_verbosity = terse;
  

@@ -55,7 +55,6 @@ select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt order by uu
 select fremovemvt('2-1');
 select fremovemvt('2-2');
 select fremovemvt('2-3');
-select id,qtt from tquality;
 
 select finsertorder('u','b',2000,1000,'a');
 select finsertorder('v','c',2000,1000,'b');
@@ -80,9 +79,8 @@ select fremovemvt('2-7');
 select fremovemvt('2-8');
 
 set role admin;
-select id,qtt from tquality;
 select * from fgetstats(true);
-select * from fgeterrs(true) where cnt != 0;
+select * from fgeterrs() where cnt != 0;
 
 
 select * from fchangestatemarket(true);

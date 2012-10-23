@@ -46,40 +46,29 @@ select swallow_agreements();
 
 set role admin;
 select * from fchangestatemarket(true);
-NOTICE:  market_status OPENED->STOPPING
-NOTICE:  The market is now stopping for clients
- fchangestatemarket 
---------------------
- STOPPING
+ _market_session | _market_status 
+-----------------+----------------
+               1 | STOPPING
 (1 row)
 
 select * from fchangestatemarket(true);
-NOTICE:  market_status STOPPING->CLOSED
- fchangestatemarket 
---------------------
- CLOSED
+NOTICE:  Connexions by clients are forbidden. The role admin has exclusive access to the market.
+ _market_session | _market_status 
+-----------------+----------------
+               1 | CLOSED
 (1 row)
 
 select * from fchangestatemarket(true);
-NOTICE:  market_session = n->n+1
-NOTICE:  market_status CLOSED->STARTING
-NOTICE:  Run the command:
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
-NOTICE:  	VACUUM FULL ANALYZE
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
-NOTICE:  before starting the market
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
- fchangestatemarket 
---------------------
- STARTING
+NOTICE:  A new market session is created. Run the command: VACUUM FULL ANALYZE before changing the market state to OPENED.
+ _market_session | _market_status 
+-----------------+----------------
+               2 | STARTING
 (1 row)
 
 select * from fchangestatemarket(true);
-NOTICE:  market_status STARTING->OPENED
-NOTICE:  The market is now opened for clients
- fchangestatemarket 
---------------------
- OPENED
+ _market_session | _market_status 
+-----------------+----------------
+               2 | OPENED
 (1 row)
 
 select id,market_session,market_status from vmarket;
@@ -138,20 +127,6 @@ select fremovemvt('2-3');
 ------------
           1
 (1 row)
-
-select id,qtt from tquality;
- id | qtt 
-----+-----
-  1 |   0
-  2 |   0
-  3 |   0
-  7 |   0
-  8 |   0
-  9 |   0
-  5 |   0
-  4 |   0
-  6 |   0
-(9 rows)
 
 select finsertorder('u','b',2000,1000,'a');
           finsertorder          
@@ -224,11 +199,9 @@ select finsertorder('w','a',500,1000,'b');
 
 set role admin;
 select * from fchangestatemarket(true);
-NOTICE:  market_status OPENED->STOPPING
-NOTICE:  The market is now stopping for clients
- fchangestatemarket 
---------------------
- STOPPING
+ _market_session | _market_status 
+-----------------+----------------
+               2 | STOPPING
 (1 row)
 
 select id,market_session,market_status from vmarket;
@@ -252,20 +225,6 @@ select fremovemvt('2-8');
 (1 row)
 
 set role admin;
-select id,qtt from tquality;
- id | qtt 
-----+-----
-  1 |   0
-  2 |   0
-  3 |   0
-  7 |   0
-  8 |   0
-  9 |   0
-  6 |   0
-  5 |   0
-  4 |   0
-(9 rows)
-
 select * from fgetstats(true);
             _name            | cnt 
 -----------------------------+-----
@@ -283,38 +242,29 @@ select * from fgetstats(true);
  agreements with 3 partners  |   6
 (12 rows)
 
-select * from fgeterrs(true) where cnt != 0;
+select * from fgeterrs() where cnt != 0;
  _name | cnt 
 -------+-----
 (0 rows)
 
 select * from fchangestatemarket(true);
-NOTICE:  market_status STOPPING->CLOSED
- fchangestatemarket 
---------------------
- CLOSED
+NOTICE:  Connexions by clients are forbidden. The role admin has exclusive access to the market.
+ _market_session | _market_status 
+-----------------+----------------
+               2 | CLOSED
 (1 row)
 
 select * from fchangestatemarket(true);
-NOTICE:  market_session = n->n+1
-NOTICE:  market_status CLOSED->STARTING
-NOTICE:  Run the command:
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
-NOTICE:  	VACUUM FULL ANALYZE
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
-NOTICE:  before starting the market
-CONTEXT:  PL/pgSQL function fchangestatemarket(boolean) line 60 at assignment
- fchangestatemarket 
---------------------
- STARTING
+NOTICE:  A new market session is created. Run the command: VACUUM FULL ANALYZE before changing the market state to OPENED.
+ _market_session | _market_status 
+-----------------+----------------
+               3 | STARTING
 (1 row)
 
 select * from fchangestatemarket(true);
-NOTICE:  market_status STARTING->OPENED
-NOTICE:  The market is now opened for clients
- fchangestatemarket 
---------------------
- OPENED
+ _market_session | _market_status 
+-----------------+----------------
+               3 | OPENED
 (1 row)
 
 select id,market_session,market_status from vmarket;

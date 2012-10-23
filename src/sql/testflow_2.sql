@@ -43,6 +43,5 @@ select id,uuid,nb,oruuid,grp,provider,fs(quality),qtt,receiver from vmvt order b
 select * from fremovemvt('1-7');
 select * from fremovemvt('1-8');
 
-select id,qtt from tquality;
 select * from fgetstats(true);
-select * from fgeterrs(true);
+select * from fgeterrs();

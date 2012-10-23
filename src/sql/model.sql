@@ -169,13 +169,11 @@ create table tquality (
     name text not NULL,
     idd int , -- can be NULL
     depository text,
-    qtt bigint default 0,
     PRIMARY KEY (id),
     UNIQUE(name),
     CHECK(	
     	char_length(name)>0 AND 
-    	char_length(depository)>0 AND
-    	qtt >=0 
+    	char_length(depository)>0 
     ),
     CONSTRAINT ctquality_idd FOREIGN KEY (idd) references tuser(id),
     CONSTRAINT ctquality_depository FOREIGN KEY (depository) references tuser(name)
@@ -185,7 +183,6 @@ comment on table tquality is 'description of qualities';
 comment on column tquality.name is 'name of depository/name of quality ';
 comment on column tquality.idd is 'id of the depository';
 comment on column tquality.depository is 'name of depository (user)';
-comment on column tquality.qtt is 'total quantity on the market for this quality';
 alter sequence tquality_id_seq owned by tquality.id;
 create index tquality_name_idx on tquality(name);
 SELECT _reference_time('tquality');
@@ -263,7 +260,7 @@ BEGIN
 				_idd := NULL;
 			END IF;
 		
-			INSERT INTO tquality (name,idd,depository,qtt) VALUES (_quality_name,_idd,_q[1],0)
+			INSERT INTO tquality (name,idd,depository) VALUES (_quality_name,_idd,_q[1])
 				RETURNING * INTO _qlt;
 			RETURN _qlt.id;
 			
@@ -276,39 +273,7 @@ END;
 $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 /* We know that _idd <=> session_user, since _idd := fverifyquota() TODO*/
-CREATE FUNCTION 
-	fupdate_quality(_qid int,_qtt int8) 
-	RETURNS void AS $$
-DECLARE 
-	_qp tquality%rowtype;
-	_q text[];
-	_id int;
-	_qtta int8;
-BEGIN
 
-	UPDATE tquality SET qtt = qtt + _qtt 
-		WHERE id = _qid RETURNING qtt INTO _qtta;
-
-	IF NOT FOUND THEN
-		RAISE EXCEPTION USING ERRCODE='YA004';
-	END IF;	
-		
-	IF (_qtt > 0)   THEN 
-		IF (_qtta < _qtt) THEN 
-			RAISE WARNING 'Quality "%" owerflows',_quality_name;
-			RAISE EXCEPTION USING ERRCODE='YA004';
-		END IF; 
-	ELSIF (_qtt < 0) THEN
-		IF (_qtta > _qtt) THEN 
-			RAISE WARNING 'Quality "%" underflows',_quality_name;
-			RAISE EXCEPTION USING ERRCODE='YA004';
-		END IF;			
-	END IF;
-	
-	RETURN;
-END;
-$$ LANGUAGE PLPGSQL;
-	
 --------------------------------------------------------------------------------
 -- TOWNER
 --------------------------------------------------------------------------------
@@ -594,25 +559,6 @@ CREATE VIEW vmvtverif AS
 SELECT _grant_read('vmvtverif');
 
 --------------------------------------------------------------------------------
-CREATE VIEW vstat AS 
-	SELECT 	q.name as name,
-		sum(d.qtt) - q.qtt as delta,
-		q.qtt as qtt_quality,
-		sum(d.qtt) as qtt_detail
-	FROM (
-		SELECT np as nat,qtt FROM vorderverif
-		UNION ALL
-		SELECT nat,qtt FROM vmvtverif
-	) AS d
-	INNER JOIN tquality AS q ON (d.nat=q.id)
-	GROUP BY q.id ORDER BY q.name; 
-
-SELECT _grant_read('vstat');	
-
-/* examples:
-	 select count(*) from vstat where delta!=0;
-		should return 0 
-*/
 /*
 an order is moved to torderremoved when:
 	it is executed and becomes empty,
@@ -657,10 +603,7 @@ BEGIN
 	END IF;
 
 	SELECT * INTO _vo FROM vorder WHERE id = _o.id;	-- _vo returned
-	
 		
-	UPDATE tquality SET qtt = qtt - _o.qtt WHERE id = _o.np RETURNING qtt INTO _qlt;
-	-- check tquality.qtt >=0	
 	-- order is removed but is NOT cleared
 	perform fremoveorder_int(_o.id);
 	
@@ -1219,8 +1162,6 @@ DECLARE
 	_start		 int8;
 BEGIN
 		
-	perform fupdate_quality(_np,_qtt_prov);	
-		
 	INSERT INTO torder (uuid,qtt,nr,np,qtt_prov,qtt_requ,own,created,updated) 
 		VALUES ('',_qtt_prov,_nr,_np,_qtt_prov,_qtt_requ,_own,statement_timestamp(),NULL)
 		RETURNING id INTO _id;
@@ -1402,8 +1343,6 @@ BEGIN
 		RAISE WARNING 'The movement "%" does not belong to the user "%""',_uuid,session_user;
 		RETURN 0;
 	END IF;
-	
-	UPDATE tquality SET qtt = qtt - _mvt.qtt WHERE id = _mvt.nat RETURNING qtt INTO _qtt;
 	
 	WITH a AS (DELETE FROM tmvt m  WHERE  m.uuid=_uuid RETURNING m.*) 
 	INSERT INTO tmvtremoved SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,statement_timestamp() as deleted FROM a;	

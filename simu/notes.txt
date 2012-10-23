@@ -48,7 +48,13 @@ python-gnutls
 twisted
 
 ##################################################################################################
+Volume,
 
-
+controle comptable
+sum(qorder)+sum(qmvt)=sum(qqua)
+remplace par
+flux_entrant multiple de Q premier
+sum(qorder)+sum(qmvt)+sum(qmvtRemoved) multiple de Q => OK proba 1-1/Q
+fonctionne tant qu'aucun qmvtRemoved est enlevé.
 	
 
