@@ -34,7 +34,7 @@ INSERT INTO tconst (name,value) VALUES
 	('CHECK_QUALITY_OWNERSHIP',0), 
 	-- !=0, quality = user_name/quality_name prefix must match session_user
 	-- ==0, the name of quality can be any string
-	('MAXPATHFETCHED',10000),
+	('MAXPATHFETCHED',10000);
 	-- maximum number of paths of the set on which the competition occurs
 	-- ('MAXBRANCHFETCHED',20);
 --------------------------------------------------------------------------------
