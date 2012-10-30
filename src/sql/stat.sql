@@ -120,8 +120,8 @@ $$ LANGUAGE PLPGSQL  SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fgetcounts() TO admin;
 
 /*------------------------------------------------------------------------------
-returns 3 records:
-the number of errors found with fbalance(),fverifmvt() and fverifmvt2()
+returns  records:
+the number of errors found with fverifmvt() and fverifmvt3()
 ------------------------------------------------------------------------------*/
 CREATE FUNCTION fgeterrs() RETURNS TABLE(_name text,cnt int8) AS $$
 DECLARE 

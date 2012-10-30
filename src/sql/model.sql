@@ -34,8 +34,9 @@ INSERT INTO tconst (name,value) VALUES
 	('CHECK_QUALITY_OWNERSHIP',0), 
 	-- !=0, quality = user_name/quality_name prefix must match session_user
 	-- ==0, the name of quality can be any string
-	('MAXPATHFETCHED',10000);
+	('MAXPATHFETCHED',10000),
 	-- maximum number of paths of the set on which the competition occurs
+	('MAXBRANCHFETCHED',20);
 --------------------------------------------------------------------------------
 -- fetch a constant, and verify consistancy
 CREATE FUNCTION fgetconst(_name text) RETURNS int AS $$
@@ -656,14 +657,19 @@ BEGIN
 	_cnt := fcreate_tmp(_pivot.id,
 			yorder_get(_pivot.id,_pivot.own,_pivot.nr,_pivot.qtt_requ,_pivot.np,_pivot.qtt_prov,_pivot.qtt),
 			_pivot.np,_pivot.nr);
-
+/*
 	IF(_cnt=0) THEN
 		RETURN;
 	END IF;
 	_cnt := 0;
-	
+*/	
 	LOOP		
 		SELECT yflow_max(pat) INTO _patmax FROM _tmp  ;
+		
+		IF(NOT FOUND) THEN
+			EXIT; -- from LOOP
+		END IF;
+		
 		-- among potential exchanges of _tmp, selects the one having the product of omegas maximum
 		IF (yflow_status(_patmax)!=3) THEN -- status != draft
 			-- no potential exchange where found
@@ -701,13 +707,15 @@ Among those objects representing chains of orders,
 only those making a potential exchange (draft) are recorded.
 */
 --------------------------------------------------------------------------------
+/*
 CREATE VIEW vorderinsert AS
 	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
-	FROM torder ORDER BY ((qtt_prov::double precision)/(qtt_requ::double precision)) DESC;
+	FROM torder ORDER BY ((qtt_prov::double precision)/(qtt_requ::double precision)) DESC; */
 --------------------------------------------------------------------------------
 CREATE FUNCTION fcreate_tmp(_id int,_ord yorder,_np int,_nr int) RETURNS int AS $$
 DECLARE 
 	_MAXPATHFETCHED	 int := fgetconst('MAXPATHFETCHED'); 
+	_MAXBRANCHFETCHED	 int := fgetconst('MAXBRANCHFETCHED'); 
 	_MAXCYCLE 	int := fgetconst('MAXCYCLE');
 	_cnt int;
 BEGIN
@@ -724,7 +732,14 @@ BEGIN
 					yflow_get(X.ord,Y.pat), 
 					-- add the order at the beginning of the yflow
 					X.nr
-					FROM search_backward Y,vorderinsert X
+					FROM search_backward Y,(
+						SELECT id,
+							yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,
+							np,nr
+						FROM torder 
+						ORDER BY ((qtt_prov::double precision)/(qtt_requ::double precision)) DESC
+						LIMIT _MAXBRANCHFETCHED					
+					) X
 					WHERE   yflow_follow(_MAXCYCLE,X.ord,Y.pat) 
 					-- X->Y === X.qtt>0 and X.np=Y[0].nr
 					-- Y.pat does not contain X.ord 
@@ -736,9 +751,11 @@ BEGIN
 			FROM search_backward LIMIT _MAXPATHFETCHED 
 		) A WHERE  yflow_status(A.pat)=3 -- potential exchange (draft)
 	);
+	RETURN 0;
+/*
 	SELECT COUNT(*) INTO _cnt FROM _tmp;
-
 	RETURN _cnt;
+*/
 END;
 $$ LANGUAGE PLPGSQL;
 
