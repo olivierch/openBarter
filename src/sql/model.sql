@@ -36,7 +36,7 @@ INSERT INTO tconst (name,value) VALUES
 	-- ==0, the name of quality can be any string
 	('MAXPATHFETCHED',10000),
 	-- maximum number of paths of the set on which the competition occurs
-	('MAXBRANCHFETCHED',20);
+	-- ('MAXBRANCHFETCHED',20);
 --------------------------------------------------------------------------------
 -- fetch a constant, and verify consistancy
 CREATE FUNCTION fgetconst(_name text) RETURNS int AS $$
@@ -393,6 +393,7 @@ comment on column torder.start is 'position of treltried[np,nr].cnt when the ord
 alter sequence torder_id_seq owned by torder.id;
 create index torder_nr_idx on torder(nr);
 create index torder_np_idx on torder(np);
+-- create index torder_omega_idx on torder((qtt_prov::double precision/qtt_requ::double precision) DESC);
 
 --------------------------------------------------------------------------------
 CREATE VIEW vorder AS 
@@ -715,7 +716,7 @@ CREATE VIEW vorderinsert AS
 CREATE FUNCTION fcreate_tmp(_id int,_ord yorder,_np int,_nr int) RETURNS int AS $$
 DECLARE 
 	_MAXPATHFETCHED	 int := fgetconst('MAXPATHFETCHED'); 
-	_MAXBRANCHFETCHED	 int := fgetconst('MAXBRANCHFETCHED'); 
+	-- _MAXBRANCHFETCHED	 int := fgetconst('MAXBRANCHFETCHED'); 
 	_MAXCYCLE 	int := fgetconst('MAXCYCLE');
 	_cnt int;
 BEGIN
@@ -738,9 +739,9 @@ BEGIN
 							np,nr
 						FROM torder 
 						ORDER BY ((qtt_prov::double precision)/(qtt_requ::double precision)) DESC
-						LIMIT _MAXBRANCHFETCHED					
+						-- LIMIT _MAXBRANCHFETCHED					
 					) X
-					WHERE   yflow_follow(_MAXCYCLE,X.ord,Y.pat) 
+					WHERE  X.np=Y.nr AND yflow_follow(_MAXCYCLE,X.ord,Y.pat) 
 					-- X->Y === X.qtt>0 and X.np=Y[0].nr
 					-- Y.pat does not contain X.ord 
 					-- len(X.ord+Y.path) <= _MAXCYCLE	
@@ -1093,7 +1094,7 @@ BEGIN
 	_r.qtt_out_sum := 0;
 	
 	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_pivot) LOOP
-		_flows := array_append(_flows,yflow_to_json(_ypatmax));
+		_flows := array_append(_flows,yflow_to_json(_ypatmax)::text);
 		_res := yflow_qtts(_ypatmax); -- [in,out] of the last node
 		
 		_r.qtt_in_sum  := _r.qtt_in_sum + _res[1];
