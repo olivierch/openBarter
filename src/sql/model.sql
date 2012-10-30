@@ -34,7 +34,7 @@ INSERT INTO tconst (name,value) VALUES
 	('CHECK_QUALITY_OWNERSHIP',0), 
 	-- !=0, quality = user_name/quality_name prefix must match session_user
 	-- ==0, the name of quality can be any string
-	('MAXORDERFETCH',10000);
+	('MAXPATHFETCHED',10000);
 	-- maximum number of paths of the set on which the competition occurs
 --------------------------------------------------------------------------------
 -- fetch a constant, and verify consistancy
@@ -239,6 +239,7 @@ DECLARE
 	_id int;
 BEGIN
 	LOOP
+
 		SELECT * INTO _qlt FROM tquality WHERE name = _quality_name;
 		IF FOUND THEN
 			return _qlt.id;
@@ -247,26 +248,26 @@ BEGIN
 			return 0;
 		END IF;
 		
-		BEGIN
-			_q := fexplodequality(_quality_name);
-			IF(_q[1] IS NOT NULL) THEN 	
-				-- _CHECK_QUALITY_OWNERSHIP =1
-				SELECT id INTO _idd FROM tuser WHERE name=_q[1];
-				IF(NOT FOUND) THEN -- user should exists
-					RAISE NOTICE 'The depository "%" is undefined',_q[1] ;
-					RAISE EXCEPTION USING ERRCODE='YU001';
-				END IF;
-			ELSE
-				_idd := NULL;
+		_q := fexplodequality(_quality_name);
+		IF(_q[1] IS NOT NULL) THEN 	
+			-- _CHECK_QUALITY_OWNERSHIP =1
+			SELECT id INTO _idd FROM tuser WHERE name=_q[1];
+			IF(NOT FOUND) THEN -- user should exists
+				RAISE NOTICE 'The depository "%" is undefined',_q[1] ;
+				RAISE EXCEPTION USING ERRCODE='YU001';
 			END IF;
-		
+		ELSE
+			_idd := NULL;
+		END IF;
+		--
+		BEGIN
 			INSERT INTO tquality (name,idd,depository) VALUES (_quality_name,_idd,_q[1])
 				RETURNING * INTO _qlt;
 			RETURN _qlt.id;
-			
 		EXCEPTION WHEN unique_violation THEN
 			--
 		END;
+
 	END LOOP;
 
 END;
@@ -363,7 +364,7 @@ create table torder (
     qtt_prov dquantity NOT NULL,
     
     qtt int8 NOT NULL,  
-    start int8,   
+    start int8 DEFAULT 0,  -- used to store a quota 
 
     created timestamp not NULL,
     updated timestamp default NULL,    
@@ -383,9 +384,9 @@ comment on column torder.uuid is 'unique id for all sessions';
 comment on column torder.own is 'owner of the value provided';
 comment on column torder.nr is 'quality required';
 comment on column torder.qtt_requ is 'quantity required; used to express omega=qtt_prov/qtt_req';
-comment on column torder.np is 'quality provided';
+comment on column torder.np is 'quality offered';
 comment on column torder.qtt_prov is 'quantity offered';
-comment on column torder.qtt is 'current quantity remaining (<= quantity offered)';
+comment on column torder.qtt is 'current quantity remaining available (<= quantity offered)';
 comment on column torder.start is 'position of treltried[np,nr].cnt when the order is inserted';
 
 alter sequence torder_id_seq owned by torder.id;
@@ -424,7 +425,7 @@ create table torderremoved (
     np int not NULL ,
     qtt_prov dquantity NOT NULL,
     qtt int8 NOT NULL, -- != 0 for order finvalidate_treltried
-    start int8, 
+    start int8,
     created timestamp not NULL,
     updated timestamp default NULL,
     PRIMARY KEY (uuid)
@@ -441,6 +442,7 @@ CREATE VIEW vorderremoved AS
 		qp.name as qua_prov,
 		n.qtt_prov,
 		n.qtt,
+		n.start,
 		n.created as created,
 		n.updated as updated
 	FROM torderremoved n
@@ -454,7 +456,6 @@ CREATE VIEW vorderverif AS
 	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt,false AS removed FROM torder
 	UNION
 	SELECT id,uuid,own,nr,qtt_requ,np,qtt_prov,qtt,true AS removed FROM torderremoved;
-	
 SELECT _grant_read('vorderverif');
 
 --------------------------------------------------------------------------------
@@ -487,7 +488,7 @@ create table tmvt (
 );
 SELECT _grant_read('tmvt');
 
-comment on table tmvt is 'records a change of ownership';
+comment on table tmvt is 'Records a ownership changes';
 comment on column tmvt.uuid is 'uuid of this movement';
 comment on column tmvt.nb is 'number of movements of the exchange';
 comment on column tmvt.oruuid is 'order.uuid producing this movement';
@@ -523,16 +524,17 @@ CREATE VIEW vmvt AS
 	INNER JOIN towner w_dst ON (m.own_dst = w_dst.id) 
 	INNER JOIN tquality q ON (m.nat = q.id); 	
 SELECT _grant_read('vmvt');
-COMMENT ON VIEW vmvt IS 'List of movements';
-COMMENT ON COLUMN vmvt.uuid IS 'reference this movement';
-COMMENT ON COLUMN vmvt.nb IS 'number of movements of the exchange';
-COMMENT ON COLUMN vmvt.oruuid IS 'reference to the exchange';
-COMMENT ON COLUMN vmvt.grp IS 'id of the first movement of the exchange';
+COMMENT ON VIEW vmvt IS 'View of movements';
+COMMENT ON COLUMN vmvt.id IS 'primary key of the movement';
+COMMENT ON COLUMN vmvt.uuid IS 'uuid of the movement';
+COMMENT ON COLUMN vmvt.nb IS 'number of movements of the exchange containing this movement';
+COMMENT ON COLUMN vmvt.oruuid IS 'uuid of the order producing this movement';
+COMMENT ON COLUMN vmvt.grp IS 'uuid of the exchange containing this movement';
 COMMENT ON COLUMN vmvt.provider IS 'name of the provider of the movement';
 COMMENT ON COLUMN vmvt.quality IS 'name of the quality moved';
 COMMENT ON COLUMN vmvt.qtt IS 'quantity moved';
 COMMENT ON COLUMN vmvt.receiver IS 'name of the receiver of the movement';
-COMMENT ON COLUMN vmvt.created IS 'time of the transaction';
+COMMENT ON COLUMN vmvt.created IS 'transaction';
 
 --------------------------------------------------------------------------------
 create table tmvtremoved (
@@ -551,12 +553,26 @@ create table tmvtremoved (
 	deleted timestamp not NULL
 );
 SELECT _grant_read('tmvtremoved');
+
 --------------------------------------------------------------------------------
+
 CREATE VIEW vmvtverif AS
-	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,false AS removed FROM tmvt where grp is not NULL
+	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,NULL,false AS removed FROM tmvt
 	UNION ALL
-	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,true AS removed FROM tmvtremoved where grp is not NULL;
+	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,deleted,true AS removed FROM tmvtremoved;
 SELECT _grant_read('vmvtverif');
+COMMENT ON VIEW vmvtverif IS 'tmvt union tmvtremoved';
+
+--------------------------------------------------------------------------------
+
+CREATE VIEW vexchange AS SELECT id,uuid,nb,created FROM (
+	SELECT first_value(id) OVER (PARTITION BY created,grp order by id) as id,
+		first_value(uuid) OVER (PARTITION BY created,grp order by id) as uuid,nb,created 
+		FROM tmvt WHERE nb!=1
+) AS t GROUP BY id,uuid,nb,created;
+SELECT _grant_read('vexchange');
+COMMENT ON VIEW vexchange IS 'List of new exchanges';
+
 
 --------------------------------------------------------------------------------
 /*
@@ -617,9 +633,12 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fremoveorder(text) TO client_opened_role,client_stopping_role;
 
 --------------------------------------------------------------------------------
--- finsertflows
+/* fomega_max_iterator
+creates a temporary table _tmp of potential exchanges
+among potential exchanges of _tmp, selects the ones having the product of omegas maximum
+*/
 --------------------------------------------------------------------------------
-CREATE FUNCTION finsertflows(_pivot torder) 
+CREATE FUNCTION fomega_max_iterator(_pivot torder) 
 	RETURNS TABLE (_patmax yflow) AS $$
 DECLARE
 
@@ -632,7 +651,7 @@ DECLARE
 BEGIN
 	------------------------------------------------------------------------
 	-- _pivot.qtt := _pivot.qtt_prov;
-	_time_begin := clock_timestamp();
+	_time_begin := clock_timestamp(); -- not statement_timestamp()
 	
 	_cnt := fcreate_tmp(_pivot.id,
 			yorder_get(_pivot.id,_pivot.own,_pivot.nr,_pivot.qtt_requ,_pivot.np,_pivot.qtt_prov,_pivot.qtt),
@@ -645,33 +664,50 @@ BEGIN
 	
 	LOOP		
 		SELECT yflow_max(pat) INTO _patmax FROM _tmp  ;
-		
+		-- among potential exchanges of _tmp, selects the one having the product of omegas maximum
 		IF (yflow_status(_patmax)!=3) THEN -- status != draft
+			-- no potential exchange where found
 			EXIT; -- from LOOP
 		END IF;
 		_cnt := _cnt + 1;
-		
 		RETURN NEXT;
 
 		UPDATE _tmp SET pat = yflow_reduce(pat,_patmax);
 	END LOOP;
 	
-	DROP TABLE _tmp;
+	
+	
+	-- DROP TABLE _tmp; it is dropped at the end of the transaction
 	
 	perform fspendquota(_time_begin);
 	
  	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL; 
+
+--------------------------------------------------------------------------------
+/* for an order O creates a temporary table _tmp of objects.
+Each object represents a chain of orders - a flows - going to O. 
+The table has columns
+	id	id of an order X
+	ord	order X
+	nr	quality required by this order X
+	pat	path of orders - a flow - from X to O
+One object for each paths to O
+objects having the shortest path are fetched first
+objects having best orders (using the view vorderinsert) are fetched first
+The number of objects fetched is limited to MAXPATHFETCHED
+Among those objects representing chains of orders, 
+only those making a potential exchange (draft) are recorded.
+*/
 --------------------------------------------------------------------------------
 CREATE VIEW vorderinsert AS
 	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
 	FROM torder ORDER BY ((qtt_prov::double precision)/(qtt_requ::double precision)) DESC;
-
 --------------------------------------------------------------------------------
 CREATE FUNCTION fcreate_tmp(_id int,_ord yorder,_np int,_nr int) RETURNS int AS $$
 DECLARE 
-	_MAXORDERFETCH	 int := fgetconst('MAXORDERFETCH'); 
+	_MAXPATHFETCHED	 int := fgetconst('MAXPATHFETCHED'); 
 	_MAXCYCLE 	int := fgetconst('MAXCYCLE');
 	_cnt int;
 BEGIN
@@ -697,8 +733,8 @@ BEGIN
 					 
 			)
 			SELECT id,ord,nr,pat 
-			FROM search_backward LIMIT _MAXORDERFETCH 
-		) A WHERE  yflow_status(A.pat)=3 --draft
+			FROM search_backward LIMIT _MAXPATHFETCHED 
+		) A WHERE  yflow_status(A.pat)=3 -- potential exchange (draft)
 	);
 	SELECT COUNT(*) INTO _cnt FROM _tmp;
 
@@ -708,7 +744,11 @@ $$ LANGUAGE PLPGSQL;
 
 
 --------------------------------------------------------------------------------
--- fexecute_flow
+/* fexecute_flow
+from a flow representing a draft, for each order:
+	inserts a new movement
+	updates the order
+*/
 --------------------------------------------------------------------------------
 
 CREATE FUNCTION fexecute_flow(_flw yflow) RETURNS int AS $$
@@ -732,6 +772,9 @@ DECLARE
 	_uuid		text;
 	_res		text;
 BEGIN
+
+	--lock table torder in share row exclusive mode;
+	lock table torder in share update exclusive mode;
 
 	_commits := yflow_to_matrix(_flw);
 	-- indices in _commits
@@ -791,7 +834,7 @@ BEGIN
 			USING ERRCODE='YA003';
 	END IF;
 	
-	PERFORM fupdate_treltried(_commits,_nbcommit);
+	
 	
 	RETURN _first_mvt;
 END;
@@ -830,6 +873,22 @@ CREATE TABLE tquote (
     PRIMARY KEY (id)
 );
 SELECT _grant_read('tquote');
+
+comment on table tquote is 'records quotes';
+comment on column tquote.id is 'unique id for the session of the market';
+comment on column tquote.own is 'owner of the value provided';
+comment on column tquote.nr is 'quality required';
+comment on column tquote.qtt_requ is 'quantity required; used to express omega=qtt_prov/qtt_req';
+comment on column tquote.np is 'quality provided';
+comment on column tquote.qtt_prov is 'quantity offered';
+comment on column tquote.qtt_in is 'quantity received by the owner';
+comment on column tquote.qtt_out is 'quantity provided by the owner';
+comment on column tquote.flows is 'array of flows produced by the quote';
+comment on column tquote.created is 'timestamp when created';
+comment on column tquote.removed is 'timestamp when romoved';
+
+alter sequence tquote_id_seq owned by tquote.id;
+
 -- SELECT _reference_time('tquote');
 -- TODO truncate at market opening
 -- id,own,nr,qtt_requ,np,qtt_prov,qtt_in,qtt_out,flows,created,removed
@@ -850,6 +909,8 @@ CREATE TABLE tquoteremoved (
     removed timestamp
 );
 SELECT _grant_read('tquoteremoved');
+
+comment on table tquoteremoved is 'records quotes removed';
 
 --------------------------------------------------------------------------------
 -- (id,own,qtt_in,qtt_out,flows) = fgetquote(owner,qltprovided,qttprovided,qttrequired,qltprovided)
@@ -915,7 +976,7 @@ BEGIN
 	
 	_cumul[1] := 0; -- in
 	_cumul[2] := 0; -- out
-	FOR _ypatmax IN SELECT _patmax  FROM finsertflows(_pivot) LOOP
+	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_pivot) LOOP
 		_r.flows := array_append(_r.flows,_ypatmax);
 		_res := yflow_qtts(_ypatmax); -- [in,out] of the last node
 		IF(_qttrequired = 0) THEN
@@ -1014,7 +1075,7 @@ BEGIN
 	_r.qtt_in_sum := 0;
 	_r.qtt_out_sum := 0;
 	
-	FOR _ypatmax IN SELECT _patmax  FROM finsertflows(_pivot) LOOP
+	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_pivot) LOOP
 		_flows := array_append(_flows,yflow_to_json(_ypatmax));
 		_res := yflow_qtts(_ypatmax); -- [in,out] of the last node
 		
@@ -1055,6 +1116,7 @@ CREATE TYPE yresorder AS (
     qtt_out int8,
     flows yflow[]
 );
+
 --------------------------------------------------------------------------------
 -- torder id,uuid,yorder,created,updated
 -- yorder: qtt,nr,np,qtt_prov,qtt_requ,own
@@ -1076,7 +1138,10 @@ DECLARE
 	_qtt_requ	int8;
 	_first_mvt	int;
 
+	_time_begin	timestamp;
 BEGIN
+	
+	_time_begin := clock_timestamp();
 	
 	_idd := fverifyquota();
 	_wid := fgetowner(_owner,false); -- returns _wid == 0 if not found
@@ -1090,9 +1155,6 @@ BEGIN
 		END IF;
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
-	
-	-- lock table torder in share row exclusive mode; 
-	lock table torder in share update exclusive mode;
 		
 	-- _q.qtt_requ != 0		
 	_qtt_requ := _q.qtt_requ;
@@ -1112,7 +1174,10 @@ BEGIN
 	_ro.qtt_out 	:= 0;
 	_ro.flows   	:= ARRAY[]::yflow[];
 	
-	FOR _ypatmax IN SELECT _patmax  FROM finsertflows(_o) LOOP
+	-- lock table torder in share row exclusive mode; 
+	lock table torder in share update exclusive mode;
+		
+	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_o) LOOP
 		_first_mvt := fexecute_flow(_ypatmax);
 		_res := yflow_qtts(_ypatmax);
 		_ro.qtt_in  := _ro.qtt_in  + _res[1];
@@ -1130,7 +1195,7 @@ BEGIN
 	END IF;
 	
 	PERFORM fremovequote_int(_idquote);	
-	PERFORM finvalidate_treltried();
+	PERFORM finvalidate_treltried(_time_begin);
 	
 	RETURN _ro;
 	
@@ -1167,9 +1232,8 @@ BEGIN
 		RETURNING id INTO _id;
 	
 	_uuid := fgetuuid(_id);
-	_start := fget_treltried(_np,_nr);
 	
-	UPDATE torder SET uuid = _uuid,start = _start WHERE id=_id RETURNING * INTO _o;	
+	UPDATE torder SET uuid = _uuid WHERE id=_id RETURNING * INTO _o;	
 	
 	RETURN _o;					
 END;
@@ -1188,24 +1252,21 @@ CREATE FUNCTION
 	
 DECLARE
 	_wid		int;
-	_o		torder%rowtype;
+	_o		    torder%rowtype;
 	_idd		int;
-	-- _expected	tquote%rowtype;
-	_q		tquote%rowtype;
-	_ro		yresorder%rowTYPE;
-	-- _pivot		torder%rowtype;
+	_q		    tquote%rowtype;
+	_ro		    yresorder%rowTYPE;
 	_qua		text[];
 
 	_flows		yflow[];
 	_ypatmax	yflow;
-	_res	        int8[];
+	_res	    int8[];
 	_first_mvt	int;
+	_unlocked	bool := true;
+	_time_begin	timestamp;
 BEGIN
-	--lock table torder in share row exclusive mode;
-	lock table torder in share update exclusive mode;
-	_idd := fverifyquota();
-	_q.own := fgetowner(_owner,true); -- inserted if not found
 	
+	_time_begin := clock_timestamp();
 	-- quantities must be >0
 	IF(_qttprovided<=0 OR _qttrequired<=0) THEN
 		RAISE NOTICE 'quantities incorrect: %<=0 or %<=0', _qttprovided,_qttrequired;
@@ -1218,6 +1279,12 @@ BEGIN
 		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
 	
+	lock table torder in share update exclusive mode;
+	
+	_idd := fverifyquota();
+	_q.own := fgetowner(_owner,true); -- owner inserted if not found
+	
+	
 	-- qualities are red and inserted if necessary
 	_q.np := fgetquality(_qualityprovided,true); 
 	_q.nr := fgetquality(_qualityrequired,true); 
@@ -1228,6 +1295,7 @@ BEGIN
 	
 	_o := finsert_toint(_qttprovided,_q.nr,_q.np,_qttrequired,_q.own);
 	
+
 	_ro.id      	:= _o.id;
 	_ro.uuid    	:= _o.uuid;
 	_ro.own     	:= _q.own;
@@ -1238,15 +1306,16 @@ BEGIN
 	_ro.qtt_in  	:= 0;
 	_ro.qtt_out 	:= 0;
 	_ro.flows   	:= ARRAY[]::yflow[];
+
 	
-	FOR _ypatmax IN SELECT _patmax  FROM finsertflows(_o) LOOP
+		
+	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_o) LOOP
 		_first_mvt := fexecute_flow(_ypatmax);
 		_res := yflow_qtts(_ypatmax);
 		_ro.qtt_in  := _ro.qtt_in  + _res[1];
 		_ro.qtt_out := _ro.qtt_out + _res[2];
 		_ro.flows := array_append(_ro.flows,_ypatmax);
 	END LOOP;
-	
 	
 	IF (	(_ro.qtt_in != 0) AND 
 		((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
@@ -1255,8 +1324,8 @@ BEGIN
 		RAISE NOTICE 'Omega of the flows obtained is not limited by the order';
 		RAISE EXCEPTION USING ERRCODE='YA003';
 	END IF;
-		
-	PERFORM finvalidate_treltried();
+	
+	PERFORM finvalidate_treltried(_time_begin);
 	
 	RETURN _ro;
 
@@ -1369,7 +1438,7 @@ DECLARE
 	_m	 vmvtverif%rowtype;
 BEGIN
 		_qtt_requ := NULL;
-		FOR _m IN SELECT * FROM vmvtverif WHERE grp=_grp ORDER BY id ASC LOOP
+		FOR _m IN SELECT * FROM vmvtverif WHERE grp=_grp AND nb!=1 ORDER BY id ASC LOOP
 			IF(_qtt_requ IS NULL) THEN
 				_qtt_requ := _m.qtt;
 				SELECT name INTO _natr FROM tquality WHERE _m.nat=id;

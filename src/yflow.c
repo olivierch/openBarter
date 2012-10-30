@@ -49,6 +49,7 @@ PG_FUNCTION_INFO_V1(yflow_qtts);
 PG_FUNCTION_INFO_V1(yflow_get_last_order);
 PG_FUNCTION_INFO_V1(yflow_to_json);
 PG_FUNCTION_INFO_V1(yflows_array_to_json);
+PG_FUNCTION_INFO_V1(yflow_iterid);
 
 Datum yflow_in(PG_FUNCTION_ARGS);
 Datum yflow_out(PG_FUNCTION_ARGS);
@@ -72,6 +73,7 @@ Datum yflow_qtts(PG_FUNCTION_ARGS);
 Datum yflow_get_last_order(PG_FUNCTION_ARGS);
 Datum yflow_to_json(PG_FUNCTION_ARGS);
 Datum yflows_array_to_json(PG_FUNCTION_ARGS);
+Datum yflow_iterid(PG_FUNCTION_ARGS);
 
 char *yflow_statusBoxToStr (Tflow *box);
 char *yflow_pathToStr(Tflow *yflow);
@@ -829,6 +831,77 @@ yflows_array_to_json(PG_FUNCTION_ARGS)
 	PG_RETURN_CSTRING(_buf.data);
 }
 
+/* from backend/util/adt/array_foncts.c 
+Datum
+generate_subscripts(PG_FUNCTION_ARGS)
+*/
+
+typedef struct yflow_iterid_fctx
+{
+	short		dim,k;
+	int32		ids[FLOW_MAX_DIM];
+} yflow_iterid_fctx;
+
+/*
+ * yflow_iterid(yflow)
+ *		Returns the set of ids of the flow
+ */
+Datum
+yflow_iterid(PG_FUNCTION_ARGS)
+{
+	FuncCallContext *funcctx;	
+	yflow_iterid_fctx *fctx;
+
+	/* stuff done only on the first call of the function */
+	if (SRF_IS_FIRSTCALL())
+	{
+		MemoryContext oldcontext;
+		Tflow  		*flow = PG_GETARG_TFLOW(0);
+		int32		_k,_dim;
+
+		/* create a function context for cross-call persistence */
+		funcctx = SRF_FIRSTCALL_INIT();
+		_dim = flow->dim;
+		
+		/* Sanity check */
+		if (_dim <= 0 || _dim > FLOW_MAX_DIM)
+			SRF_RETURN_DONE(funcctx);
+
+		/*
+		 * switch to memory context appropriate for multiple function calls
+		 */
+		oldcontext = MemoryContextSwitchTo(funcctx->multi_call_memory_ctx);
+		fctx = (yflow_iterid_fctx *) palloc(sizeof(yflow_iterid_fctx));
+		
+
+		fctx->dim = _dim;
+		fctx->k = 0;
+
+		obMRange (_k,_dim) {
+			if(flow->x[_k].qtt == 0) {
+				fctx->dim = 0;
+				break;
+			}
+			fctx->ids[_k] = flow->x[_k].id;		
+		}
+
+		funcctx->user_fctx = fctx;
+
+		MemoryContextSwitchTo(oldcontext);
+	}
+
+	funcctx = SRF_PERCALL_SETUP();
+
+	fctx = funcctx->user_fctx;
+
+	if (fctx->k < fctx->dim) {
+		int32 _id = fctx->ids[fctx->k];
+		fctx->k +=1;
+		SRF_RETURN_NEXT(funcctx, Int32GetDatum(_id));
+	} else
+		/* done when there are no more elements left */
+		SRF_RETURN_DONE(funcctx);
+}
 
 
 

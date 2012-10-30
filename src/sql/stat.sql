@@ -1,7 +1,6 @@
 /*------------------------------------------------------------------------------
 STAT
 ------------------------------------------------------------------------------*/
-	
 /*------------------------------------------------------------------------------
 fgetstats() 
 	returns stats but not errors
@@ -63,6 +62,64 @@ $$ LANGUAGE PLPGSQL  SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fgetstats(bool) TO admin;
 
 /*------------------------------------------------------------------------------
+fgetcount() 
+	returns stats but not errors
+------------------------------------------------------------------------------*/
+CREATE FUNCTION fgetcounts() RETURNS TABLE(_name text,cnt int8) AS $$
+DECLARE 
+	_cnt 		int;
+BEGIN
+
+	_name := 'count(tquality)';
+	select count(*) INTO cnt FROM tquality;
+	RETURN NEXT;
+	
+	_name := 'count(towner)';
+	select count(*) INTO cnt FROM towner;
+	RETURN NEXT;
+	
+	_name := 'count(tquote)';
+	select count(*) INTO cnt FROM tquote;
+	RETURN NEXT;
+	
+	_name := 'count(tquoteremoved)';
+	select count(*) INTO cnt FROM tquoteremoved;
+	RETURN NEXT;
+				
+	_name := 'count(torder)';
+	select count(*) INTO cnt FROM torder;
+	RETURN NEXT;
+
+	_name := 'count(torderremoved)';
+	select count(*) INTO cnt FROM torderremoved;
+	RETURN NEXT;
+		
+	_name := 'count(tmvt)';
+	select count(*) INTO cnt FROM tmvt;
+	RETURN NEXT;
+
+	_name := 'count(tmvtremoved)';
+	select count(*) INTO cnt FROM tmvtremoved;	
+	RETURN NEXT;
+	
+	_name := 'count(vmvtverif.grp) with nb!=1';
+	select count(distinct grp) INTO cnt FROM vmvtverif where nb!=1;	
+	RETURN NEXT;	
+		
+	_name := 'count(vmvtverif.grp) with nb==1';
+	select count(distinct grp) INTO cnt FROM vmvtverif where nb=1;	
+	RETURN NEXT;
+		
+	_name := 'count(vmvtverif.created) with nb!=1';
+	select count(distinct created) INTO cnt FROM vmvtverif where nb!=1;	
+	RETURN NEXT;		
+
+	RETURN;
+END;
+$$ LANGUAGE PLPGSQL  SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fgetcounts() TO admin;
+
+/*------------------------------------------------------------------------------
 returns 3 records:
 the number of errors found with fbalance(),fverifmvt() and fverifmvt2()
 ------------------------------------------------------------------------------*/
@@ -76,7 +133,7 @@ BEGIN
 	RETURN NEXT;
 
 	_name := 'errors on agreements in mvts';
-	cnt := fverifmvt2();
+	cnt := fverifmvt3();
 	RETURN NEXT;
 	RETURN;
 END;
@@ -96,18 +153,14 @@ DECLARE
 	_npa		 int;
 	_npb		 int;
 	_np		 int;
+	_nb			int;
 	_cnterr		 int := 0;
 	_iserr		 bool;
 BEGIN
-	
-	FOR _qtt_prov,_qtt,_uuid,_np IN SELECT qtt_prov,qtt,uuid,np FROM vorderverif LOOP
-	
-		_iserr := false;
-	
-		SELECT sum(qtt),max(nat),min(nat) INTO _qtta,_npa,_npb 
-			FROM vmvtverif WHERE oruuid=_uuid GROUP BY oruuid;
-			
-		IF(	FOUND ) THEN 
+	FOR _uuid,_qtta,_npa,_npb,_qtt_prov,_qtt,_np IN 
+	SELECT m.oruuid,sum(m.qtt),max(m.nat),min(m.nat),o.qtt_prov,o.qtt,o.np
+	FROM vmvtverif m INNER JOIN vorderverif o ON  o.uuid=m.oruuid 
+	WHERE m.nb!=1 GROUP BY m.oruuid,o.qtt_prov,o.qtt,o.np LOOP
 			IF(	(_qtt_prov != _qtta+_qtt) 
 				-- NOT vorderverif.qtt_prov == vorderverif.qtt + sum(mvt.qtt)
 				OR (_np != _npa)	
@@ -115,90 +168,11 @@ BEGIN
 				OR (_npa != _npb)
 				-- NOT all mvt.nat are the same 
 			)	THEN 
-				_iserr := true;
-				
-			END IF;	
-		END IF;
-		
-		IF(_iserr) THEN
-			_cnterr := _cnterr +1;
-			RAISE NOTICE 'error on uuid:%',_uuid;
-		END IF;
+				_cnterr := _cnterr +1;
+				RAISE NOTICE 'error on uuid:%',_uuid;
+			END IF;
 	END LOOP;
-
 	RETURN _cnterr;
-END;
-$$ LANGUAGE PLPGSQL;
-
-/*------------------------------------------------------------------------------
--- verifies that for all agreements, movements comply with related orders.
-------------------------------------------------------------------------------*/
-CREATE FUNCTION fverifmvt2() RETURNS int AS $$
-DECLARE
-	_cnterr		 int := 0;
-	_cnterrtot	 int := 0;
-	_mvt		 tmvt%rowtype;
-	_mvtprec	 tmvt%rowtype;
-	_mvtfirst	 tmvt%rowtype;
-	_uuiderr	 text;
-	_cnt		 int;		-- count mvt in agreement
-BEGIN
-		
-	_mvtprec.grp := NULL;_mvtfirst.grp := NULL;
-	_uuiderr := NULL;
-	FOR _mvt IN SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM vmvtverif ORDER BY grp,uuid ASC  LOOP
-		IF(_mvt.grp != _mvtprec.grp) THEN -- first mvt of agreement
-			--> finish last agreement
-			IF NOT (_mvtprec.grp IS NULL OR _mvtfirst.grp IS NULL) THEN
-				_cnterr := _cnterr + fverifmvt2_int(_mvtprec,_mvtfirst);
-				_cnt := _cnt +1;
-				
-				if(_cnt != _mvtprec.nb) THEN
-					_cnterr := _cnterr +1;
-					RAISE NOTICE 'wrong number of movements for agreement %',_mvtprec.oruuid;
-				END IF;
-				-- errors found
-				if(_cnterr != 0) THEN
-					_cnterrtot := _cnterr + _cnterrtot;
-					IF(_uuiderr IS NULL) THEN
-						_uuiderr := _mvtprec.oruuid;
-					END IF;
-				END IF;
-			END IF;
-			--< A
-			_mvtfirst := _mvt;
-			_cnt := 0;
-			_cnterr := 0;
-		ELSE
-			_cnterr := _cnterr + fverifmvt2_int(_mvtprec,_mvt);
-			_cnt := _cnt +1;
-		END IF;
-		_mvtprec := _mvt;
-	END LOOP;
-	--> finish last agreement
-	IF NOT (_mvtprec.grp IS NULL OR _mvtfirst.grp IS NULL) THEN
-		_cnterr := _cnterr + fverifmvt2_int(_mvtprec,_mvtfirst);
-		_cnt := _cnt +1;
-		
-		if(_cnt != _mvtprec.nb) THEN
-			_cnterr := _cnterr +1;
-			RAISE NOTICE 'wrong number of movements for agreement %',_mvtprec.oruuid;
-		END IF;
-		-- errors found
-		if(_cnterr != 0) THEN
-			_cnterrtot := _cnterr + _cnterrtot;
-			IF(_uuiderr IS NULL) THEN
-				_uuiderr := _mvtprec.oruuid;
-			END IF;
-		END IF;
-	END IF;
-	--< A
-	IF(_cnterrtot != 0) THEN
-		RAISE NOTICE 'mvt.oruuid= % is the first agreement where an error is found',_uuiderr;
-		RETURN _cnterrtot;
-	ELSE
-		RETURN 0;
-	END IF;
 END;
 $$ LANGUAGE PLPGSQL;
 
@@ -233,29 +207,132 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL;
 
+/*------------------------------------------------------------------------------
+-- verifies that for all agreements, movements comply with related orders.
+------------------------------------------------------------------------------*/
+CREATE FUNCTION fverifmvt3() RETURNS int AS $$
+DECLARE
+	_cnterr		 int := 0;
+	_mvts		 tmvt[];
+	_mvt		 tmvt%rowtype;
+	_mvtprec	 tmvt%rowtype;
+	_mvtfirst	 tmvt%rowtype;
+	_uuiderr	 text;
+	_cnt		 int;		-- count mvt in agreement
+BEGIN
+		
+	_mvtprec.grp := NULL;
+	_cnterr := 0;
+	FOR _mvt IN SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM vmvtverif WHERE nb!=1 ORDER BY grp,uuid ASC  LOOP
+		IF(_mvt.grp = _mvtprec.grp) THEN
+			_mvts := array_append(_mvts,_mvt);
+		ELSE
+			IF NOT (_mvtprec.grp IS NULL) THEN
+				_cnterr := fverifmvt3_int(_mvts) + _cnterr;
+			END IF;
+			_mvts := array_append(ARRAY[]::tmvt[],_mvt);
+		END IF;
+		_mvtprec.grp := _mvt.grp;
+	END LOOP;
+	IF NOT (_mvtprec.grp IS NULL) THEN
+		_cnterr := fverifmvt3_int(_mvts) + _cnterr;
+	END IF;
+	RETURN _cnterr;
+END;
+$$ LANGUAGE PLPGSQL;
+
+/*------------------------------------------------------------------------------
+_mvtprec and _mvt are successive movements of an agreement
+------------------------------------------------------------------------------*/
+CREATE FUNCTION fverifmvt3_int(_mvts tmvt[]) RETURNS int AS $$
+DECLARE
+	_mvtprec	 tmvt%rowtype;
+	_mvtfirst    tmvt%rowtype;
+	_mvt		 tmvt%rowtype;
+	_cnterr		 int;
+	_nb			 int;
+BEGIN
+	_nb := array_length(_mvts,1);
+	_mvtprec.uuid := NULL;
+	_cnterr := 0;
+	FOREACH _mvt IN ARRAY _mvts LOOP
+		IF ( _nb != _mvt.nb ) THEN
+			RAISE NOTICE 'mvt.nb incorrect for movement %',_mvt.oruuid;
+			_cnterr := _cnterr + 1 ;
+		END IF;
+		IF (_mvtprec.uuid IS NULL) THEN
+			_mvtfirst := _mvt;
+		ELSE
+			_cnterr := fverifmvt2_int(_mvtprec,_mvt) + _cnterr;
+		END IF;
+		_mvtprec.uuid := _mvt.grp;
+	END LOOP;
+	IF NOT (_mvtprec.grp IS NULL) THEN
+		_cnterr := fverifmvt2_int(_mvt,_mvtfirst) + _cnterr;
+	END IF;
+	RETURN _cnterr;
+END;
+$$ LANGUAGE PLPGSQL;
+
 --------------------------------------------------------------------------------
 -- number of partners for the 100 last movements
 -- select nb,count(distinct grp) from (select * from vmvtverif order by id desc limit 100) a group by nb;
 
 -- performances
+--------------------------------------------------------------------------------
+-- list of transactions created at date increasing
+CREATE VIEW vtransaction(id,cnt_grp,created,delay) AS SELECT max(id),count(distinct grp) as cnt_grp,created,created-(lag(created) over(order by created)) as delay from tmvt group by created order by created;
+COMMENT ON VIEW vtransaction IS 'list of transactions, ';
 
--- list - cnt of agreement created at date increasing
-CREATE VIEW vgrp (id,cnt,created) AS SELECT max(id),count(distinct grp) as cnt,max(created) as created from tmvt group by created order by created;
+--------------------------------------------------------------------------------
+-- list of ten groups ntile( 10 over delay)
+-- cnt_tr 		number of transactions
+-- cnt_grp     	number of cycles
+-- delay_tr_min		min duration of transaction
+-- delay_tr_max		max duration of transaction
+-- delay_grp_avg	average duration of cycles
 
--- same list with delays 
-CREATE VIEW vgrp_delay (id,cnt,delay) AS select id,cnt,created-(lag(created) over(order by created)) as delay from vgrp;
-
--- list of ten groups
--- nbtransactions number of transactions
--- nbcycles 	number of cycles
--- delaymin		min duration of transaction
--- delaymax		max duration of transaction
--- avg			average duration of cycles
+CREATE VIEW vperf(cnt_tr,cnt_grp,delay_tr_min,delay_tr_max,delay_grp_avg) AS 
+select count(*) as cnt_tr,sum(cnt_grp) as cnt_grp,min(delay) as delay_tr_min,max(delay) as delay_tr_max,sum(delay)/sum(cnt_grp) as delay_grp_avg from (
+	select cnt_grp,delay,ntile(10) over(order by delay desc) as n from (
+		select * from vtransaction order by id desc
+		) as t2
+	) as t group by n order by delay_tr_min desc;
 
 -- for 1000 last transactions
-CREATE VIEW vperf1000(nbtransactions,nbgrp,delaymin,delaymax,avg) AS select count(*),sum(cnt) as grps,min(delay),max(delay),sum(delay)/sum(cnt) from (select cnt,delay,ntile(10) over(order by delay desc) as n from (select * from vgrp_delay order by id desc limit 1000) as t2) as t group by n order by min desc;
+CREATE VIEW vperf1000(cnt_tr,cnt_grp,delay_tr_min,delay_tr_max,delay_grp_avg) AS 
+select count(*) as cnt_tr,sum(cnt_grp) as cnt_grp,min(delay) as delay_tr_min,max(delay) as delay_tr_max,sum(delay)/sum(cnt_grp) as delay_grp_avg from (
+	select cnt_grp,delay,ntile(10) over(order by delay desc) as n from (
+		select * from vtransaction order by id desc limit 1000
+		) as t2
+	) as t group by n order by delay_tr_min desc;
+--------------------------------------------------------------------------------
+-- list of ten groups ntile( 10 over cnt_grp)
+-- cnt_grp_min,cnt_grp_max	number of grp per transaction
+-- cnt_tr 		total number of transactions
+-- sum_grp     	total number of cycles
+-- delay_grp_avg	average duration of cycles
 
--- distribution of cycles by number of partners for 1000 last cycles
-CREATE VIEW vnbgrp1000(nb,cnt) AS SELECT nb,count(*) as cnt from (SELECT max(id) as gid,grp,max(nb) as nb from tmvt group by grp order by gid desc limit 1000) as t group by nb order by nb asc;
+CREATE VIEW vperfcntgrp(cnt_grp_min,cnt_grp_max,cnt_tr,sum_grp,delay_grp_avg) AS 
+select min(cnt_grp) as cnt_grp_min,max(cnt_grp) as cnt_grp_max,count(*) as cnt_tr,sum(cnt_grp) as sum_grp,sum(delay)/sum(cnt_grp) as delay_grp_avg from (
+	select cnt_grp,delay,ntile(10) over(order by cnt_grp desc) as n from (
+		select * from vtransaction 
+		) as t2
+	) as t group by n order by n asc;
+--------------------------------------------------------------------------------	
+-- distribution of cycles by number of partners 
+CREATE VIEW vnbgrp(nb,cnt_grp) AS SELECT nb,count(*) as cnt_grp from (
+	SELECT max(id) as gid,grp,max(nb) as nb from tmvt group by grp order by gid desc
+) as t group by nb order by nb asc;
 
+-- for 1000 last cycles
+CREATE VIEW vnbgrp1000(nb,cnt) AS SELECT nb,count(*) as cnt from (
+	SELECT max(id) as gid,grp,max(nb) as nb from tmvt group by grp order by gid desc limit 1000
+) as t group by nb order by nb asc;
+--------------------------------------------------------------------------------	
+-- proba que deux ordres soient connectés
+/*
+with torl as (select * from torder order by id asc limit 1000)
+select sum(t.x)::float/count(*) from(select case when s.np=d.nr THEN 1 ELSE 0 END as x from torl s,torl d) as t;
+*/
 

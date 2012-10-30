@@ -33,7 +33,7 @@ typedef struct Tno {
 
 // defines the status of the flow
 typedef enum Tstatusflow {
-	empty, // flow empty
+	empty, // flow empty, ( dim==0 or some qtt ==0 )
 	noloop, //  end.np != begin.nr
 	refused, // refused OMEGA < 1
 	undefined, // no solution found, (rounding did not find any solution)

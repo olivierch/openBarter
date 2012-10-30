@@ -4,7 +4,7 @@
 paramètre influant sur le comportement de la place de marché:
 	MAXCYCLE
 	MAXTRY
-	MAXORDERFETCH
+	MAXPATHFETCHED
 	
 caractéristiques statistiques des ordres:
 	distribution du stock d'ordres sur les couples (np,nr)

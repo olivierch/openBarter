@@ -4,121 +4,43 @@ It is the garbadge collector of poor orders
 Some orders that frequently belong to refused cycles are removed 
 from the database with the following algorithm:
 
-1 - When a movement nr->np is created, a counter Q(np,nr)  is incremented
-	Q(np,nr) := treltried[np,nr].cnt +=1 
-	done by fupdate_treltried(_commits int8[],_nbcommit int), called by fexecute_flow()
+1- torder[.].start = 0 by table default
+	
+2- for orders of unempty flows of _tmp, torder[.].start += microsecs of the transaction
+orders such as torder[.].start > MAXTRY are removed
+ done by finvalidate_treltried(timestamp) called by fexecquote() and finsertorder()
 
-2- When an order nr->np is created, the counter Q(np,nr) is recorded at a position P
-	torder[.].start := Q(np,nr) == P
-	done by fget_treltried() called by finsert_toint() called by finsertorder() and fexecquote()
-	
-3- orders are removed from the market when their torder[.].start +MAXTRY < Q(np,nr), with MAXTRY defined in tconst
-	This operation 3) is performed each time some movements are created.
-	done by finvalidate_treltried() called by fexecquote() and finsertorder()
-	
-4- treltried must be truncated at market opening
-	done by frenumbertables()
-	
-Ainsi, on permet à chaque offre d'être mis en concurrence MAXTRY fois sans pénaliser les couple (np,nr) plus rares. 
-Celà suppose que toutes les solutions soient parcourus, ce qui n'est pas le cas.
-	
+uses yflow_iterid(tflow). example:
+	update tab set q=q+1 where id in (select yflow_iterid(yflow('[(100,10,3,1,4,1,1),(101,11,4,1,5,1,1),(102,12,5,1,3,1,1)]')));
 */
-INSERT INTO tconst (name,value) VALUES 	('MAXTRY',10);
-	-- life time of an order for a given couple (np,nr)
---------------------------------------------------------------------------------
--- TRELTRIED
---------------------------------------------------------------------------------
-create table treltried (
-	np int, 
-	nr int, 
-	cnt bigint DEFAULT 0,
-	PRIMARY KEY (np,nr),     
-	CHECK(	
-    		np!=nr AND 
-    		cnt >=0
-    	),
-    CONSTRAINT creltried_np FOREIGN KEY (np) references tquality(id),
-    CONSTRAINT creltried_nr FOREIGN KEY (nr) references tquality(id)
-);
+INSERT INTO tconst (name,value) VALUES 	('MAXTRY',3000000); -- 3 seconds
 
 --------------------------------------------------------------------------------
--- fupdate_treltried(_commits int8[],_nbcommit int)
---      update treltried[np,nr].cnt
+-- finvalidate_treltried(_time_begin)
 --------------------------------------------------------------------------------
-CREATE FUNCTION  fupdate_treltried(_commits int8[],_nbcommit int) RETURNS void AS $$
-DECLARE 
-	_i int;
-	_np int;
-	_nr int;
-	_MAXTRY 	int := fgetconst('MAXTRY');
-BEGIN
-	IF(_MAXTRY=0) THEN
-		RETURN;
-	END IF;
-	
-	FOR _i IN 1 .. _nbcommit LOOP
-		_nr	:= _commits[_i][3]::int;
-		_np	:= _commits[_i][5]::int;
-		LOOP
-			UPDATE treltried SET cnt = cnt + 1 WHERE np=_np AND nr=_nr;
-			IF FOUND THEN
-				EXIT;
-			ELSE
-				BEGIN
-					INSERT INTO treltried (np,nr,cnt) VALUES (_np,_nr,1);
-				EXCEPTION WHEN check_violation THEN
-					-- 
-				END;
-			END IF;
-		END LOOP;
-	END LOOP;
-
-	RETURN;
-END;
-$$ LANGUAGE PLPGSQL;
---------------------------------------------------------------------------------
--- fget_treltried(_np int,_nr int)
--- sets torder[.].start
---------------------------------------------------------------------------------
-CREATE FUNCTION  fget_treltried(_np int,_nr int) RETURNS int8 AS $$
-DECLARE 
-	_cnt int8;
-	_MAXTRY 	int := fgetconst('MAXTRY');
-BEGIN
-	IF(_MAXTRY=0) THEN
-		RETURN 0;
-	END IF;
-	SELECT cnt into _cnt FROM treltried WHERE np=_np AND nr=_nr;
-	IF NOT FOUND THEN
-		_cnt := 0;
-	END IF;
-
-	RETURN _cnt;
-END;
-$$ LANGUAGE PLPGSQL;
---------------------------------------------------------------------------------
--- finvalidate_treltried()
---------------------------------------------------------------------------------
-CREATE FUNCTION  finvalidate_treltried() RETURNS void AS $$
+CREATE FUNCTION  finvalidate_treltried(_time_begin timestamp) RETURNS void AS $$
 DECLARE 
 	_o 	torder%rowtype;
-	_MAXTRY int := fgetconst('MAXTRY');
+	_MAXTRY int8 := fgetconst('MAXTRY');
 	_res	int;
 	_mvt_id	int;
 	_uuid   text;
+	_t2	timestamp;
 BEGIN
 	IF(_MAXTRY=0) THEN
 		RETURN;
 	END IF;
 	
-	FOR _o IN SELECT o.* FROM torder o,treltried r 
-		WHERE o.np=r.np AND o.nr=r.nr AND o.start IS NOT NULL AND o.start + _MAXTRY < r.cnt LOOP
+	_t2 := clock_timestamp();
+	UPDATE torder SET start = start + extract (microseconds from (_t2-_time_begin)) WHERE id IN (SELECT yflow_iterid(pat) FROM _tmp);
+
+	FOR _o IN SELECT o.* FROM torder o WHERE o.start > _MAXTRY LOOP
 		
 		INSERT INTO tmvt (uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created) 
-			VALUES('',1,_o.uuid,NULL,_o.own,_o.own,_o.qtt,_o.np,statement_timestamp()) 
+			VALUES('',1,_o.uuid,'',_o.own,_o.own,_o.qtt,_o.np,statement_timestamp()) 
 			RETURNING id INTO _mvt_id;
 		_uuid := fgetuuid(_mvt_id);
-		UPDATE tmvt SET uuid = _uuid WHERE id=_mvt_id;
+		UPDATE tmvt SET uuid = _uuid,grp = _uuid WHERE id=_mvt_id;
 			
 		-- the order order.qtt != 0
 		perform fremoveorder_int(_o.id);			
@@ -126,4 +48,5 @@ BEGIN
 	RETURN;
 END;
 $$ LANGUAGE PLPGSQL;
+
 

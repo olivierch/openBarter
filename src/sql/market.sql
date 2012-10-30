@@ -98,7 +98,8 @@ BEGIN
 	
 	IF (_action = 'init' OR _action = 'open') THEN
 		-- INITIALIZING	->OPENED
-		-- STARTING		->OPENED 		
+		-- STARTING		->OPENED 	
+		-- REVOKE  client_stopping_role FROM client;	
 		GRANT client_opened_role TO client;
 				
 	ELSIF (_action = 'stop') THEN
@@ -203,9 +204,6 @@ BEGIN
 	-- tuser is not touched since it is linked to pg_roles
 	UPDATE tuser SET spent = 0;
 	
-	-- remove quotas of unused qualities
-	DELETE FROM treltried r WHERE (np NOT IN (SELECT id FROM tquality)) OR (nr NOT IN (SELECT id FROM tquality));
-		
 	-- renumbering orders
 	PERFORM setval('torder_id_seq',1,false);
 	FOR _id IN SELECT * FROM torder ORDER BY id ASC LOOP

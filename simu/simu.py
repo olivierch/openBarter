@@ -17,14 +17,16 @@ logging.basicConfig(level=logging.DEBUG,
                     )
                     
 def verifyVolumes(cursor):
+	""" gives a good response when no records of tmvtremoved
+	are deleted """
 	if (not util.getMediumQtt.const): 
 		print "Volumes could not be verified"
-		return
+		return 
 
 	volumes = util.getVolumes(cursor)
 	for nat,qtt in volumes:
 		if((qtt % util.getMediumQtt()) != 0):
-			print "verifyVolumes failed"
+			print "verifyVolumes failed KO !!!!!!!!!!"
 			return
 	print "verifyVolumes Ok"
 	return
@@ -117,7 +119,7 @@ def main():
 	parser.add_option("--seed",type="int",dest="seed",help="reset random seed",default=0)
 	parser.add_option("--MAXCYCLE",type="int",dest="MAXCYCLE",help="reset MAXCYCLE")
 	parser.add_option("--MAXTRY",type="int",dest="MAXTRY",help="reset MAXTRY")
-	parser.add_option("--MAXORDERFETCH",type="int",dest="MAXORDERFETCH",help="reset MAXORDERFETCH")
+	parser.add_option("--MAXPATHFETCHED",type="int",dest="MAXPATHFETCHED",help="reset MAXPATHFETCHED")
 	parser.add_option("--CHECKQUALITYOWNERSHIP",action="store_true",dest="CHECKQUALITYOWNERSHIP",help="set CHECK_QUALITY_OWNERSHIP",default=False)
 	parser.add_option("-s","--scenario",type="string",action="store",dest="scenario",help="the scenario choosen",default="basic")
 		

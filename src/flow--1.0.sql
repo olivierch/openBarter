@@ -229,3 +229,12 @@ CREATE FUNCTION yflows_array_to_json(yflow[])
 RETURNS cstring
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
+
+--------------------------------------------------------------------------------
+-- returns an empty set if the flow has some qtt ==0, and otherwise set of order[.].id
+
+CREATE FUNCTION yflow_iterid(yflow)
+    RETURNS SETOF integer
+    AS 'MODULE_PATHNAME'
+    LANGUAGE C IMMUTABLE STRICT;
+    

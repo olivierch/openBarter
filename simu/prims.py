@@ -123,10 +123,10 @@ def createUser(cursor,user=const.DB_USER):
 	return
 
 def getErrs(cde,cursor):
-	cursor.execute("SELECT * from fgeterrs(true) ")
+	cursor.execute("SELECT * from fgeterrs() ")
 	for e in cursor:
 		if(e[1] != 0):
-			ex = Exception("fgeterrs(true) -> %s:%i"% tuple(e) )
+			ex = Exception("fgeterrs() -> %s:%i"% tuple(e) )
 			raise PrimException(cde,ex)
 	return
 	

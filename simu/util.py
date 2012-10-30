@@ -97,8 +97,8 @@ def writeMaxOptions(cursor,options):
 		cursor.execute(sql % (int(options.MAXCYCLE),"MAXCYCLE"))
 	if(not options.MAXTRY is None):
 		cursor.execute(sql % (int(options.MAXTRY),"MAXTRY"))
-	if(not options.MAXORDERFETCH is None):
-		cursor.execute(sql % (int(options.MAXORDERFETCH),"MAXORDERFETCH"))
+	if(not options.MAXPATHFETCHED is None):
+		cursor.execute(sql % (int(options.MAXPATHFETCHED),"MAXPATHFETCHED"))
 		
 def setQualityOwnership(cursor,check=True):
 	val =0
@@ -108,7 +108,7 @@ def setQualityOwnership(cursor,check=True):
 
 def readMaxOptions(cursor):
 	r = []
-	for n in ("MAXCYCLE","MAXTRY","MAXORDERFETCH"):
+	for n in ("MAXCYCLE","MAXTRY","MAXPATHFETCHED"):
 		cursor.execute("SELECT value FROM tconst WHERE name=%s",[n])
 		res = [e[0] for e in cursor]
 		r.append((n,res[0]))
@@ -130,7 +130,9 @@ def getSelect(cursor,sql,pars=[]):
 
 def getCycles(cursor,idmvt):	
 	sql = """SELECT nb,count(*) as cnt from (
-		SELECT max(id) as gid,grp,max(nb) as nb from tmvt where id>%s group by grp
+		SELECT gid,max(nb) as nb FROM (
+			SELECT max(id) over(partition by created,grp) as gid,nb as nb from tmvt where id>%s
+		) as t2 group by gid
 	) as t group by nb order by nb asc"""
 	r = 8*[0]
 	res = getSelect(cursor,sql,[idmvt])

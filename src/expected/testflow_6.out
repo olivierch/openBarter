@@ -10,7 +10,7 @@ SET role client;
 select finsertorder('A','z',200 ,200 ,'x');
 NOTICE:  owner A created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 21 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
           finsertorder          
 --------------------------------
  (1,3-1,8,11,200,10,200,0,0,{})
@@ -21,7 +21,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 21 at assignme
 select finsertorder('B','y',200 ,25  ,'x');
 NOTICE:  owner B created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 21 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
          finsertorder          
 -------------------------------
  (2,3-2,9,11,25,12,200,0,0,{})
@@ -31,7 +31,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 21 at assignme
 select finsertorder('C','z',100 ,100 ,'y');
 NOTICE:  owner C created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 21 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
           finsertorder           
 ---------------------------------
  (3,3-3,10,12,100,10,100,0,0,{})
@@ -47,7 +47,7 @@ select id,uuid,nb,oruuid,grp,provider,quality,qtt,receiver from vmvt order by uu
 select finsertorder('D','x',250 ,250 ,'z');
 NOTICE:  owner D created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 21 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
                                                                                                finsertorder                                                                                               
 ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
  (4,3-4,11,10,250,11,250,300,250,"{""[(2, 9, 11, 25, 12, 200, 200),(3, 10, 12, 100, 10, 100, 100),(4, 11, 10, 250, 11, 250, 250)]"",""[(1, 8, 11, 200, 10, 200, 200),(4, 11, 10, 250, 11, 250, 200)]""}")

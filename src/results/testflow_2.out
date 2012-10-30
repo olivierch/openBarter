@@ -23,7 +23,7 @@ NOTICE:  The role is a super user.
 select * from finsertorder('u',fq('b'),1000,1000,fq('a'));
 NOTICE:  owner u created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 21 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
  id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
 ----+------+-----+----+----------+----+----------+--------+---------+-------
   1 | 1-1  |   1 |  2 |     1000 |  1 |     1000 |      0 |       0 | {}
@@ -32,7 +32,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 21 at assignme
 select * from finsertorder('v',fq('c'),1000,1000,fq('b'));
 NOTICE:  owner v created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 21 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
  id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
 ----+------+-----+----+----------+----+----------+--------+---------+-------
   2 | 1-2  |   2 |  1 |     1000 |  3 |     1000 |      0 |       0 | {}
