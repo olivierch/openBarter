@@ -370,7 +370,10 @@ static short _fluxMaximum(const Tchemin *pchemin, double *omegaCorrige, double *
 		
 	return _iExhausted;
 }
-/******************************************************************************/
+/******************************************************************************
+reduce the number of iteration of _rounding
+the matrix of bits is at most _NMATBITS long 
+******************************************************************************/
 #define _NMATBITS (8)
 #define _get_MIN(a,b) ((a<b)?a:b)
 #define _get_bit_mat(mat,i) (mat &( 1 << (i & (_NMATBITS -1))))
@@ -381,16 +384,16 @@ floor and flow contains integers, and mat bits.
 	out:flow
 for each i, if the bit i of mat is 0, flow[i] := floor[i]
 else flow[i] := floor[i]+1
-*******************************************************************************/
+*******************************************************************************/ 
 #define _obtain_vertex(dim,mat,floor,flow) \
 do { \
 	short __j; \
 	for(__j=0;__j<dim;__j++) { \
 		flow[__j] = floor[__j]; \
-		if (mat & (1 << __j)) \
+		if (_get_bit_mat(mat,__j)) \
 			flow[__j] += 1; \
 	} \
-} while(0) 
+} while(0)
 
 /*******************************************************************************
  Computes a distance between two vectors vecExact and vecArrondi. 
@@ -473,7 +476,8 @@ static Tstatusflow _rounding(short iExhausted, double *fluxExact, Tchemin *pchem
 		}
 	}
 
-	_matmax = 1 << _dim; // one bit for each node 
+	//_matmax = 1 << _dim; // one bit for each node 
+	_matmax = 1 << _get_MIN(_dim,_NMATBITS);
 	
 	// sanity check
 	if(_matmax < 1) {
@@ -486,9 +490,12 @@ static Tstatusflow _rounding(short iExhausted, double *fluxExact, Tchemin *pchem
 	/***********************************************************************/
 	_found = false;
 	_ret = undefined;
+	
+	// at most _NMATBIT^2 iterations
 	for (_matcour = 0; _matcour < _matmax; _matcour++) {
 	
-		if((_matcour >> iExhausted) & 1)
+		//if((_matcour >> iExhausted) & 1)
+		if(_get_bit_mat(_matcour,iExhausted))
 			goto _continue;
 		 
 		// obtain the vertex _flowNodes

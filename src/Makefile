@@ -8,7 +8,8 @@ DATA = flow--1.0.sql flow--unpackaged--1.0.sql
 
 REGRESS = testflow_1 testflow_2 testflow_3 testflow_4 testflow_5 testflow_6
 
-EXTRA_CLEAN = y.tab.c y.tab.h
+#EXTRA_CLEAN = y.tab.c y.tab.h
+EXTRA_CLEAN = yflowparse.c yflowscan.c
 
 # SHLIB_LINK += $(filter -lm, $(LIBS)) `uuid-config --libs`
 

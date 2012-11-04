@@ -5,7 +5,7 @@
 
 ******************************************************************************/
 // maximum length of flow
-#define FLOW_MAX_DIM (8)
+#define FLOW_MAX_DIM (64)
 #define obMRange(v,S) for ((v)=0;(v)<(S);(v)++)
 
 #define PG_GETARG_TFLOW(x)	((Tflow*)PG_GETARG_POINTER(x))

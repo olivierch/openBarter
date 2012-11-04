@@ -134,7 +134,7 @@ def getCycles(cursor,idmvt):
 			SELECT max(id) over(partition by created,grp) as gid,nb as nb from tmvt where id>%s
 		) as t2 group by gid
 	) as t group by nb order by nb asc"""
-	r = 8*[0]
+	r = const.FLOW_MAX_DIM*[0]
 	res = getSelect(cursor,sql,[idmvt])
 	for nb,cnt in res:
 		r[nb-1]=cnt

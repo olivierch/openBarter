@@ -23,7 +23,7 @@ create table tconst(
 
 --------------------------------------------------------------------------------
 INSERT INTO tconst (name,value) VALUES 
-	('MAXCYCLE',8),
+	('MAXCYCLE',64),
 	-- it is the version of the model, not that of the extension
 	('VERSION-X.y.z',0),
 	('VERSION-x.Y.y',4),
@@ -48,8 +48,8 @@ BEGIN
 		RAISE WARNING 'the const % is not found',_name USING ERRCODE= 'YA002';
 		RAISE EXCEPTION USING ERRCODE='YA002';
 	END IF;
-	IF(_name = 'MAXCYCLE' AND _ret >8) THEN
-		RAISE EXCEPTION 'obCMAXVALUE must be <=8' USING ERRCODE='YA002';
+	IF(_name = 'MAXCYCLE' AND _ret >64) THEN
+		RAISE EXCEPTION 'obCMAXVALUE must be <=64' USING ERRCODE='YA002';
 	END IF;
 	RETURN _ret;
 END; 

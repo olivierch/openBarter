@@ -41,7 +41,6 @@ PG_FUNCTION_INFO_V1(yflow_left);
 PG_FUNCTION_INFO_V1(yflow_reduce);
 PG_FUNCTION_INFO_V1(yflow_last_iomega);
 PG_FUNCTION_INFO_V1(yflow_maxg);
-//PG_FUNCTION_INFO_V1(yflow_ming);
 PG_FUNCTION_INFO_V1(yflow_status);
 PG_FUNCTION_INFO_V1(yflow_flr_omega);
 PG_FUNCTION_INFO_V1(yflow_to_matrix);
@@ -65,7 +64,6 @@ Datum yflow_left(PG_FUNCTION_ARGS);
 Datum yflow_reduce(PG_FUNCTION_ARGS);
 Datum yflow_last_iomega(PG_FUNCTION_ARGS);
 Datum yflow_maxg(PG_FUNCTION_ARGS);
-//Datum yflow_ming(PG_FUNCTION_ARGS);
 Datum yflow_status(PG_FUNCTION_ARGS);
 Datum yflow_flr_omega(PG_FUNCTION_ARGS);
 Datum yflow_to_matrix(PG_FUNCTION_ARGS);
@@ -569,30 +567,7 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 	else 
 		PG_RETURN_TFLOW(f2);	
 }
-/*
-Datum yflow_ming(PG_FUNCTION_ARGS)
-{
-	Tflow	*f1 = PG_GETARG_TFLOW(0);
-	Tflow	*f2 = PG_GETARG_TFLOW(1);
 
-	if(false && !FLOWAREDOEU(f1,f2)) 
-			ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("yflow_ming: the flow should be draft,undefined or empty")));
-				 
-					 
-	if ((f1->status == draft) && (f2->status == draft)) {
-	
-		if(	// for the last partner, qtt_out(f1)/qtt_in(f1) < qtt_out(f2)/qtt_in(f2)
-			FLOW_LAST_OMEGA(f1) < FLOW_LAST_OMEGA(f2)
-		) PG_RETURN_TFLOW(f2);
-		else PG_RETURN_TFLOW(f1);
-		
-	} else if(f1->status == draft)
-		PG_RETURN_TFLOW(f1);
-	else 
-		PG_RETURN_TFLOW(f2);	
-} */
 /******************************************************************************
 aggregate function [qtt_in,qtt_out,dim] = yflow_qtts(yflow)
 with: qtt_out=flow[dim-1] and qtt_in=flow[dim-2]
