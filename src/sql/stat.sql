@@ -65,52 +65,52 @@ GRANT EXECUTE ON FUNCTION  fgetstats(bool) TO admin;
 fgetcount() 
 	returns stats but not errors
 ------------------------------------------------------------------------------*/
-CREATE FUNCTION fgetcounts() RETURNS TABLE(_name text,cnt int8) AS $$
+CREATE FUNCTION fgetcounts() RETURNS TABLE(_count text,cnt int8) AS $$
 DECLARE 
 	_cnt 		int;
 BEGIN
 
-	_name := 'count(tquality)';
+	_count := 'tquality';
 	select count(*) INTO cnt FROM tquality;
 	RETURN NEXT;
 	
-	_name := 'count(towner)';
+	_count := 'towner';
 	select count(*) INTO cnt FROM towner;
 	RETURN NEXT;
 	
-	_name := 'count(tquote)';
+	_count := 'tquote';
 	select count(*) INTO cnt FROM tquote;
 	RETURN NEXT;
 	
-	_name := 'count(tquoteremoved)';
+	_count := 'tquoteremoved';
 	select count(*) INTO cnt FROM tquoteremoved;
 	RETURN NEXT;
 				
-	_name := 'count(torder)';
+	_count := 'torder';
 	select count(*) INTO cnt FROM torder;
 	RETURN NEXT;
 
-	_name := 'count(torderremoved)';
+	_count := 'torderremoved';
 	select count(*) INTO cnt FROM torderremoved;
 	RETURN NEXT;
 		
-	_name := 'count(tmvt)';
+	_count := 'tmvt';
 	select count(*) INTO cnt FROM tmvt;
 	RETURN NEXT;
 
-	_name := 'count(tmvtremoved)';
+	_count := 'tmvtremoved';
 	select count(*) INTO cnt FROM tmvtremoved;	
 	RETURN NEXT;
 	
-	_name := 'count(vmvtverif.grp) with nb!=1';
+	_count := 'vmvtverif.grp with nb!=1';
 	select count(distinct grp) INTO cnt FROM vmvtverif where nb!=1;	
 	RETURN NEXT;	
 		
-	_name := 'count(vmvtverif.grp) with nb==1';
+	_count := 'vmvtverif.grp with nb==1';
 	select count(distinct grp) INTO cnt FROM vmvtverif where nb=1;	
 	RETURN NEXT;
 		
-	_name := 'count(vmvtverif.created) with nb!=1';
+	_count := 'vmvtverif.created with nb!=1';
 	select count(distinct created) INTO cnt FROM vmvtverif where nb!=1;	
 	RETURN NEXT;		
 
@@ -330,9 +330,20 @@ CREATE VIEW vnbgrp1000(nb,cnt) AS SELECT nb,count(*) as cnt from (
 	SELECT max(id) as gid,grp,max(nb) as nb from tmvt group by grp order by gid desc limit 1000
 ) as t group by nb order by nb asc;
 --------------------------------------------------------------------------------	
--- proba que deux ordres soient connectés
+-- probability for two orders to be related
+CREATE VIEW vprobalink(proba) as
+with torl as (select * from torder)
+select sum(t.x)::float/count(*) as proba from(select case when s.np=d.nr THEN 1 ELSE 0 END as x from torl s,torl d) as t;
+--------------------------------------------------------------------------------
+-- list of 10 blocs of orders between [id_begin,id_end[ , ntile!=1
+CREATE VIEW vblocorder10(ntile,id_begin,id_end) as
+select ntile,lag(id) over (order by ntile asc) as id_begin,id as id_end from (select ntile,min(id) as id from (select id,ntile(10) over(order by id asc) as ntile from torder) as t group by ntile order by ntile) as t;
 /*
-with torl as (select * from torder order by id asc limit 1000)
-select sum(t.x)::float/count(*) from(select case when s.np=d.nr THEN 1 ELSE 0 END as x from torl s,torl d) as t;
+select w.ntile,count(distinct d.id),sum(case when s.qua_prov=d.qua_requ THEN 1 ELSE 0 END) 
+from vorder s,vorder d,vblocorder10 w 
+where (w.id_begin <=d.id and d.id <w.id_end and s.id<w.id_end) 
+and w.ntile!=1 group by w.ntile order by w.ntile;
 */
+
+
 

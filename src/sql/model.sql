@@ -1034,7 +1034,7 @@ CREATE TYPE yresprequote AS (
     qtt_in_sum int8,
     qtt_out_sum int8,
         
-    flows text -- json of yflow[]
+    flows json -- json of yflow[]
 );
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
@@ -1044,14 +1044,14 @@ CREATE FUNCTION
 DECLARE
 	_pivot 		 torder%rowtype;
 	_ypatmax	 yflow;
-	_flows		 text[];
-	_res	         int8[];
+	_flows		 json[];
+	_res	     int8[];
 	_idd		 int;
-	_q		 text[];
-	_r		 yresprequote;
-	_om_min		double precision;
-	_om_max		double precision;
-	_om		double precision;
+	_q		 	 text[];
+	_r		 	 yresprequote;
+	_om_min		 double precision;
+	_om_max		 double precision;
+	_om		     double precision;
 BEGIN
 	_idd := fverifyquota();
 	
@@ -1081,7 +1081,7 @@ BEGIN
 	
 	_r.own 		:= _pivot.own;
 	-- _r.flows 	:= ARRAY[]::yflow[];
-	_flows		:= ARRAY[]::text[];
+	_flows		:= ARRAY[]::json[];
 	_r.nr 		:= _pivot.nr;
 	_r.np 		:= _pivot.np;
 	_r.qtt_prov 	:= _pivot.qtt_prov;
@@ -1094,7 +1094,7 @@ BEGIN
 	_r.qtt_out_sum := 0;
 	
 	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_pivot) LOOP
-		_flows := array_append(_flows,yflow_to_json(_ypatmax)::text);
+		_flows := array_append(_flows,(yflow_to_json(_ypatmax)::text)::json);
 		_res := yflow_qtts(_ypatmax); -- [in,out] of the last node
 		
 		_r.qtt_in_sum  := _r.qtt_in_sum + _res[1];
@@ -1132,7 +1132,7 @@ CREATE TYPE yresorder AS (
     qtt_prov int8,
     qtt_in int8,
     qtt_out int8,
-    flows yflow[]
+    flows json -- yflow[]
 );
 
 --------------------------------------------------------------------------------
@@ -1149,7 +1149,7 @@ DECLARE
 	_q		tquote%rowtype;
 	_ro		yresorder%ROWTYPE;
 
-	_flows		yflow[];
+	_flows		json[]:= ARRAY[]::json[];
 	_ypatmax	yflow;	
 	_res	        int8[];
 	_qtt_prov	int8;
@@ -1190,7 +1190,6 @@ BEGIN
 	_ro.qtt_prov	:= _q.qtt_prov;
 	_ro.qtt_in  	:= 0;
 	_ro.qtt_out 	:= 0;
-	_ro.flows   	:= ARRAY[]::yflow[];
 	
 	-- lock table torder in share row exclusive mode; 
 	lock table torder in share update exclusive mode;
@@ -1200,10 +1199,10 @@ BEGIN
 		_res := yflow_qtts(_ypatmax);
 		_ro.qtt_in  := _ro.qtt_in  + _res[1];
 		_ro.qtt_out := _ro.qtt_out + _res[2];
-		_ro.flows := array_append(_ro.flows,_ypatmax);
+		_flows := array_append(_flows,(yflow_to_json(_ypatmax)::text)::json);
 	END LOOP;
 	
-	
+	-- sanity check
 	IF (	(_ro.qtt_in = 0) OR (_qtt_requ = 0) OR
 		((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
 		((_qtt_prov::double precision)		/(_qtt_requ::double precision))
@@ -1215,11 +1214,13 @@ BEGIN
 	PERFORM fremovequote_int(_idquote);	
 	PERFORM finvalidate_treltried(_time_begin);
 	
+	_ro.flows := array_to_json(_flows);
 	RETURN _ro;
 	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	-- PERFORM fremovequote_int(_idquote); 
 	-- RAISE NOTICE 'Abort; Quote removed';
+	_ro.flows := array_to_json(_flows);
 	RETURN _ro; 
 
 END; 
@@ -1276,7 +1277,7 @@ DECLARE
 	_ro		    yresorder%rowTYPE;
 	_qua		text[];
 
-	_flows		yflow[];
+	_flows		json[]:= ARRAY[]::json[];
 	_ypatmax	yflow;
 	_res	    int8[];
 	_first_mvt	int;
@@ -1323,16 +1324,13 @@ BEGIN
 	_ro.qtt_prov	:= _q.qtt_prov;
 	_ro.qtt_in  	:= 0;
 	_ro.qtt_out 	:= 0;
-	_ro.flows   	:= ARRAY[]::yflow[];
-
-	
 		
 	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_o) LOOP
 		_first_mvt := fexecute_flow(_ypatmax);
 		_res := yflow_qtts(_ypatmax);
 		_ro.qtt_in  := _ro.qtt_in  + _res[1];
 		_ro.qtt_out := _ro.qtt_out + _res[2];
-		_ro.flows := array_append(_ro.flows,_ypatmax);
+		_flows := array_append(_flows,(yflow_to_json(_ypatmax)::text)::json);
 	END LOOP;
 	
 	IF (	(_ro.qtt_in != 0) AND 
@@ -1345,6 +1343,7 @@ BEGIN
 	
 	PERFORM finvalidate_treltried(_time_begin);
 	
+	_ro.flows := array_to_json(_flows);
 	RETURN _ro;
 
 
@@ -1490,6 +1489,7 @@ CREATE FUNCTION _removepublic() RETURNS void AS $$
 BEGIN
 	EXECUTE 'REVOKE ALL ON DATABASE ' || current_catalog || ' FROM PUBLIC';
 	EXECUTE 'GRANT CONNECT,TEMPORARY ON DATABASE ' || current_catalog || ' TO client'; 
+	EXECUTE 'GRANT CONNECT,TEMPORARY ON DATABASE ' || current_catalog || ' TO admin';
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL;

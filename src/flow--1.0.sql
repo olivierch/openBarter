@@ -195,25 +195,25 @@ CREATE FUNCTION yflow_maxg(yflow,yflow)
 RETURNS yflow
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
-
+/*
 CREATE FUNCTION yflow_ming(yflow,yflow)
 RETURNS yflow
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
-
+*/
 CREATE AGGREGATE yflow_max(yflow)
 (
 sfunc = yflow_maxg,
 stype = yflow,
 initcond = '[]'
 );
-
+/*
 CREATE AGGREGATE yflow_min(yflow)
 (
 sfunc = yflow_ming,
 stype = yflow,
 initcond = '[]'
-);
+);*/
 --------------------------------------------------------------------------------
 CREATE FUNCTION yflow_qtts(yflow)
 RETURNS int8[]

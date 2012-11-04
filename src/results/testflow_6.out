@@ -13,7 +13,7 @@ CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
           finsertorder          
 --------------------------------
- (1,3-1,8,11,200,10,200,0,0,{})
+ (1,3-1,8,11,200,10,200,0,0,[])
 (1 row)
 
 -- path (a)
@@ -24,7 +24,7 @@ CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
          finsertorder          
 -------------------------------
- (2,3-2,9,11,25,12,200,0,0,{})
+ (2,3-2,9,11,25,12,200,0,0,[])
 (1 row)
 
 --select finsertorder('C','y',100 ,100 ,'z');
@@ -34,7 +34,7 @@ CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
           finsertorder           
 ---------------------------------
- (3,3-3,10,12,100,10,100,0,0,{})
+ (3,3-3,10,12,100,10,100,0,0,[])
 (1 row)
 
 -- no exchange
@@ -48,9 +48,11 @@ select finsertorder('D','x',250 ,250 ,'z');
 NOTICE:  owner D created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
 PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
-                                                                                               finsertorder                                                                                               
-----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- (4,3-4,11,10,250,11,250,300,250,"{""[(2, 9, 11, 25, 12, 200, 200),(3, 10, 12, 100, 10, 100, 100),(4, 11, 10, 250, 11, 250, 250)]"",""[(1, 8, 11, 200, 10, 200, 200),(4, 11, 10, 250, 11, 250, 200)]""}")
+                                                                                                                                                                                finsertorder                                                                                                                                                                                
+----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ (4,3-4,11,10,250,11,250,300,250,"[[{""id"":2, ""own"":9, ""nr"":11, ""qtt_requ"":25, ""np"":12, ""qtt_prov"":200, ""qtt"":200, ""flowr"":200 },{""id"":3, ""own"":10, ""nr"":12, ""qtt_requ"":100, ""np"":10, ""qtt_prov"":100, ""qtt"":100, ""flowr"":100 },{""id"":4, ""own"":11, ""nr"":10, ""qtt_requ"":250, ""np"":11, ""qtt_prov"":250, ""qtt"":250, ""flowr"":50 }]+
+ ,[{""id"":1, ""own"":8, ""nr"":11, ""qtt_requ"":200, ""np"":10, ""qtt_prov"":200, ""qtt"":200, ""flowr"":200 },{""id"":4, ""own"":11, ""nr"":10, ""qtt_requ"":250, ""np"":11, ""qtt_prov"":250, ""qtt"":200, ""flowr"":200 }]                                                                                                                                             +
+ ]")
 (1 row)
 
 --two exchanges in a single transaction

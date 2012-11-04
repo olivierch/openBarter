@@ -370,6 +370,10 @@ static short _fluxMaximum(const Tchemin *pchemin, double *omegaCorrige, double *
 		
 	return _iExhausted;
 }
+/******************************************************************************/
+#define _NMATBITS (8)
+#define _get_MIN(a,b) ((a<b)?a:b)
+#define _get_bit_mat(mat,i) (mat &( 1 << (i & (_NMATBITS -1))))
 /*******************************************************************************
 floor,flow and mat are vectors of dimension _dim
 floor and flow contains integers, and mat bits.
@@ -456,18 +460,22 @@ static Tstatusflow _rounding(short iExhausted, double *fluxExact, Tchemin *pchem
 			double _d = floor(fluxExact[_i]);
 			int64 _f = (int64) _d;
 			
+			// sanity check
 			if(_f < 0) _f = 0; 
 			if(((double)(_f)) != _d) {
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("in _rounding, fluxExact[%i] = %f cannot be rounded",_i,fluxExact[_i])));
 			}
+			
 			_floor[_i] = _f;
 			//elog(WARNING,"flowc_maximum: _floor[%i]=%lli",_i,_f);
 		}
 	}
 
 	_matmax = 1 << _dim; // one bit for each node 
+	
+	// sanity check
 	if(_matmax < 1) {
 		ereport(ERROR,
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),

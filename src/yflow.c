@@ -41,7 +41,7 @@ PG_FUNCTION_INFO_V1(yflow_left);
 PG_FUNCTION_INFO_V1(yflow_reduce);
 PG_FUNCTION_INFO_V1(yflow_last_iomega);
 PG_FUNCTION_INFO_V1(yflow_maxg);
-PG_FUNCTION_INFO_V1(yflow_ming);
+//PG_FUNCTION_INFO_V1(yflow_ming);
 PG_FUNCTION_INFO_V1(yflow_status);
 PG_FUNCTION_INFO_V1(yflow_flr_omega);
 PG_FUNCTION_INFO_V1(yflow_to_matrix);
@@ -65,7 +65,7 @@ Datum yflow_left(PG_FUNCTION_ARGS);
 Datum yflow_reduce(PG_FUNCTION_ARGS);
 Datum yflow_last_iomega(PG_FUNCTION_ARGS);
 Datum yflow_maxg(PG_FUNCTION_ARGS);
-Datum yflow_ming(PG_FUNCTION_ARGS);
+//Datum yflow_ming(PG_FUNCTION_ARGS);
 Datum yflow_status(PG_FUNCTION_ARGS);
 Datum yflow_flr_omega(PG_FUNCTION_ARGS);
 Datum yflow_to_matrix(PG_FUNCTION_ARGS);
@@ -511,8 +511,30 @@ Datum yflow_last_iomega(PG_FUNCTION_ARGS)
 	PG_RETURN_FLOAT8(FLOW_LAST_IOMEGA(f));
 }
 /******************************************************************************
-aggregate function yflow_max(yflow) and min (useless)
+aggregate function yflow_max(yflow)
+		new_limit <- yflow_maxg(old_limit,value)
+		
 ******************************************************************************/
+static double _omega(Tflow	*f)
+{
+	double _Omega = 1.; //float8
+	int32	_dim = f->dim;
+	int32 	_k;
+
+	obMRange (_k,_dim) {
+		if(f->x[_k].qtt_requ == 0) {
+		
+			// sanity check
+			if(_k != (_dim - 1))
+				ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("yflow_maxg,_omega(): f->x[_k].qtt_requ for k=%i != _dim-1",_k)));
+			continue;
+		}
+		_Omega *= ((double)f->x[_k].qtt_prov)/((double)f->x[_k].qtt_requ);		
+	}
+	return _Omega;
+}
 
 Datum yflow_maxg(PG_FUNCTION_ARGS)
 {
@@ -527,16 +549,27 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 					 
 	if ((f1->status == draft) && (f2->status == draft)) {
 	
+		//elog(WARNING,"yflow_max(f1): %s",yflow_ndboxToStr(f1,true));
+		//elog(WARNING,"yflow_max(f2): %s",yflow_ndboxToStr(f2,true));	
+	
+	
 		if(	// for the last partner, qtt_out(f1)/qtt_in(f1) > qtt_out(f2)/qtt_in(f2)
-			FLOW_LAST_OMEGA(f1) > FLOW_LAST_OMEGA(f2)
-		) PG_RETURN_TFLOW(f2);
-		else PG_RETURN_TFLOW(f1);
-		
+			// FLOW_LAST_OMEGA(f1) > FLOW_LAST_OMEGA(f2)
+			_omega(f1) < _omega(f2)
+		) {
+			//elog(WARNING,"f1<f2");
+			PG_RETURN_TFLOW(f2); //omega minimum
+		}
+		else  {
+			//elog(WARNING,"f1>=f2");
+			PG_RETURN_TFLOW(f1);
+		}
 	} else if(f1->status == draft)
 		PG_RETURN_TFLOW(f1);
 	else 
 		PG_RETURN_TFLOW(f2);	
 }
+/*
 Datum yflow_ming(PG_FUNCTION_ARGS)
 {
 	Tflow	*f1 = PG_GETARG_TFLOW(0);
@@ -559,7 +592,7 @@ Datum yflow_ming(PG_FUNCTION_ARGS)
 		PG_RETURN_TFLOW(f1);
 	else 
 		PG_RETURN_TFLOW(f2);	
-}
+} */
 /******************************************************************************
 aggregate function [qtt_in,qtt_out,dim] = yflow_qtts(yflow)
 with: qtt_out=flow[dim-1] and qtt_in=flow[dim-2]

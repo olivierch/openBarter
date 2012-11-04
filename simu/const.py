@@ -1,6 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf8 -*-
-DB_NAME='simu'
+DB_NAME='market'
 DB_USER='olivier'
 DB_PWD=''
 DB_HOST='localhost'
