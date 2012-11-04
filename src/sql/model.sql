@@ -26,8 +26,8 @@ INSERT INTO tconst (name,value) VALUES
 	('MAXCYCLE',64),
 	-- it is the version of the model, not that of the extension
 	('VERSION-X.y.z',0),
-	('VERSION-x.Y.y',4),
-	('VERSION-x.y.Z',2),
+	('VERSION-x.Y.y',5),
+	('VERSION-x.y.Z',0),
 	('INSERT_OWN_UNKNOWN',1), 
 	-- !=0, insert an owner when it is unknown
 	-- ==0, raise an error when the owner is unknown
