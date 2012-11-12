@@ -2,7 +2,7 @@
 select * from finsertorder('x','b',160,40,'a');
 NOTICE:  owner x created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 33 at assignment
  id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
 ----+------+-----+----+----------+----+----------+--------+---------+-------
   8 | 1-8  |   4 |  5 |       40 |  4 |      160 |      0 |       0 | []
@@ -11,7 +11,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignme
 select * from finsertorder('y','c',160,80,'b');
 NOTICE:  owner y created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 33 at assignment
  id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
 ----+------+-----+----+----------+----+----------+--------+---------+-------
   9 | 1-9  |   5 |  4 |       80 |  6 |      160 |      0 |       0 | []
@@ -20,7 +20,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignme
 select * from finsertorder('t','c',100,100,'a');
 NOTICE:  owner t created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignment
+PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 33 at assignment
  id | uuid | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out | flows 
 ----+------+-----+----+----------+----+----------+--------+---------+-------
  10 | 1-10 |   6 |  5 |      100 |  6 |      100 |      0 |       0 | []
@@ -29,7 +29,7 @@ PL/pgSQL function finsertorder(text,text,bigint,bigint,text) line 35 at assignme
 select * from fgetquote('z','a',20,0,'c'); -- expected (qtt_prov,qtt_requ)= (20,160)
 NOTICE:  owner z created
 CONTEXT:  PL/pgSQL function fgetowner(text,boolean) line 10 at assignment
-PL/pgSQL function fgetquote(text,text,bigint,bigint,text) line 36 at assignment
+PL/pgSQL function fgetquote(text,text,bigint,bigint,text) line 34 at assignment
  id | own | nr | qtt_requ | np | qtt_prov | qtt_in | qtt_out |                                        flows                                        | created | removed 
 ----+-----+----+----------+----+----------+--------+---------+-------------------------------------------------------------------------------------+---------+---------
   0 |   7 |  6 |        0 |  5 |       20 |    160 |      20 | {"[(8, 4, 5, 40, 4, 160, 160),(9, 5, 4, 80, 6, 160, 160),(0, 7, 6, 0, 5, 20, 20)]"} |         | 

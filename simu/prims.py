@@ -139,7 +139,7 @@ def initDb():
 		p1 = subprocess.Popen(['more','sql/model.sql'], stdout=subprocess.PIPE)
 		p2 = subprocess.Popen(['psql', const.DB_NAME], stdin=p1.stdout,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
 		p2.communicate()
-	print 'database was reset'
+	print 'database '+const.DB_NAME+' was reset'
 	return p2.returncode == 0
 
 	# subprocess.Popen(['psql '+ const.DB_NAME +' < ../src/sql/model.sql'],shell=True)

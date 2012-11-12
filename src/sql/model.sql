@@ -34,7 +34,7 @@ INSERT INTO tconst (name,value) VALUES
 	('CHECK_QUALITY_OWNERSHIP',0), 
 	-- !=0, quality = user_name/quality_name prefix must match session_user
 	-- ==0, the name of quality can be any string
-	('MAXPATHFETCHED',10000);
+	('MAXPATHFETCHED',1024);
 	-- maximum number of paths of the set on which the competition occurs
 	-- ('MAXBRANCHFETCHED',20);
 --------------------------------------------------------------------------------
@@ -45,8 +45,7 @@ DECLARE
 BEGIN
 	SELECT value INTO _ret FROM tconst WHERE name=_name;
 	IF(NOT FOUND) THEN
-		RAISE WARNING 'the const % is not found',_name USING ERRCODE= 'YA002';
-		RAISE EXCEPTION USING ERRCODE='YA002';
+		RAISE EXCEPTION 'the const % is not found',_name USING ERRCODE= 'YA002';
 	END IF;
 	IF(_name = 'MAXCYCLE' AND _ret >64) THEN
 		RAISE EXCEPTION 'obCMAXVALUE must be <=64' USING ERRCODE='YA002';
@@ -206,8 +205,7 @@ DECLARE
 	_CHECK_QUALITY_OWNERSHIP int := fgetconst('CHECK_QUALITY_OWNERSHIP');
 BEGIN
 	IF(char_length(_quality_name) <1) THEN
-		RAISE NOTICE 'Quality name "%" incorrect: do not len(name)<1',_quality_name;
-		RAISE EXCEPTION USING ERRCODE='YU001';
+		RAISE EXCEPTION 'Quality name "%" incorrect: do not len(name)<1',_quality_name USING ERRCODE='YU001';
 	END IF;
 	IF(_CHECK_QUALITY_OWNERSHIP = 0) THEN
 		_q[1] := NULL;
@@ -217,15 +215,14 @@ BEGIN
 	
 	_e =position('/' in _quality_name);
 	IF(_e < 2) THEN 
-		RAISE NOTICE 'Quality name "%" incorrect: <depository>/<quality> expected',_quality_name;
-		RAISE EXCEPTION USING ERRCODE='YU001';
+		RAISE EXCEPTION 'Quality name "%" incorrect: <depository>/<quality> expected',_quality_name USING ERRCODE='YU001';
 	END IF;
 	
 	_q[1] = substring(_quality_name for _e-1);
 	_q[2] = substring(_quality_name from _e+1);
 	if(char_length(_q[2])<1) THEN
-		RAISE NOTICE 'Quality name "%" incorrect: <depository>/<quality> expected',_quality_name;
-		RAISE EXCEPTION USING ERRCODE='YU001';
+		RAISE EXCEPTION 'Quality name "%" incorrect: <depository>/<quality> expected',_quality_name USING ERRCODE='YU001';
+		
 	END IF;
 	RETURN _q;
 END;
@@ -254,8 +251,7 @@ BEGIN
 			-- _CHECK_QUALITY_OWNERSHIP =1
 			SELECT id INTO _idd FROM tuser WHERE name=_q[1];
 			IF(NOT FOUND) THEN -- user should exists
-				RAISE NOTICE 'The depository "%" is undefined',_q[1] ;
-				RAISE EXCEPTION USING ERRCODE='YU001';
+				RAISE EXCEPTION 'The depository "%" is undefined',_q[1]  USING ERRCODE='YU001';
 			END IF;
 		ELSE
 			_idd := NULL;
@@ -312,8 +308,7 @@ BEGIN
 			IF (fgetconst('INSERT_OWN_UNKNOWN')=1) THEN
 				_wid := fcreateowner(_name);
 			ELSE
-				RAISE NOTICE 'The owner % is unknown',_name;
-				RAISE EXCEPTION USING ERRCODE='YU001';
+				RAISE EXCEPTION 'The owner % is unknown',_name USING ERRCODE='YU001';
 			END IF;
 		ELSE
 			_wid := 0;
@@ -335,8 +330,7 @@ BEGIN
 		END IF;
 		BEGIN
 			if(char_length(_name)<1) THEN
-				RAISE NOTICE 'Owner s name cannot be empty';
-				RAISE EXCEPTION USING ERRCODE='YU001';
+				RAISE EXCEPTION 'Owner s name cannot be empty' USING ERRCODE='YU001';
 			END IF;
 			INSERT INTO towner (name) VALUES (_name) RETURNING id INTO _wid;
 			RAISE NOTICE 'owner % created',_name;
@@ -393,7 +387,7 @@ comment on column torder.start is 'position of treltried[np,nr].cnt when the ord
 alter sequence torder_id_seq owned by torder.id;
 create index torder_nr_idx on torder(nr);
 create index torder_np_idx on torder(np);
--- create index torder_omega_idx on torder((qtt_prov::double precision/qtt_requ::double precision) DESC);
+create index torder_omega_idx on torder((qtt_prov::double precision/qtt_requ::double precision) DESC);
 
 --------------------------------------------------------------------------------
 CREATE VIEW vorder AS 
@@ -609,14 +603,13 @@ BEGIN
 		SELECT o.* INTO _o FROM torder o,tquality q 
 			WHERE 	o.np=q.id AND q.depository=session_user AND o.uuid = _uuid;
 		IF NOT FOUND THEN
-			RAISE WARNING 'the order % on a quality belonging to % was not found',_uuid,session_user;
-			RAISE EXCEPTION USING ERRCODE='YU001';
+			RAISE EXCEPTION 'the order % on a quality belonging to % was not found',_uuid,session_user USING ERRCODE='YU001';
+			
 		END IF;
 	ELSE
 		SELECT o.* INTO _o FROM torder o WHERE o.uuid = _uuid;
 		IF NOT FOUND THEN
-			RAISE WARNING 'the order % was not found',_uuid;
-			RAISE EXCEPTION USING ERRCODE='YU001';
+			RAISE EXCEPTION 'the order % was not found',_uuid USING ERRCODE='YU001';
 		END IF;
 	END IF;
 
@@ -626,10 +619,10 @@ BEGIN
 	perform fremoveorder_int(_o.id);
 	
 	RETURN _vo;
-	
+/*	
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	RAISE NOTICE 'ABORTED';
-	RETURN _vo; 
+	RETURN _vo;*/ 
 END;		
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fremoveorder(text) TO client_opened_role,client_stopping_role;
@@ -671,7 +664,7 @@ BEGIN
 			EXIT; -- from LOOP
 		END IF;
 		
-		-- among potential exchanges of _tmp, selects the one having the product of omegas maximum
+		-- among potential exchange cycles of _tmp, selects the one having the product of omegas maximum
 		IF (yflow_status(_patmax)!=3) THEN -- status != draft
 			-- no potential exchange where found
 			EXIT; -- from LOOP
@@ -815,8 +808,7 @@ BEGIN
 		UPDATE torder set qtt = qtt - _flowr ,updated = statement_timestamp()
 			WHERE id = _oid AND _flowr <= qtt RETURNING uuid,qtt INTO _oruuid,_qtt;
 		IF(NOT FOUND) THEN
-			RAISE WARNING 'the flow is not in sync with the database torder[%] does not exist or torder.qtt < %',_oid,_flowr ;
-			RAISE EXCEPTION USING ERRCODE='YU002';
+			RAISE EXCEPTION 'the flow is not in sync with the database torder[%] does not exist or torder.qtt < %',_oid,_flowr  USING ERRCODE='YU002';
 		END IF;
 			
 		INSERT INTO tmvt (uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created) 
@@ -962,14 +954,12 @@ BEGIN
 	
 	-- quantities must be >0
 	IF(_qttprovided<=0 OR _qttrequired<0) THEN
-		RAISE NOTICE 'quantities incorrect: %<=0 or %<0', _qttprovided,_qttrequired;
-		RAISE EXCEPTION USING ERRCODE='YU001';
+		RAISE EXCEPTION 'quantities incorrect: %<=0 or %<0', _qttprovided,_qttrequired USING ERRCODE='YU001';
 	END IF;
 	
 	_q := fexplodequality(_qualityprovided);
 	IF ((_q[1] IS NOT NULL) AND (_q[1] != session_user)) THEN
-		RAISE NOTICE 'depository % of quality is not the user %',_q[1],session_user;
-		RAISE EXCEPTION USING ERRCODE='YU001';
+		RAISE EXCEPTION 'depository % of quality is not the user %',_q[1],session_user USING ERRCODE='YU001';
 	END IF;
 	
 	-- qualities are red and inserted if necessary
@@ -1057,14 +1047,16 @@ BEGIN
 	
 	-- quantity must be >0
 	IF(_qttprovided<=0) THEN
-		RAISE NOTICE 'quantities incorrect: %<=0', _qttprovided;
-		RAISE EXCEPTION USING ERRCODE='YU001';
+		RAISE EXCEPTION 'quantities incorrect: %<=0', _qttprovided USING ERRCODE='YU001';
+	END IF;
+	
+	IF(_qualityprovided = _qualityrequired) THEN
+		RAISE EXCEPTION 'qualities should be distinct' USING ERRCODE='YU001';
 	END IF;
 	
 	_q := fexplodequality(_qualityprovided);
 	IF ((_q[1] IS NOT NULL) AND (_q[1] != session_user)) THEN
-		RAISE NOTICE 'depository % of quality is not the user %',_q[1],session_user;
-		RAISE EXCEPTION USING ERRCODE='YU001';
+		RAISE EXCEPTION 'depository % of quality is not the user %',_q[1],session_user USING ERRCODE='YU001';
 	END IF;
 	
 	-- qualities are red and inserted if necessary
@@ -1167,11 +1159,10 @@ BEGIN
 	SELECT * INTO _q FROM tquote WHERE id=_idquote AND own=_wid;
 	IF (NOT FOUND) THEN
 		IF(_wid = 0) THEN
-			RAISE NOTICE 'the owner % is not found',_owner;
+			RAISE EXCEPTION 'the owner % is not found',_owner USING ERRCODE='YU001';
 		ELSE
-			RAISE NOTICE 'this quote % was not made by owner %',_idquote,_owner;
+			RAISE EXCEPTION 'this quote % was not made by owner %',_idquote,_owner USING ERRCODE='YU001';
 		END IF;
-		RAISE EXCEPTION USING ERRCODE='YU001';
 	END IF;
 		
 	-- _q.qtt_requ != 0		
@@ -1207,8 +1198,7 @@ BEGIN
 		((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
 		((_qtt_prov::double precision)		/(_qtt_requ::double precision))
 	) THEN
-		RAISE NOTICE 'Omega of the flows obtained is not limited by the order';
-		RAISE EXCEPTION USING ERRCODE='YA003';
+		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order' USING ERRCODE='YA003';
 	END IF;
 	
 	PERFORM fremovequote_int(_idquote);	
@@ -1216,13 +1206,13 @@ BEGIN
 	
 	_ro.flows := array_to_json(_flows);
 	RETURN _ro;
-	
+/*
 EXCEPTION WHEN SQLSTATE 'YU001' THEN
 	-- PERFORM fremovequote_int(_idquote); 
 	-- RAISE NOTICE 'Abort; Quote removed';
 	_ro.flows := array_to_json(_flows);
 	RETURN _ro; 
-
+*/
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fexecquote(text,int) TO client_opened_role;
@@ -1288,14 +1278,12 @@ BEGIN
 	_time_begin := clock_timestamp();
 	-- quantities must be >0
 	IF(_qttprovided<=0 OR _qttrequired<=0) THEN
-		RAISE NOTICE 'quantities incorrect: %<=0 or %<=0', _qttprovided,_qttrequired;
-		RAISE EXCEPTION USING ERRCODE='YU001';
+		RAISE EXCEPTION 'quantities incorrect: %<=0 or %<=0', _qttprovided,_qttrequired USING ERRCODE='YU001';
 	END IF;
 	
 	_qua := fexplodequality(_qualityprovided);
 	IF ((_qua[1] IS NOT NULL) AND (_qua[1] != session_user)) THEN
-		RAISE NOTICE 'depository % of quality is not the user %',_qua[1],session_user;
-		RAISE EXCEPTION USING ERRCODE='YU001';
+		RAISE EXCEPTION 'depository % of quality is not the user %',_qua[1],session_user USING ERRCODE='YU001';
 	END IF;
 	
 	lock table torder in share update exclusive mode;
@@ -1337,8 +1325,7 @@ BEGIN
 		((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
 		((_qttprovided::double precision)	/(_qttrequired::double precision))
 	) THEN
-		RAISE NOTICE 'Omega of the flows obtained is not limited by the order';
-		RAISE EXCEPTION USING ERRCODE='YA003';
+		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order' USING ERRCODE='YA003';
 	END IF;
 	
 	PERFORM finvalidate_treltried(_time_begin);
@@ -1362,14 +1349,12 @@ DECLARE
 	_market_status	text;
 BEGIN
 	IF( _name IN ('admin','client','client_opened_role','client_stopping_role')) THEN
-		RAISE WARNING 'The name % is not allowed',_name USING ERRCODE='YU001';
-		RAISE EXCEPTION USING ERRCODE='YU001';
+		RAISE EXCEPTION 'The name % is not allowed',_name USING ERRCODE='YU001';
 	END IF;
 	
 	SELECT * INTO _user FROM tuser WHERE name=_name;
 	IF FOUND THEN
-		RAISE WARNING 'The user % exists',_name USING ERRCODE='YU001';
-		RAISE EXCEPTION USING ERRCODE='YU001';
+		RAISE EXCEPTION 'The user % exists',_name USING ERRCODE='YU001';
 	END IF;
 	
 	INSERT INTO tuser (name) VALUES (_name);
