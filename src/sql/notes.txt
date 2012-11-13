@@ -1,0 +1,44 @@
+Evolutions envisagées
+
+Ajouter la notion de stock
+**************************
+permettre des ordres du type:
+je propose V1 contre V2 ou a défaut V3 ou a défaut V4
+
+pour celà, créer un stock S1 contenant la valeur V1 offerte, et créer trois ordres élémentaires distinct:
+propose S1 contre V2
+propose S1 contre V3
+propose S1 contre V4
+
+impacts
+-------
+ajout d'une table des stocks,
+à la première offre, on note le numéro de l'ordre créé qui fait référence à un stock,
+on utilise ce numéro pour faire les offres suivantes.
+
+la fct insertorder a un paramètre supplémentaire ref, 
+s'il est 0, un nouveau stock est inséré,
+si un ordre existe avec ce même No et owner, il est utilisé,
+sinon erreur.
+
+suppression d'ordre. Si un seul stock y fait rérérence, ce stock est supprimé
+
+Ajouter l'approbation de mouvements
+***********************************
+un flag est ajouté aux mouvements.
+le flag est à zéro quand le mouvement est produit,
+il est mis à 1 quand le mouvement est approuvé,
+un cycle dont tous les mouvements sont approuvés est réputé exécuté.
+
+
+Ajouter un stack des ordres en attente
+**************************************
+Une table particulière contient les ordres en attente. L'insertion vérifie la cohérence de l'ordre, et retourne sans attendre.
+Un batch permet la consommation des ordres en attente qui sont insérés au livre d'ordres.
+
+impacts
+-------
+ajouter une fonction d'insertion d'ordre dans le stack
+ajouter une fonction d'exécution d'ordre
+
+
