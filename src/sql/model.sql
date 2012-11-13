@@ -471,6 +471,7 @@ create table tmvt (
 	qtt dquantity not NULL,
 	nat int not NULL,
 	created timestamp not NULL,
+	acked timestamp,
 	CHECK (
 		(nb = 1 AND own_src = own_dst)
 	OR 	(nb !=1) -- ( AND own_src != own_dst)
@@ -514,7 +515,8 @@ CREATE VIEW vmvt AS
 		q.name as quality,
 		m.qtt as qtt,
 		w_dst.name as receiver,
-		m.created as created
+		m.created as created,
+		m.acked as acked
 	FROM tmvt m
 	INNER JOIN towner w_src ON (m.own_src = w_src.id)
 	INNER JOIN towner w_dst ON (m.own_dst = w_dst.id) 
@@ -546,6 +548,7 @@ create table tmvtremoved (
 	qtt dquantity not NULL,
 	nat int references tquality(id) not null,
 	created timestamp not NULL,
+	acked timestamp,
 	deleted timestamp not NULL
 );
 SELECT _grant_read('tmvtremoved');
@@ -553,9 +556,9 @@ SELECT _grant_read('tmvtremoved');
 --------------------------------------------------------------------------------
 
 CREATE VIEW vmvtverif AS
-	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,NULL,false AS removed FROM tmvt
+	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,acked,NULL AS removed FROM tmvt
 	UNION ALL
-	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,deleted,true AS removed FROM tmvtremoved;
+	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,acked,deleted AS removed FROM tmvtremoved;
 SELECT _grant_read('vmvtverif');
 COMMENT ON VIEW vmvtverif IS 'tmvt union tmvtremoved';
 
@@ -1388,15 +1391,12 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION fcreateuser(text) TO admin;
 
 \i sql/market.sql
-
 --------------------------------------------------------------------------------
--- moves a movement of an exchange belonging to the user into tmvtremoved
--- returns the number of movements moved
+-- checks if the movement can be touched 
 CREATE FUNCTION 
-	fremovemvt(_uuid text) 
+	fchecktouchmvt(_uuid text) 
 	RETURNS int AS $$
 DECLARE 
-	_qtt int8;
 	_qlt tquality%rowtype;
 	_mvt tmvt%rowtype;
 	_CHECK_QUALITY_OWNERSHIP int := fgetconst('CHECK_QUALITY_OWNERSHIP');
@@ -1414,9 +1414,46 @@ BEGIN
 		RAISE WARNING 'The movement "%" does not belong to the user "%""',_uuid,session_user;
 		RETURN 0;
 	END IF;
+	RETURN 1;
+
+END;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+--------------------------------------------------------------------------------
+-- moves a movement of an exchange belonging to the user into tmvtremoved
+-- returns the number of movements moved
+CREATE FUNCTION 
+	fackmvt(_uuid text) 
+	RETURNS int AS $$
+DECLARE 
+	_mvt tmvt%rowtype;
+	_ok int := fchecktouchmvt(_uuid);
+BEGIN
+	IF _ok!=1 THEN
+		RETURN 0;
+	END IF;
+	
+	UPDATE tmvt SET acked = statement_timestamp() WHERE uuid=_uuid;
+	RETURN 1;
+
+END;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fackmvt(text) TO client_opened_role,client_stopping_role;
+--------------------------------------------------------------------------------
+-- moves a movement of an exchange belonging to the user into tmvtremoved
+-- returns the number of movements moved
+CREATE FUNCTION 
+	fremovemvt(_uuid text) 
+	RETURNS int AS $$ 
+DECLARE 
+	_mvt tmvt%rowtype;
+	_ok int := fchecktouchmvt(_uuid);
+BEGIN
+	IF _ok!=1 THEN
+		RETURN 0;
+	END IF;
 	
 	WITH a AS (DELETE FROM tmvt m  WHERE  m.uuid=_uuid RETURNING m.*) 
-	INSERT INTO tmvtremoved SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,statement_timestamp() as deleted FROM a;	
+	INSERT INTO tmvtremoved SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,acked,statement_timestamp() as deleted FROM a;	
 
 	RETURN 1;
 
