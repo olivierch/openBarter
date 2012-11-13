@@ -21,14 +21,16 @@ s'il est 0, un nouveau stock est inséré,
 si un ordre existe avec ce même No et owner, il est utilisé,
 sinon erreur.
 
-suppression d'ordre. Si un seul stock y fait rérérence, ce stock est supprimé
+suppression d'ordre. Si un seul stock y fait rérérence, ce stock est supprimé.
 
-Ajouter l'approbation de mouvements OK
+Ajouter l'approbation de mouvements
 ***********************************
 un flag est ajouté aux mouvements.
 le flag est à zéro quand le mouvement est produit,
 il est mis à 1 quand le mouvement est approuvé,
 un cycle dont tous les mouvements sont approuvés est réputé exécuté.
+
+que se passe t-il si le mouvement est refusé?
 
 
 Ajouter un stack des ordres en attente
