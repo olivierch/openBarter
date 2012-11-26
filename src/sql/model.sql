@@ -387,7 +387,7 @@ comment on column torder.start is 'position of treltried[np,nr].cnt when the ord
 alter sequence torder_id_seq owned by torder.id;
 create index torder_nr_idx on torder(nr);
 create index torder_np_idx on torder(np);
-create index torder_omega_idx on torder((qtt_prov::double precision/qtt_requ::double precision) DESC);
+create index torder_omega_idx on torder(((qtt_prov)::double precision/(qtt_requ)::double precision) DESC);
 
 --------------------------------------------------------------------------------
 CREATE VIEW vorder AS 
@@ -461,6 +461,7 @@ create table tmvt (
         id serial UNIQUE not NULL,
         uuid text UNIQUE NOT NULL,
         nb int not NULL,
+        nbt int not NULL DEFAULT 1,
         -- origin ymvt_origin DEFAULT 'EXECUTION',
         oruuid text NOT NULL, -- refers to order uuid
     	grp text, 
@@ -488,6 +489,7 @@ SELECT _grant_read('tmvt');
 comment on table tmvt is 'Records a ownership changes';
 comment on column tmvt.uuid is 'uuid of this movement';
 comment on column tmvt.nb is 'number of movements of the exchange';
+COMMENT ON COLUMN tmvt.nbt IS 'number of movements of the transaction containing this movement';
 comment on column tmvt.oruuid is 'order.uuid producing this movement';
 comment on column tmvt.grp is 'references the first movement of the exchange';
 comment on column tmvt.own_src is 'owner provider';
@@ -508,6 +510,7 @@ create index tmvt_own_dst_idx on tmvt(own_dst);
 CREATE VIEW vmvt AS 
 	SELECT 	m.id as id,
 		m.nb as nb,
+		m.nbt as nbt,
 		m.uuid as uuid,
 		m.oruuid as oruuid,
 		m.grp as grp,
@@ -525,7 +528,8 @@ SELECT _grant_read('vmvt');
 COMMENT ON VIEW vmvt IS 'View of movements';
 COMMENT ON COLUMN vmvt.id IS 'primary key of the movement';
 COMMENT ON COLUMN vmvt.uuid IS 'uuid of the movement';
-COMMENT ON COLUMN vmvt.nb IS 'number of movements of the exchange containing this movement';
+COMMENT ON COLUMN vmvt.nb IS 'number of movements of the cycle containing this movement';
+COMMENT ON COLUMN vmvt.nbt IS 'number of movements of the transaction containing this movement';
 COMMENT ON COLUMN vmvt.oruuid IS 'uuid of the order producing this movement';
 COMMENT ON COLUMN vmvt.grp IS 'uuid of the exchange containing this movement';
 COMMENT ON COLUMN vmvt.provider IS 'name of the provider of the movement';
@@ -539,6 +543,7 @@ create table tmvtremoved (
         id int not NULL,
         uuid text UNIQUE not NULL,
         nb int not null,
+        nbt int not null,
         oruuid text NOT NULL, -- refers to order uuid
     	grp text NOT NULL, 
     	-- References the first mvt of an exchange.
@@ -556,9 +561,9 @@ SELECT _grant_read('tmvtremoved');
 --------------------------------------------------------------------------------
 
 CREATE VIEW vmvtverif AS
-	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,acked,NULL AS removed FROM tmvt
+	SELECT id,uuid,nb,nbt,oruuid,grp,own_src,own_dst,qtt,nat,created,acked,NULL AS removed FROM tmvt
 	UNION ALL
-	SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,acked,deleted AS removed FROM tmvtremoved;
+	SELECT id,uuid,nb,nbt,oruuid,grp,own_src,own_dst,qtt,nat,created,acked,deleted AS removed FROM tmvtremoved;
 SELECT _grant_read('vmvtverif');
 COMMENT ON VIEW vmvtverif IS 'tmvt union tmvtremoved';
 
@@ -1392,7 +1397,7 @@ GRANT EXECUTE ON FUNCTION fcreateuser(text) TO admin;
 
 \i sql/market.sql
 --------------------------------------------------------------------------------
--- checks if the movement can be touched 
+-- checks if the movement can be touched by this user
 CREATE FUNCTION 
 	fchecktouchmvt(_uuid text) 
 	RETURNS int AS $$
@@ -1453,7 +1458,7 @@ BEGIN
 	END IF;
 	
 	WITH a AS (DELETE FROM tmvt m  WHERE  m.uuid=_uuid RETURNING m.*) 
-	INSERT INTO tmvtremoved SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat,created,acked,statement_timestamp() as deleted FROM a;	
+	INSERT INTO tmvtremoved SELECT id,uuid,nb,nbt,oruuid,grp,own_src,own_dst,qtt,nat,created,acked,statement_timestamp() as deleted FROM a;	
 
 	RETURN 1;
 

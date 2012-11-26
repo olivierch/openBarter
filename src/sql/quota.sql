@@ -16,7 +16,7 @@ create function fverifyquota() RETURNS int AS $$
 DECLARE 
 	_u	tuser%rowtype;
 BEGIN
-	SELECT * INTO _u FROM tuser WHERE name=session_user;
+	SELECT * INTO _u FROM tuser WHERE name = session_user;
 	IF(_u.id is NULL) THEN
 		RAISE WARNING 'the user % is undefined',session_user;
 		RAISE EXCEPTION USING ERRCODE='YA005';

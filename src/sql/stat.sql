@@ -223,7 +223,7 @@ BEGIN
 		
 	_mvtprec.grp := NULL;
 	_cnterr := 0;
-	FOR _mvt IN SELECT id,uuid,nb,oruuid,grp,own_src,own_dst,qtt,nat FROM vmvtverif WHERE nb!=1 ORDER BY grp,uuid ASC  LOOP
+	FOR _mvt IN SELECT id,uuid,nb,nbt,oruuid,grp,own_src,own_dst,qtt,nat FROM vmvtverif WHERE nb!=1 ORDER BY grp,uuid ASC  LOOP
 		IF(_mvt.grp = _mvtprec.grp) THEN
 			_mvts := array_append(_mvts,_mvt);
 		ELSE
