@@ -65,24 +65,30 @@
 
 <div>
 <h1>openBarter</h1>
-<p> openBarter is the model of a barter market of fungible values. It is organized as a <a href="http://en.wikipedia.org/wiki/Central_limit_order_book">central limit order book</a>.<p>
+<p> openBarter is the model of a barter market of fungible values. It is organized as a <a href="http://en.wikipedia.org/wiki/Central_limit_order_book">central limit order book</a> (CLOB), accepting orders and producing movements.<p>
 
 <div class="verseblock">
 <div class="verseblock-content">Gold is <em>fungible</em>. Silver is fungible; that is, these metals are both so homogeneous that,if I get a pound 
 of pure gold, for example, it is indifferent to me whether it be this pound or that pound,one is as good as another.
 </div>
 </div>
+<p>openBarter allows cyclic exchange between up to <em>64</em> partners in a single transaction. The combinatorics is so rich that for a reasonable diversity of qualities, openBarter is nearly as liquid as a regular CLOB.</p>
 
-<p>Each fungible value has a pecular <em>quality</em> and <em>quantity</em>. An order is an unilateral commitment to provide a fungible in exchange of an other.<p>
-<p>The ratio between quantity offered and quantity required is used instead of a price to perform competition between orders.</p>
-<p>openBarter allows cyclic exchange between up to <em>8</em> partners in a single transaction.</p>
-<div class="verseblock">
-<p><em> The combinatorics is so rich that for a reasonable diversity of qualities, openBarter is nearly as liquid as a regular market.</p>
-<p>The market does not require a central value standard to express prices.</em><p>
-</div>
-<p>Mathematic principles of openbarter are detailed on this <a href="https://github.com/downloads/olivierch/openBarter/paper-ob.pdf">paper</a>. openBarter uses <a href="http://www.postgresql.org/">postgreSQL</a>, the linux of databases. A special extension of this database allows fast execution of the primitives of the model.</p>
- 
-    
+<p>Each value has a pecular <em>quality</em> and <em>quantity</em>. The value is only measured by the quantity without any reference to a price or reference to a monetary standard. This measurement is used to perform competition between orders.</p>
+<p>An order is an unilateral commitment to provide a fungible in exchange of a minimum quantity of an other.<p>
+
+
+
+ openBarter uses <a href="http://www.postgresql.org/">postgreSQL</a>, the linux of databases. A special extension of this database allows fast execution of the primitives of the model.</p>
+<h2>Principles</h2>
+<p>For an order, the ratio noted &omega; between quantity offered and quantity required measures the effort to provide compared to the pleasure to receive. As a price, it measures the will to exchange.</p>
+<p>Movements produced represent agreements or cycles where each partner of the cycle provide and receive the values proposed and expected by their odrers.</p>
+<p>The product of &omega; on an exchange cycle is a non dimensional number. This product is noted &Omega;.</p>
+<p>When &Omega; < 1, wills to exchange are not sufficient to find and agreement between orders that satisfy the minimum quantities required by partners.</p>
+<p>When &Omega; = 1, wills to exchange are just sufficient to find an agreement.</p>
+<p>When &Omega; > 1, the excess between &Omega; and 1 is shared between orders to obtain the agreement.</p>
+<p>A regular CLOB performs competition by choosing a maximum on a set of possible matchings using the best price rule. The competition performed by openBarter does it the same way but chooses the maximum &Omega;. It can be shown that this rule is equivalent to the best price rule when applied to bilateral cycles.<p>
+<p>Principles of openBarter are detailed on this <a href="https://github.com/downloads/olivierch/openBarter/paper-ob.pdf">paper</a>.    
 <h2>Releases</h2>
 <p>The latest release can be dowload from this <a href="https://github.com/olivierch/openBarter/tags">page</a>.</p>
 
@@ -90,8 +96,8 @@ of pure gold, for example, it is indifferent to me whether it be this pound or t
 <p>One million transactions were performed with a mean time of 0.252 seconds/transaction<p>
 <p>Since v0.5.0, exchange cycles can contain up to 64 partners</p>
 
-<h2>Origins</h2>
-<p>The difficulty of driving a system growns as it's complexity, due to the diversity of command signals that need to be carefully adjusted. Mankind is in charge of restoring the ecologic stability of the planet, but ecological economics is driven by a mono-dimensional signal that is money. openBarter provides a mean to control each dimension of the control signal independently.</p>
+<h2>Origins and goals</h2>
+<p>The difficulty of driving a system growns as it's complexity, due to the diversity of command signals that need to be carefully adjusted. Mankind is in charge of restoring the ecologic stability of the planet, but ecological economy is driven by a mono-dimensional signal that is money. openBarter provides a mean to control each dimension of the control signal independently, and to build market instruments independantly of currencies.</p>
 
 <p>To know more about origins and goals of the project go to this <a href="./originsAndGoals.html">page</a>.</p>
 
