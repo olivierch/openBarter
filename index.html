@@ -75,19 +75,20 @@ of pure gold, for example, it is indifferent to me whether it be this pound or t
 <p>openBarter allows cyclic exchange between up to <em>64</em> partners in a single transaction. The combinatorics is so rich that for a reasonable diversity of qualities, openBarter is nearly as liquid as a regular CLOB.</p>
 
 <p>Each value has a pecular <em>quality</em> and <em>quantity</em>. The value is only measured by the quantity without any reference to a price or reference to a monetary standard. This measurement is used to perform competition between orders.</p>
-<p>An order is an unilateral commitment to provide a fungible in exchange of a minimum quantity of an other.<p>
-
-
-
- openBarter uses <a href="http://www.postgresql.org/">postgreSQL</a>, the linux of databases. A special extension of this database allows fast execution of the primitives of the model.</p>
+<p>openBarter uses <a href="http://www.postgresql.org/">postgreSQL</a>, the linux of databases. A special extension of this database allows fast execution of the primitives of the model.</p>
+ 
+ 
 <h2>Principles</h2>
-<p>For an order, the ratio noted &omega; between quantity offered and quantity required measures the effort to provide compared to the pleasure to receive. As a price, it measures the will to exchange.</p>
-<p>Movements produced represent agreements or cycles where each partner of the cycle provide and receive the values proposed and expected by their odrers.</p>
-<p>The product of &omega; on an exchange cycle is a non dimensional number. This product is noted &Omega;.</p>
-<p>When &Omega; < 1, wills to exchange are not sufficient to find and agreement between orders that satisfy the minimum quantities required by partners.</p>
-<p>When &Omega; = 1, wills to exchange are just sufficient to find an agreement.</p>
-<p>When &Omega; > 1, the excess between &Omega; and 1 is shared between orders to obtain the agreement.</p>
-<p>A regular CLOB performs competition by choosing a maximum on a set of possible matchings using the best price rule. The competition performed by openBarter does it the same way but chooses the maximum &Omega;. It can be shown that this rule is equivalent to the best price rule when applied to bilateral cycles.<p>
+<p>The barter market accepts exchange orders of the form:</p>
+<div class="verseblock">
+<div class="verseblock-content">I propose a value in exchange of a value of an other quality for a minimum quantity
+</div>
+</div>
+<p>submitted by the owner of the value proposed.</p>
+<p>The market finds potential exchange cycles with two partners or more. Agreements can be formed from them, defined by a set of movements where each partner provides a quantity to an other and receives at the same time a value of the quality required by it's order. By allowing more than two partners in a cycle the liquidity of the market is not limited by the double coincidence of wants problem.</p>
+<p>For an order, we define ω as a ratio between provided quantity and minimum required quantity. For a cycle formed by several orders where quality offered and required match, we compute an Ω as the product of ω of orders of the cycle, and see that it is a dimensionless quantity. When Ω is lower than 1, the common will to exchange is not sufficient to find an agreement between partners due to minimum quantities required. When  Ω is 1 it is easy to find an agreement than observe the maximum ratio ω defined by the minimum quantity required. When  Ω is greater than 1 the excess Ω-1 can be shared fairly for the benefit of partners to form the exchange. When an owner submits an order, that's because he considers that the value expected is more useful that the one he owns, and ω measures how much this exchange would be useful for him. For a given cycle, Ω is proportional to any ω of it's orders since Ω is their product. In other words Ω is an aggregate measuring how much the exchange is globally useful for the partners of the cycle. Ω is dimensionless and equal or greater than 1 when an exchange is possible; it can be used to compare the usefulness of cycles. This comparison defines a maximum representing the most useful exchange cycle. It can showed that the choice of the cycle having  Ω maximum is the same as what would be obtained with the best price rule when applied to bilateral exchange using prices. By maximizing Ω the market meets the goal of utilitarians by maximizing utility but with a definition of utility that is independent of any currency. </p>
+<p>This market proceeds as a regular CLOB - by processing orders one after the other. We describe here what is common between these markets. The input of the market is a flow of orders and it's output is a flow of movements. It records unmatched orders in an order book. When a new order is submitted, a competition is performed between potential cycles created by the new order and pending orders in the book to choose the cycle that will form the exchange. If no matching is found, the new order is added to the book. Otherwise, movements forming the exchange are produced from the selected cycle and the value offered by matched orders are decreased of the value exchanged. If some cycles remain the competition is repeated as long as the new order is not exhausted.</p>
+<p>The difference between this barter market and a regular CLOB is only that 1) exchange cycles can be non-bilateral 2) competition is performed with  Ω instead of price.</p>
 <p>Principles of openBarter are detailed on this <a href="https://github.com/downloads/olivierch/openBarter/paper-ob.pdf">paper</a>.    
 <h2>Releases</h2>
 <p>The latest release can be dowload from this <a href="https://github.com/olivierch/openBarter/tags">page</a>.</p>
