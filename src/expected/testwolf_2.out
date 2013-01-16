@@ -36,7 +36,6 @@ psql:sql/model.sql:3: NOTICE:  schema "test" does not exist, skipping
  
 (1 row)
 
-psql:sql/model.sql:633: ERROR:  function deletemvt() does not exist
  id | diag 
 ----+------
   1 |    0
@@ -64,19 +63,19 @@ psql:sql/model.sql:633: ERROR:  function deletemvt() does not exist
   3 |   3 |   3 |   1 |   1 |    1 | a       | c       |  20 | q1  | f
 (3 rows)
 
- acceptmvt 
------------
-         1
+ ackmvt 
+--------
+      1
 (1 row)
 
- acceptmvt 
------------
-         1
+ ackmvt 
+--------
+      1
 (1 row)
 
- acceptmvt 
------------
-         1
+ ackmvt 
+--------
+      1
 (1 row)
 
  count 

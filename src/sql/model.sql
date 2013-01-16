@@ -612,7 +612,7 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fsubmitorder(text,int,text,int8,point,text,int8,point,float8) TO client;	
 
 --------------------------------------------------------------------------------
-CREATE FUNCTION acceptmvt() RETURNS int AS $$
+CREATE FUNCTION ackmvt() RETURNS int AS $$
 DECLARE
 	_cnt	int;
 	_m  tmvt%rowtype;
@@ -630,7 +630,7 @@ BEGIN
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  deletemvt() TO client;
+GRANT EXECUTE ON FUNCTION  ackmvt() TO client;
 
 --------------------------------------------------------------------------------
 -- renumber a table with an index on id asc (init_fifo(_name) sets this index)
