@@ -36,14 +36,10 @@ psql:sql/model.sql:3: NOTICE:  schema "test" does not exist, skipping
  
 (1 row)
 
+psql:sql/model.sql:633: ERROR:  function deletemvt() does not exist
  id | diag 
 ----+------
   1 |    0
-(1 row)
-
-           ord            | qtt_in | qtt_out 
---------------------------+--------+---------
- (1,a,1,10,q2,20,q1,20,0) |      0 |       0
 (1 row)
 
  id | diag 
@@ -51,25 +47,40 @@ psql:sql/model.sql:3: NOTICE:  schema "test" does not exist, skipping
   2 |    0
 (1 row)
 
-           ord            | qtt_in | qtt_out 
---------------------------+--------+---------
- (2,b,2,10,q3,20,q2,20,0) |      0 |       0
-(1 row)
-
  id | diag 
 ----+------
   3 |    0
 (1 row)
 
-           ord            | qtt_in | qtt_out 
---------------------------+--------+---------
- (3,c,3,10,q1,20,q3,20,0) |     20 |      20
+ femptystack 
+-------------
+           3
 (1 row)
 
- id | nbc | nbt | grp | xid | xoid | own_src | own_dst | qtt | nat 
-----+-----+-----+-----+-----+------+---------+---------+-----+-----
-  1 |   3 |   3 |   1 |   3 |    3 | c       | b       |  20 | q3
-  2 |   3 |   3 |   1 |   2 |    2 | b       | a       |  20 | q2
-  3 |   3 |   3 |   1 |   1 |    1 | a       | c       |  20 | q1
+ id | nbc | nbt | grp | xid | xoid | own_src | own_dst | qtt | nat | ack 
+----+-----+-----+-----+-----+------+---------+---------+-----+-----+-----
+  1 |   3 |   3 |   1 |   3 |    3 | c       | b       |  20 | q3  | f
+  2 |   3 |   3 |   1 |   2 |    2 | b       | a       |  20 | q2  | f
+  3 |   3 |   3 |   1 |   1 |    1 | a       | c       |  20 | q1  | f
 (3 rows)
+
+ acceptmvt 
+-----------
+         1
+(1 row)
+
+ acceptmvt 
+-----------
+         1
+(1 row)
+
+ acceptmvt 
+-----------
+         1
+(1 row)
+
+ count 
+-------
+     0
+(1 row)
 

@@ -193,6 +193,9 @@ create table tmvt (
 	own_dst text not NULL,
 	qtt dquantity not NULL,
 	nat text not NULL,
+	ack	boolean default false,
+	exhausted boolean default false,
+	refused boolean default false,
 	created timestamp not NULL,
 	CHECK (
 		(nbc = 1 AND own_src = own_dst)
@@ -421,9 +424,12 @@ BEGIN
 		IF(_cnt = 0) THEN
 			RAISE EXCEPTION 'the wolf is not in sync with the database. torder[%] does not exist',_o.oid  USING ERRCODE='YU002';
 		END IF;
+		IF( _qtt = 0 ) THEN
+			_exhausted := true;
+		END IF;
 		
-		INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,created) 
-			VALUES(_nbcommit,1,_first_mvt,_o.id,_usr,_o.oid,_o.own,_onext.own,_o.flowr,_o.qua_prov,statement_timestamp())
+		INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,refused,created) 
+			VALUES(_nbcommit,1,_first_mvt,_o.id,_usr,_o.oid,_o.own,_onext.own,_o.flowr,_o.qua_prov,false,_exhausted,false,statement_timestamp())
 			RETURNING id INTO _mvt_id;
 		IF(_first_mvt IS NULL) THEN
 			_first_mvt := _mvt_id;
@@ -433,9 +439,8 @@ BEGIN
 		_resx.mvts := array_append(_resx.mvts,_mvt_id);
 
 		-- RAISE NOTICE 'ici1 %',_xo;
-		IF( _qtt = 0 ) THEN
+		IF( _exhausted ) THEN
 			DELETE FROM torder WHERE (ord).oid=_o.oid;
-			_exhausted := true;
 		END IF;
 		-- RAISE NOTICE 'ici2 %',_xo;
 		_i := _next_i;
@@ -483,6 +488,7 @@ DECLARE
 	_resx		yresexec%rowtype;
 	_time_begin	timestamp;
 	_qtt		int8;
+	_mid		int;
 BEGIN
 
 	lock table torder in share update exclusive mode;
@@ -503,8 +509,10 @@ BEGIN
 		SELECT o INTO _od from torder o WHERE (o.ord).id= _t.oid;
 		_o := (_od.ord);
 		IF NOT FOUND THEN
-			INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,created) 
-				VALUES(1,1,NULL,_t.id,_t.usr,_t.oid,_o.own,_o.own,_o.qtt,_o.qua_prov,_t.created);
+			INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,refused,created) 
+				VALUES(1,1,NULL,_t.id,_t.usr,_t.oid,_o.own,_o.own,_o.qtt,_o.qua_prov,false,true,true,_t.created)
+				RETURNING id INTO _mid;
+			UPDATE tmvt SET grp = _mid WHERE id = _mid;
 			_ro.ord := _o;
 			RETURN _ro; -- the referenced order was not found in the book
 		ELSE
@@ -604,17 +612,20 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fsubmitorder(text,int,text,int8,point,text,int8,point,float8) TO client;	
 
 --------------------------------------------------------------------------------
-CREATE FUNCTION deletemvt() RETURNS int AS $$
+CREATE FUNCTION acceptmvt() RETURNS int AS $$
 DECLARE
-	_tid	int;
+	_cnt	int;
 	_m  tmvt%rowtype;
 BEGIN
-	SELECT id INTO _m FROM tmvt WHERE usr=current_user ORDER BY id ASC LIMIT 1;
+	SELECT * INTO _m FROM tmvt WHERE usr=current_user AND ack=false ORDER BY id ASC LIMIT 1;
 	IF(NOT FOUND) THEN
 		RETURN 0;
 	END IF;
-	SELECT * INTO STRICT _m FROM tmvt WHERE id=_m.id;
-	DELETE FROM tmvt where id=_m.id;
+	UPDATE tmvt SET ack=true WHERE id=_m.id;
+	SELECT count(*) INTO STRICT _cnt FROM tmvt WHERE grp=_m.grp AND ack=false;
+	IF(_cnt = 0) THEN
+		DELETE FROM tmvt where grp=_m.grp;
+	END IF;
 	RETURN 1;
 
 END; 
@@ -662,24 +673,21 @@ GRANT EXECUTE ON FUNCTION  frenumber_tables() TO admin;
 CREATE OR REPLACE FUNCTION femptystack() RETURNS int AS $$
 DECLARE
 	_t tstack%rowtype;
-	_cur int;
 	_res yresorder%rowtype;
 	_cnt int := 0;
 BEGIN
-	_cur := 0;
 	LOOP
-		SELECT * INTO _t FROM tstack WHERE id > _cur ORDER BY id ASC LIMIT 1;
-		EXIT WHEN NOT FOUND;
-		_cur = _t.id; 
+		SELECT * INTO _t FROM tstack ORDER BY created ASC LIMIT 1;
+		EXIT WHEN NOT FOUND; 
 		_cnt := _cnt +1;
 		
 		_res := fproducemvt();
 		DROP TABLE _tmp;
-		
+/*		
 		IF((_cnt % 100) =0) THEN
 			CHECKPOINT;
 		END IF;
-		
+*/	
 	END LOOP;
 	RETURN _cnt;
 END;
