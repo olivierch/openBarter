@@ -162,6 +162,7 @@ create domain dquantity AS int8 check( VALUE>0);
 -- ORDER
 --------------------------------------------------------------------------------
 create table torder ( 
+	usr text,
     ord yorder,
     created timestamp not NULL,
     updated timestamp
@@ -186,6 +187,7 @@ create table tmvt (
 	grp int, -- References the first mvt of an exchange.
 	-- can be NULL
 	xid int not NULL,
+	usr text,
 	xoid int not NULL,
 	own_src text not NULL, 
 	own_dst text not NULL,
@@ -227,6 +229,7 @@ SELECT fifo_init('tmvt');
 --------------------------------------------------------------------------------
 create table tstack ( 
     id serial UNIQUE not NULL,
+    usr text NOT NULL,
     own text NOT NULL,
     oid int, -- can be NULL
     qua_requ text NOT NULL ,
@@ -382,6 +385,7 @@ DECLARE
 	_resx		yresexec%rowtype;
 	_qtt		int8;
 	_o			yorder;
+	_usr		text;
 	_onext		yorder;
 BEGIN
 	_nbcommit := array_length(_flw,1);
@@ -411,15 +415,15 @@ BEGIN
 			RAISE EXCEPTION 'the wolf is not in sync with the database. the flow exeeds orders'  USING ERRCODE='YU003';
 		END IF;
 		UPDATE torder SET ord.qtt = (ord).qtt - _o.flowr ,updated = statement_timestamp()
-			WHERE (ord).oid = _o.oid RETURNING (ord).qtt INTO _qtt;
+			WHERE (ord).oid = _o.oid RETURNING (ord).qtt,usr INTO _qtt,_usr;
 		-- _xo := _aa.ord; -- RAISE NOTICE 'ici11 %',_aa;
 		GET DIAGNOSTICS _cnt = ROW_COUNT;
 		IF(_cnt = 0) THEN
 			RAISE EXCEPTION 'the wolf is not in sync with the database. torder[%] does not exist',_o.oid  USING ERRCODE='YU002';
 		END IF;
 		
-		INSERT INTO tmvt (nbc,nbt,grp,xid,xoid,own_src,own_dst,qtt,nat,created) 
-			VALUES(_nbcommit,1,_first_mvt,_o.id,_o.oid,_o.own,_onext.own,_o.flowr,_o.qua_prov,statement_timestamp())
+		INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,created) 
+			VALUES(_nbcommit,1,_first_mvt,_o.id,_usr,_o.oid,_o.own,_onext.own,_o.flowr,_o.qua_prov,statement_timestamp())
 			RETURNING id INTO _mvt_id;
 		IF(_first_mvt IS NULL) THEN
 			_first_mvt := _mvt_id;
@@ -466,6 +470,7 @@ DECLARE
 	_wid		int;
 	_o			yorder;
 	_or			yorder;
+	_od			torder%rowtype;
 	_t			tstack%rowtype;
 	_ro		    yresorder%rowtype;
 	_fmvtids	int[];
@@ -495,14 +500,15 @@ BEGIN
 	
 	IF NOT (_t.oid IS NULL) THEN
 		-- look for the referenced oid
-		SELECT o.ord INTO _or from torder o WHERE (o.ord).id= _t.oid;
+		SELECT o INTO _od from torder o WHERE (o.ord).id= _t.oid;
+		_o := (_od.ord);
 		IF NOT FOUND THEN
-			INSERT INTO tmvt (nbc,nbt,grp,own_src,own_dst,qtt,nat,created) 
-				VALUES(1,1,NULL,_o.own,_o.own,_o.qtt,_o.qua_prov,statement_timestamp());
+			INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,created) 
+				VALUES(1,1,NULL,_t.id,_t.usr,_t.oid,_o.own,_o.own,_o.qtt,_o.qua_prov,_t.created);
 			_ro.ord := _o;
 			RETURN _ro; -- the referenced order was not found in the book
 		ELSE
-			_qtt	:= _or.qtt;
+			_qtt	:= _o.qtt;
 		END IF;
 	ELSE 
 		-- RAISE NOTICE 'ici % % % %',_t.id,_t.qtt_prov,_t.oid,_qtt;
@@ -515,7 +521,7 @@ BEGIN
 
 	_o := ROW(_t.id,_t.own,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt,0)::yorder;
 	
-	INSERT INTO torder(ord,created,updated) VALUES (_o,_t.created,NULL);	
+	INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);	
 
 	_ro.ord      	:= _o;
 	 
@@ -589,8 +595,8 @@ BEGIN
 		RETURN _r;
 	END IF;	
 	
-	INSERT INTO tstack(own,oid,qua_requ,qtt_requ,qua_prov,qtt_prov,created)
-	VALUES (_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,statement_timestamp()) RETURNING * into _t;
+	INSERT INTO tstack(usr,own,oid,qua_requ,qtt_requ,qua_prov,qtt_prov,created)
+	VALUES (current_user,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,statement_timestamp()) RETURNING * into _t;
 	_r.id := _t.id;
 	RETURN _r;
 END; 
@@ -603,12 +609,12 @@ DECLARE
 	_tid	int;
 	_m  tmvt%rowtype;
 BEGIN
-	SELECT id INTO _tid FROM tmvt ORDER BY id ASC LIMIT 1;
+	SELECT id INTO _m FROM tmvt WHERE usr=current_user ORDER BY id ASC LIMIT 1;
 	IF(NOT FOUND) THEN
 		RETURN 0;
 	END IF;
-	SELECT * INTO STRICT _m FROM tmvt WHERE id=_tid;
-	DELETE FROM tmvt where id=_tid;
+	SELECT * INTO STRICT _m FROM tmvt WHERE id=_m.id;
+	DELETE FROM tmvt where id=_m.id;
 	RETURN 1;
 
 END; 
