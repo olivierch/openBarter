@@ -569,7 +569,7 @@ returns (id,0) or (0,diag) with diag:
 */
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	fsubmitorder(_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
+	fsubmitorder(_own text,_oid int,_qua_requ text,_qtt_requ int8,_pos_requ point,_qua_prov text,_qtt_prov int8,_pos_prov point,_dist float8)
 	RETURNS yressubmit AS $$	
 DECLARE
 	_t			tstack%rowtype;
@@ -595,7 +595,7 @@ BEGIN
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitorder(text,int,text,int8,text,int8) TO client;	
+GRANT EXECUTE ON FUNCTION  fsubmitorder(text,int,text,int8,point,text,int8,point,float8) TO client;	
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION deletemvt() RETURNS int AS $$
