@@ -1,43 +1,12 @@
-# contrib/flow/Makefile
 
-MODULE_big = flow
-OBJS= yflow.o yflowparse.o yorder.o flowc.o flowm.o
+MODULE_big = wolf
+OBJS = tsquery.o ywolf.o earth.o wolfc.o follow.o
 
-EXTENSION = flow
-DATA = flow--1.0.sql flow--unpackaged--1.0.sql
+EXTENSION = wolf
+DATA = wolf--1.0.sql wolf--unpackaged--1.0.sql
 
-REGRESS = testflow_1 testflow_2 testflow_3 testflow_4 testflow_5 testflow_6
+REGRESS = testwolf_1 testwolf_2
 
-#EXTRA_CLEAN = y.tab.c y.tab.h
-EXTRA_CLEAN = yflowparse.c yflowscan.c
-
-# SHLIB_LINK += $(filter -lm, $(LIBS)) `uuid-config --libs`
-
-PG_CONFIG = pg_config
-PGXS := $(shell $(PG_CONFIG) --pgxs)
-PG91 = $shell $(PG_CONFIG) --version | grep -qE " 8\.| 9\.0" && echo no || echo yes 
+PGXS := $(shell pg_config --pgxs)
 include $(PGXS)
 
-# flowscan is compiled as part of flowparse
-yflowparse.o: yflowscan.c
-
-yflowparse.c: yflowparse.y
-ifdef BISON
-	$(BISON) $(BISONFLAGS) -o $@ $<
-else
-	@$(missing) bison $< $@
-endif
-
-yflowscan.c: yflowscan.l
-ifdef FLEX
-	$(FLEX) $(FLEXFLAGS) -o'$@' $<
-else
-	@$(missing) flex $< $@
-endif
-
-distprep: yflowparse.c yflowscan.c
-
-maintainer-clean:
-	rm -f yflowparse.c yflowscan.c
-
-	

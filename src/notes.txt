@@ -1,0 +1,23 @@
+fonctions utiles:
+
+	yflow_get(X.ord,Y.pat)
+	yflow_get(ord)
+	yflow_max(pat)			
+		yflow_maxg(fl,fl)
+	yflow_status(_patmax)
+	yflow_reduce(pat,_patmax)
+	
+	yflow_follow(_MAXCYCLE,X.ord,Y.pat)
+	
+	yflow_to_matrix(_flw)
+	yflow_dim(_flw)
+	yflow_to_json(_ypatmax)
+	yflow_iterid(pat)
+	
+Remarques:
+on peut fair un index sur les types composés (OUF)
+
+
+
+	
+
