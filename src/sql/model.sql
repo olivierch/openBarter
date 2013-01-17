@@ -28,11 +28,13 @@ create table tconst(
 --------------------------------------------------------------------------------
 INSERT INTO tconst (name,value) VALUES 
 	('MAXCYCLE',16),
+	('MAXPATHFETCHED',1024),
+	('RANK_NORMALIZATION',2|4),
 	-- it is the version of the model, not that of the extension
 	('VERSION-X.y.z',0),
-	('VERSION-x.Y.y',0),
-	('VERSION-x.y.Z',1),
-	('MAXPATHFETCHED',1024);
+	('VERSION-x.Y.y',6),
+	('VERSION-x.y.Z',0);
+	
 	-- maximum number of paths of the set on which the competition occurs
 	-- ('MAXBRANCHFETCHED',20);
 
@@ -56,40 +58,45 @@ $$ LANGUAGE PLPGSQL STABLE;
 
 --------------------------------------------------------------------------------
 -- definition of roles
---	admin market administrator -- cannot act as client
---	client -- can act as client only when it inherits from role_open 
+--	batch <- role_bo
+--	user <- client <- role_co 
 --------------------------------------------------------------------------------
 CREATE FUNCTION _create_roles() RETURNS int AS $$
 DECLARE
 	_rol text;
 BEGIN
 	BEGIN 
-		CREATE ROLE role_opened; 
+		CREATE ROLE role_co; 
 	EXCEPTION WHEN duplicate_object THEN
 		NULL;	
 	END;
-	ALTER ROLE role_opened NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+	ALTER ROLE role_co NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
 	
 	BEGIN 
-		CREATE ROLE role_stopped; 
+		CREATE ROLE role_bo; 
 	EXCEPTION WHEN duplicate_object THEN
 		NULL;	
 	END;
-	ALTER ROLE role_stopped NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+	ALTER ROLE role_bo NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
 	
 	BEGIN 
-		CREATE ROLE batch;
+		CREATE ROLE role_client;
 	EXCEPTION WHEN duplicate_object THEN
 		NULL;
 	END;
+	ALTER ROLE role_client INHERIT;
+	GRANT role_co TO role_client;
+
+	-- a single connection is allowed	
+	BEGIN 
+		CREATE ROLE role_batch;
+	EXCEPTION WHEN duplicate_object THEN
+		NULL;
+	END;
+	ALTER ROLE batch NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION; 
+	ALTER ROLE batch LOGIN CONNECTION LIMIT 1;
 	ALTER ROLE batch INHERIT;
-	
-	BEGIN 
-		CREATE ROLE client;
-	EXCEPTION WHEN duplicate_object THEN
-		NULL;
-	END;
-	ALTER ROLE client INHERIT;
+	GRANT role_bo TO role_batch;
 	
 	BEGIN 
 		CREATE ROLE admin;
@@ -98,7 +105,6 @@ BEGIN
 	END;
 	ALTER ROLE admin NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION; 
 	ALTER ROLE admin LOGIN CONNECTION LIMIT 1;
-	-- a single connection is allowed
 	RETURN 0;
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -149,7 +155,7 @@ $$ LANGUAGE PLPGSQL;
 CREATE FUNCTION _grant_read(_table text) RETURNS void AS $$
 
 BEGIN 
-	EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO role_opened,role_stopped,admin';
+	EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO role_co,role_bo';
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -201,8 +207,6 @@ create table tmvt (
 		(nbc = 1 AND own_src = own_dst)
 	OR 	(nbc !=1) -- ( AND own_src != own_dst)
 	),
-	-- check do not covers grp==NULL AND nb !=0
-	-- since when inserting, grp is NULL for the first mvt 
 	CONSTRAINT ctmvt_grp FOREIGN KEY (grp) references tmvt(id) ON UPDATE CASCADE
 );
 SELECT _grant_read('tmvt');
@@ -237,8 +241,12 @@ create table tstack (
     oid int, -- can be NULL
     qua_requ text NOT NULL ,
     qtt_requ dquantity NOT NULL,
+    pos_requ point,
     qua_prov text NOT NULL ,
     qtt_prov dquantity NOT NULL,
+    pos_prov point,
+    dist    float8,
+    weigth  float4[],
     created timestamp not NULL,   
     PRIMARY KEY (id)
 );
@@ -526,7 +534,8 @@ BEGIN
 		-- RAISE NOTICE 'ici % % % %',_t.id,_t.qtt_prov,_t.oid,_qtt;
 	END IF;
 	
-
+-- TODO record post_requ point,pos_prov point,dist float8,weigth float4[] of _t
+-- and RANK_NORMALIZATION from tconst
 	_o := ROW(_t.id,_t.own,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt,0)::yorder;
 	
 	INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);	
@@ -567,7 +576,7 @@ BEGIN
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fproducemvt() TO role_opened;
+GRANT EXECUTE ON FUNCTION  fproducemvt() TO role_bo;
 
 --------------------------------------------------------------------------------
 CREATE TYPE yressubmit AS (
@@ -582,8 +591,9 @@ returns (id,0) or (0,diag) with diag:
 	-2 _qtt_prov <=0 or _qtt_requ <=0
 */
 --------------------------------------------------------------------------------
+
 CREATE FUNCTION 
-	fsubmitorder(_own text,_oid int,_qua_requ text,_qtt_requ int8,_pos_requ point,_qua_prov text,_qtt_prov int8,_pos_prov point,_dist float8)
+	fsubmitorder(_own text,_oid int,_qua_requ text,_qtt_requ int8,_pos_requ point,_qua_prov text,_qtt_prov int8,_pos_prov point,_dist float8,_weigth float4[])
 	RETURNS yressubmit AS $$	
 DECLARE
 	_t			tstack%rowtype;
@@ -603,13 +613,13 @@ BEGIN
 		RETURN _r;
 	END IF;	
 	
-	INSERT INTO tstack(usr,own,oid,qua_requ,qtt_requ,qua_prov,qtt_prov,created)
-	VALUES (current_user,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,statement_timestamp()) RETURNING * into _t;
+	INSERT INTO tstack(usr,own,oid,qua_requ,qtt_requ,pos_requ,qua_prov,qtt_prov,pos_prov,dist,weigth,created)
+	VALUES (current_user,_own,_oid,_qua_requ,_qtt_requ,_pos_requ,_qua_prov,_qtt_prov,_pos_prov,_dist,_weigth,statement_timestamp()) RETURNING * into _t;
 	_r.id := _t.id;
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitorder(text,int,text,int8,point,text,int8,point,float8) TO client;	
+GRANT EXECUTE ON FUNCTION  fsubmitorder(text,int,text,int8,point,text,int8,point,float8,float4[]) TO role_co;	
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION ackmvt() RETURNS int AS $$
@@ -630,7 +640,7 @@ BEGIN
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  ackmvt() TO client;
+GRANT EXECUTE ON FUNCTION  ackmvt() TO role_co;
 
 --------------------------------------------------------------------------------
 -- renumber a table with an index on id asc (init_fifo(_name) sets this index)
@@ -692,5 +702,6 @@ BEGIN
 	RETURN _cnt;
 END;
 $$ LANGUAGE PLPGSQL;
+GRANT EXECUTE ON FUNCTION  femptystack() TO role_co;
 
 
