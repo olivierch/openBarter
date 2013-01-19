@@ -264,8 +264,145 @@ alter sequence tstack_id_seq owned by tstack.id;
 
 SELECT _grant_read('tstack');
 SELECT fifo_init('tstack');
+--------------------------------------------------------------------------------
+CREATE TYPE yresorder AS (
+    ord yorder,
+    qtt_in int8,
+    qtt_out int8
+);
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION femptystack() RETURNS int AS $$
+DECLARE
+	_t tstack%rowtype;
+	_res yresorder%rowtype;
+	_cnt int := 0;
+BEGIN
+	LOOP
+		SELECT * INTO _t FROM tstack ORDER BY created ASC LIMIT 1;
+		EXIT WHEN NOT FOUND; 
+		_cnt := _cnt +1;
+		
+		_res := fproducemvt();
+		DROP TABLE _tmp;
+/*		
+		IF((_cnt % 100) =0) THEN
+			CHECKPOINT;
+		END IF;
+*/	
+	END LOOP;
+	RETURN _cnt;
+END;
+$$ LANGUAGE PLPGSQL;
+GRANT EXECUTE ON FUNCTION  femptystack() TO role_co;
 
+--------------------------------------------------------------------------------
+-- order unstacked and inserted into torder
+/* if the referenced oid is found,
+	the order is inserted, and the process is loached
+else a movement is created
+*/
+--------------------------------------------------------------------------------
+CREATE TYPE yresexec AS (
+    first_mvt int, -- id of the first mvt
+    nbc int, -- number of mvts
+    mvts int[] -- list of id des mvts
+);
+CREATE FUNCTION fproducemvt() RETURNS yresorder AS $$
+DECLARE
+	_wid		int;
+	_o			yorder;
+	_or			yorder;
+	_od			torder%rowtype;
+	_t			tstack%rowtype;
+	_ro		    yresorder%rowtype;
+	_fmvtids	int[];
+	_first_mvt 	int;
 
+	--_flows		json[]:= ARRAY[]::json[];
+	_ypatmax	yorder[];
+	_res	    int8[];
+	_tid		int;
+	_resx		yresexec%rowtype;
+	_time_begin	timestamp;
+	_qtt		int8;
+	_mid		int;
+BEGIN
+
+	lock table torder in share update exclusive mode;
+	_ro.ord 		:= NULL;
+	_ro.qtt_in 		:= 0;
+	_ro.qtt_out 	:= 0;
+	
+	SELECT id INTO _tid FROM tstack ORDER BY id ASC LIMIT 1;
+	IF(NOT FOUND) THEN
+		RETURN _ro; -- the stack is empty
+	END IF;
+	-- SELECT * INTO STRICT _t from tstack WHERE id=_tid;
+	DELETE FROM tstack WHERE id=_tid RETURNING * INTO STRICT _t;
+	-- RAISE NOTICE 'tstack %',_t;
+	
+	IF NOT (_t.oid IS NULL) THEN
+		-- look for the referenced oid
+		SELECT o INTO _od from torder o WHERE (o.ord).id= _t.oid;
+		_o := (_od.ord);
+		IF NOT FOUND THEN
+			INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,refused,created) 
+				VALUES(1,1,NULL,_t.id,_t.usr,_t.oid,_o.own,_o.own,_o.qtt,_o.qua_prov,false,true,true,_t.created)
+				RETURNING id INTO _mid;
+			UPDATE tmvt SET grp = _mid WHERE id = _mid;
+			_ro.ord := _o;
+			RETURN _ro; -- the referenced order was not found in the book
+		ELSE
+			_qtt	:= _o.qtt;
+		END IF;
+	ELSE 
+		_t.oid 	:= _t.id;
+		_qtt  	:= _t.qtt_prov;
+	END IF;
+	
+-- TODO record post_requ point,pos_prov point,dist float8,weigth float4[] of _t
+-- and RANK_NORMALIZATION from tconst
+	_o := ROW(_t.id,_t.own,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt,0)::yorder;
+	
+	INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);	
+
+	_ro.ord      	:= _o;
+	 
+	_fmvtids := ARRAY[]::int[];
+	
+	_time_begin := clock_timestamp();
+	
+	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_o) LOOP
+	
+		_resx := fexecute_flow(_ypatmax);
+		_fmvtids := _fmvtids || _resx.mvts;
+		
+		_res := ywolf_qtts(_ypatmax);
+		_ro.qtt_in  := _ro.qtt_in  + _res[1];
+		_ro.qtt_out := _ro.qtt_out + _res[2];
+		
+		-- _flows := array_append(_flows,(yflow_to_json(_ypatmax)::text)::json);
+		
+	END LOOP;
+	
+	IF (	(_ro.qtt_in != 0) AND 
+		((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
+		((_o.qtt_prov::double precision)	/(_o.qtt_requ::double precision))
+	) THEN
+		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order' USING ERRCODE='YA003';
+	END IF;
+	
+	-- set the number of movements in this transaction
+	UPDATE tmvt SET nbt= array_length(_fmvtids,1) WHERE id = ANY (_fmvtids);
+	
+	-- PERFORM finvalidate_treltried(_time_begin);
+	
+	-- _ro.flows := array_to_json(_flows);
+	RETURN _ro;
+
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fproducemvt() TO role_bo;
 
 --------------------------------------------------------------------------------
 /* fomega_max_iterator
@@ -377,11 +514,7 @@ from a flow representing a draft, for each order:
 	updates the order
 */
 --------------------------------------------------------------------------------
-CREATE TYPE yresexec AS (
-    first_mvt int, -- id of the first mvt
-    nbc int, -- number of mvts
-    mvts int[] -- list of id des mvts
-);
+
 CREATE FUNCTION fexecute_flow(_flw yorder[]) RETURNS  yresexec AS $$
 DECLARE
 	_i			int;
@@ -398,6 +531,7 @@ DECLARE
 	_o			yorder;
 	_usr		text;
 	_onext		yorder;
+	_or			torder%rowtype;
 BEGIN
 	_nbcommit := array_length(_flw,1);
 	
@@ -420,18 +554,24 @@ BEGIN
 		------------------------------------------------------------------------
 		_onext  := _flw[_next_i];
 		_o	    := _flw[_i];	
-
+		
+		-- sanity check
 		SELECT count(*) INTO _cnt FROM torder WHERE (ord).oid = _o.oid AND _o.flowr > (ord).qtt;
 		IF(_cnt >0) THEN
-			RAISE EXCEPTION 'the wolf is not in sync with the database. the flow exeeds orders'  USING ERRCODE='YU003';
+			SELECT * INTO _or FROM torder WHERE (ord).oid = _o.oid;
+			RAISE EXCEPTION 'the wolf is not in sync with the database. the flow exeeds orders: % \n %',_or,_o  USING ERRCODE='YU003';
 		END IF;
+		
 		UPDATE torder SET ord.qtt = (ord).qtt - _o.flowr ,updated = statement_timestamp()
-			WHERE (ord).oid = _o.oid RETURNING (ord).qtt,usr INTO _qtt,_usr;
-		-- _xo := _aa.ord; -- RAISE NOTICE 'ici11 %',_aa;
+			WHERE (ord).oid = _o.oid; 
+			
+		--sanity check
 		GET DIAGNOSTICS _cnt = ROW_COUNT;
 		IF(_cnt = 0) THEN
 			RAISE EXCEPTION 'the wolf is not in sync with the database. torder[%] does not exist',_o.oid  USING ERRCODE='YU002';
 		END IF;
+		
+		SELECT (ord).qtt,usr INTO _qtt,_usr FROM torder WHERE (ord).oid = _o.oid LIMIT 1;
 		IF( _qtt = 0 ) THEN
 			_exhausted := true;
 		END IF;
@@ -439,6 +579,7 @@ BEGIN
 		INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,refused,created) 
 			VALUES(_nbcommit,1,_first_mvt,_o.id,_usr,_o.oid,_o.own,_onext.own,_o.flowr,_o.qua_prov,false,_exhausted,false,statement_timestamp())
 			RETURNING id INTO _mvt_id;
+			
 		IF(_first_mvt IS NULL) THEN
 			_first_mvt := _mvt_id;
 			_resx.first_mvt := _mvt_id;
@@ -446,7 +587,6 @@ BEGIN
 		END IF;
 		_resx.mvts := array_append(_resx.mvts,_mvt_id);
 
-		-- RAISE NOTICE 'ici1 %',_xo;
 		IF( _exhausted ) THEN
 			DELETE FROM torder WHERE (ord).oid=_o.oid;
 		END IF;
@@ -465,118 +605,6 @@ BEGIN
 END;
 $$ LANGUAGE PLPGSQL;
 
---------------------------------------------------------------------------------
-CREATE TYPE yresorder AS (
-    ord yorder,
-    qtt_in int8,
-    qtt_out int8
-);
---------------------------------------------------------------------------------
--- order unstacked and inserted into torder
-/* if the referenced oid is found,
-	the order is inserted, and the process is loached
-else a movement is created
-*/
---------------------------------------------------------------------------------
-CREATE FUNCTION fproducemvt() RETURNS yresorder AS $$
-DECLARE
-	_wid		int;
-	_o			yorder;
-	_or			yorder;
-	_od			torder%rowtype;
-	_t			tstack%rowtype;
-	_ro		    yresorder%rowtype;
-	_fmvtids	int[];
-	_first_mvt 	int;
-
-	--_flows		json[]:= ARRAY[]::json[];
-	_ypatmax	yorder[];
-	_res	    int8[];
-	_tid		int;
-	_resx		yresexec%rowtype;
-	_time_begin	timestamp;
-	_qtt		int8;
-	_mid		int;
-BEGIN
-
-	lock table torder in share update exclusive mode;
-	_ro.ord 		:= NULL;
-	_ro.qtt_in 		:= 0;
-	_ro.qtt_out 	:= 0;
-	
-	SELECT id INTO _tid FROM tstack ORDER BY id ASC LIMIT 1;
-	IF(NOT FOUND) THEN
-		RETURN _ro; -- the stack is empty
-	END IF;
-	-- SELECT * INTO STRICT _t from tstack WHERE id=_tid;
-	DELETE FROM tstack WHERE id=_tid RETURNING * INTO STRICT _t;
-	-- RAISE NOTICE 'tstack %',_t;
-	
-	IF NOT (_t.oid IS NULL) THEN
-		-- look for the referenced oid
-		SELECT o INTO _od from torder o WHERE (o.ord).id= _t.oid;
-		_o := (_od.ord);
-		IF NOT FOUND THEN
-			INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,refused,created) 
-				VALUES(1,1,NULL,_t.id,_t.usr,_t.oid,_o.own,_o.own,_o.qtt,_o.qua_prov,false,true,true,_t.created)
-				RETURNING id INTO _mid;
-			UPDATE tmvt SET grp = _mid WHERE id = _mid;
-			_ro.ord := _o;
-			RETURN _ro; -- the referenced order was not found in the book
-		ELSE
-			_qtt	:= _o.qtt;
-		END IF;
-	ELSE 
-		-- RAISE NOTICE 'ici % % % %',_t.id,_t.qtt_prov,_t.oid,_qtt;
-		_t.oid 	:= _t.id;
-		-- RAISE NOTICE 'ici % % % %',_t.id,_t.qtt_prov,_t.oid,_qtt;
-		_qtt  	:= _t.qtt_prov;
-		-- RAISE NOTICE 'ici % % % %',_t.id,_t.qtt_prov,_t.oid,_qtt;
-	END IF;
-	
--- TODO record post_requ point,pos_prov point,dist float8,weigth float4[] of _t
--- and RANK_NORMALIZATION from tconst
-	_o := ROW(_t.id,_t.own,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt,0)::yorder;
-	
-	INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);	
-
-	_ro.ord      	:= _o;
-	 
-	_fmvtids := ARRAY[]::int[];
-	
-	_time_begin := clock_timestamp();
-	
-	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_o) LOOP
-	
-		_resx := fexecute_flow(_ypatmax);
-		_fmvtids := _fmvtids || _resx.mvts;
-		
-		_res := ywolf_qtts(_ypatmax);
-		_ro.qtt_in  := _ro.qtt_in  + _res[1];
-		_ro.qtt_out := _ro.qtt_out + _res[2];
-		
-		-- _flows := array_append(_flows,(yflow_to_json(_ypatmax)::text)::json);
-		
-	END LOOP;
-	
-	IF (	(_ro.qtt_in != 0) AND 
-		((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
-		((_o.qtt_prov::double precision)	/(_o.qtt_requ::double precision))
-	) THEN
-		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order' USING ERRCODE='YA003';
-	END IF;
-	
-	-- set the number of movements in this transaction
-	UPDATE tmvt SET nbt= array_length(_fmvtids,1) WHERE id = ANY (_fmvtids);
-	
-	-- PERFORM finvalidate_treltried(_time_begin);
-	
-	-- _ro.flows := array_to_json(_flows);
-	RETURN _ro;
-
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fproducemvt() TO role_bo;
 
 --------------------------------------------------------------------------------
 CREATE TYPE yressubmit AS (
@@ -584,7 +612,7 @@ CREATE TYPE yressubmit AS (
     diag int
 );
 --------------------------------------------------------------------------------
--- order submission    DONE
+-- order submission  
 /*
 returns (id,0) or (0,diag) with diag:
 	-1 _qua_prov = _qua_requ
@@ -679,29 +707,6 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  frenumber_tables() TO admin;
 
---------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION femptystack() RETURNS int AS $$
-DECLARE
-	_t tstack%rowtype;
-	_res yresorder%rowtype;
-	_cnt int := 0;
-BEGIN
-	LOOP
-		SELECT * INTO _t FROM tstack ORDER BY created ASC LIMIT 1;
-		EXIT WHEN NOT FOUND; 
-		_cnt := _cnt +1;
-		
-		_res := fproducemvt();
-		DROP TABLE _tmp;
-/*		
-		IF((_cnt % 100) =0) THEN
-			CHECKPOINT;
-		END IF;
-*/	
-	END LOOP;
-	RETURN _cnt;
-END;
-$$ LANGUAGE PLPGSQL;
-GRANT EXECUTE ON FUNCTION  femptystack() TO role_co;
+
 
 
