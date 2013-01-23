@@ -372,7 +372,7 @@ BEGIN
 	
 	_time_begin := clock_timestamp();
 	
-	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_o) LOOP
+	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_o.id) LOOP
 	
 		_resx := fexecute_flow(_ypatmax);
 		_fmvtids := _fmvtids || _resx.mvts;
@@ -396,8 +396,6 @@ BEGIN
 	UPDATE tmvt SET nbt= array_length(_fmvtids,1) WHERE id = ANY (_fmvtids);
 	
 	-- PERFORM finvalidate_treltried(_time_begin);
-	
-	-- _ro.flows := array_to_json(_flows);
 	RETURN _ro;
 
 END; 
@@ -410,34 +408,29 @@ creates a temporary table _tmp of potential exchanges
 among potential exchanges of _tmp, selects the ones having the product of omegas maximum
 */
 --------------------------------------------------------------------------------
-CREATE FUNCTION fomega_max_iterator(_pivot yorder) 
-	RETURNS TABLE (_patmax yorder[]) AS $$
+CREATE FUNCTION fomega_max_iterator(_pivotid int) 
+	RETURNS TABLE (_patmax yflow) AS $$
 DECLARE
-
-	_idpivot 	int;
 	_cnt 		int;
-	_o			torder%rowtype;
-	_res	    int8[];
-	_start		int8;
 BEGIN
 	------------------------------------------------------------------------
-	_cnt := fcreate_tmp(_pivot);
+	_cnt := fcreate_tmp(_pivotid);
 			
 	LOOP		
-		SELECT ywolf_max(pat) INTO _patmax FROM _tmp;
+		SELECT yflow_max(pat) INTO _patmax FROM _tmp;
 		
 		IF(NOT FOUND) THEN
 			EXIT; -- from LOOP
 		END IF;
 		
 		-- among potential exchange cycles of _tmp, selects the one having the product of omegas maximum
-		IF (ywolf_status(_patmax)!=3) THEN -- status != draft
+		IF (NOT yflow_is_draft(_patmax)) THEN -- status != draft
 			EXIT; -- no potential exchange where found; exit from LOOP
 		END IF;
 		_cnt := _cnt + 1;
 		RETURN NEXT;
 
-		UPDATE _tmp SET pat = ywolf_reduce(pat,_patmax);
+		UPDATE _tmp SET pat = yflow_reduce(pat,_patmax);
 	END LOOP;
 	
 	-- DROP TABLE _tmp; it is dropped at the end of the transaction
@@ -467,7 +460,7 @@ CREATE VIEW vorderinsert AS
 	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
 	FROM torder ORDER BY ((qtt_prov::double precision)/(qtt_requ::double precision)) DESC; */
 --------------------------------------------------------------------------------
-CREATE FUNCTION fcreate_tmp(_ord yorder) RETURNS int AS $$
+CREATE FUNCTION fcreate_tmp(_ordid int) RETURNS int AS $$
 DECLARE 
 	_MAXPATHFETCHED	 int := fgetconst('MAXPATHFETCHED'); 
 	-- _MAXBRANCHFETCHED	 int := fgetconst('MAXBRANCHFETCHED'); 
@@ -479,28 +472,19 @@ BEGIN
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP  AS (
 */	
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
-		SELECT A.ord,A.pat FROM (
-			WITH RECURSIVE search_backward(ord,pat,qua_requ) AS (
-				SELECT 	_ord,ARRAY[_ord]::yorder[],_ord.qua_requ
-				UNION ALL
-				SELECT 	X.ord,ywolf_cat(X.ord,Y.pat),(X.ord).qua_requ
-					-- add the order at the beginning of the array
-					FROM search_backward Y,
-					(
-						SELECT ord FROM torder 
-						-- ORDER BY ((qtt_prov::double precision)/(qtt_requ::double precision)) DESC
-						-- LIMIT _MAXBRANCHFETCHED					
-					) X
-					WHERE  ((X.ord).qua_prov)=(Y.qua_requ) AND ywolf_follow(_MAXCYCLE,X.ord,Y.pat) 
-					-- X->Y === X.qtt>0 and X.np=Y[0].nr
-					-- Y.pat does not contain X.ord 
-					-- len(X.ord+Y.path) <= _MAXCYCLE	
-					-- it is not an unexpected cycle: Y[!=-1]|->X === Y[i].np != X.nr with i!= -1
-					 
-			)
-			SELECT ord,pat 
-			FROM search_backward LIMIT _MAXPATHFETCHED 
-		) A WHERE  ywolf_status(A.pat)>=2 -- potential exchange (refused,draft,empty)
+		WITH RECURSIVE search_backward(debut,path,fin,depth,cycle) AS(
+			SELECT ord,yflow_init(ord),ord,1,false FROM torder WHERE (ord).id= _ordid
+			UNION ALL
+			SELECT X.ord,yflow_grow(X.ord,Y.debut,Y.path),Y.fin,Y.depth+1,yflow_contains_id((X.ord).id,Y.path)
+			FROM torder X,search_backward Y
+			WHERE (X.ord).qua_prov=(Y.debut).qua_requ 
+				AND yflow_match(X.ord,Y.debut) 
+				AND Y.depth < _MAXCYCLE 
+				AND NOT cycle 
+				AND NOT yflow_contains_id((X.ord).id,Y.path)
+		) SELECT yflow_finish(debut,path,fin) from search_backward 
+		WHERE (fin).qua_prov=(debut).qua_requ AND yflow_match(fin,debut) 
+		LIMIT _MAXPATHFETCHED
 	);
 	RETURN 0;
 END;
@@ -515,7 +499,7 @@ from a flow representing a draft, for each order:
 */
 --------------------------------------------------------------------------------
 
-CREATE FUNCTION fexecute_flow(_flw yorder[]) RETURNS  yresexec AS $$
+CREATE FUNCTION fexecute_flow(_flw yflow) RETURNS  yresexec AS $$
 DECLARE
 	_i			int;
 	_next_i		int;
@@ -532,11 +516,12 @@ DECLARE
 	_usr		text;
 	_onext		yorder;
 	_or			torder%rowtype;
+	_mat		int8[][];
 BEGIN
-	_nbcommit := array_length(_flw,1);
+	_nbcommit := yflow_dim(_flw);
 	
 	-- sanity check
-	IF( _nbcommit <2 OR _flw[0].flowr <=0 ) THEN
+	IF( _nbcommit <2 ) THEN
 		RAISE EXCEPTION 'the flow should be draft' 
 			USING ERRCODE='YA003';
 	END IF;
@@ -544,22 +529,37 @@ BEGIN
 	
 	--lock table torder in share row exclusive mode;
 	lock table torder in share update exclusive mode;
+/*	
+	CREATE TYPE yresexec AS (
+    first_mvt int, -- id of the first mvt
+    nbc int, -- number of mvts
+    mvts int[] -- list of id des mvts
+); */
 	
 	_first_mvt := NULL;
 	_exhausted := false;
-	_i := _nbcommit;
 	_resx.nbc := _nbcommit;	
 	_resx.mvts := ARRAY[]::int[];
+	_mat := yflow_to_matrix(flow);
+	
+	_i := _nbcommit;
 	FOR _next_i IN 1 .. _nbcommit LOOP
 		------------------------------------------------------------------------
-		_onext  := _flw[_next_i];
-		_o	    := _flw[_i];	
+		-- _onext  := _flw[_next_i];
+		-- _o	    := _flw[_i];
+		_o.id   := _mat[_i][1];
+		_o.own	:= _mat[_i][2];
+		_o.oid	:= _mat[_i][3];
+		_o.qtt  := _mat[_i][6];
+		_o.flowr:= _mat[_i][7]; 
+		
+		_onext.own := _mat[_next_i][2];	
 		
 		-- sanity check
 		SELECT count(*) INTO _cnt FROM torder WHERE (ord).oid = _o.oid AND _o.flowr > (ord).qtt;
 		IF(_cnt >0) THEN
 			SELECT * INTO _or FROM torder WHERE (ord).oid = _o.oid;
-			RAISE EXCEPTION 'the wolf is not in sync with the database. the flow exeeds orders: % \n %',_or,_o  USING ERRCODE='YU003';
+			RAISE EXCEPTION 'the flow is not in sync with the database. the flow exeeds orders: % \n %',_or,_o  USING ERRCODE='YU003';
 		END IF;
 		
 		UPDATE torder SET ord.qtt = (ord).qtt - _o.flowr ,updated = statement_timestamp()
@@ -568,16 +568,16 @@ BEGIN
 		--sanity check
 		GET DIAGNOSTICS _cnt = ROW_COUNT;
 		IF(_cnt = 0) THEN
-			RAISE EXCEPTION 'the wolf is not in sync with the database. torder[%] does not exist',_o.oid  USING ERRCODE='YU002';
+			RAISE EXCEPTION 'the flow is not in sync with the database. torder[%] does not exist',_o.oid  USING ERRCODE='YU002';
 		END IF;
 		
-		SELECT (ord).qtt,usr INTO _qtt,_usr FROM torder WHERE (ord).oid = _o.oid LIMIT 1;
-		IF( _qtt = 0 ) THEN
+		SELECT * INTO _or FROM torder WHERE (ord).oid = _o.oid LIMIT 1;
+		IF( (_or.ord).qtt = 0 ) THEN
 			_exhausted := true;
 		END IF;
 		
 		INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,refused,created) 
-			VALUES(_nbcommit,1,_first_mvt,_o.id,_usr,_o.oid,_o.own,_onext.own,_o.flowr,_o.qua_prov,false,_exhausted,false,statement_timestamp())
+			VALUES(_nbcommit,1,_first_mvt,_o.id,(_or.ord).usr,_o.oid,_o.own,_onext.own,_o.flowr,(_or.ord).qua_prov,false,_exhausted,false,statement_timestamp())
 			RETURNING id INTO _mvt_id;
 			
 		IF(_first_mvt IS NULL) THEN

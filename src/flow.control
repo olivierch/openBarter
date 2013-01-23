@@ -1,5 +1,5 @@
 # flow extension
 comment = 'data type for cycle of orders'
 default_version = '1.0'
-module_pathname = '$libdir/wolf'
+module_pathname = '$libdir/flow'
 relocatable = true

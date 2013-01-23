@@ -8,24 +8,23 @@
 
 #include "lib/stringinfo.h"
 
-TresChemin *wolfc_maximum(Twolf *wolf);
-char * wolfc_vecIntStr(short dim,int64 *vecInt);
+TresChemin *flowc_maximum(Tflow *flow);
+char * flowc_vecIntStr(short dim,int64 *vecInt);
 
 
 static double _calOmega(TresChemin *chem);
 static void _calOwns(TresChemin *chem);
 static void _calGains(TresChemin *chem);
-static short _wolfMaximum(TresChemin *chem);
+static short _flowMaximum(TresChemin *chem);
 static Tstatusflow _rounding(short iExhausted, TresChemin *chem);
-
 
 /******************************************************************************
  * gives the maximum flow of wolf
  * return chem->flowNodes[.] and chem->status
  * flowNodes is copied to wolf->x[.].flowr
  *****************************************************************************/
-TresChemin *wolfc_maximum(Twolf *wolf) {
-	short _dim = wolf->dim;
+TresChemin *flowc_maximum(Tflow *flow) {
+	short _dim = flow->dim;
 	short _i; 
 	short _iExhausted;
 	TresChemin *chem;
@@ -34,7 +33,7 @@ TresChemin *wolfc_maximum(Twolf *wolf) {
 
 	chem->status = empty;
 	chem->lastignore = false;
-	chem->wolf = wolf;
+	chem->flow = flow;
 	
 	if(_dim == 0) 
 		goto _end;	
@@ -44,29 +43,22 @@ TresChemin *wolfc_maximum(Twolf *wolf) {
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			 errmsg("max dimension %i reached for the flow",FLOW_MAX_DIM)));
  
-	chem->lastignore = wolf->x[_dim-1].qtt_requ == 0;
+	chem->lastignore = flow->x[_dim-1].qtt_requ == 0;
 		
 	obMRange(_i,_dim) 
-		if(wolf->x[_i].qtt == 0) 
+		if(flow->x[_i].qtt == 0 || flow->x[_i].proba == 0.0) 
 			goto _dropflow; // box->status = empty
-		else if(wolf->x[_i].qtt < 0) 
+		else if(flow->x[_i].qtt < 0 ||  flow->x[_i].proba < 0.0) 
 			ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("flow with qtt <0")));
+				 errmsg("flow with qtt <0 or proba <0.0")));
 				 
 	// elog(WARNING,"flowc_maximum: dim=%i",_dim);
 	if(_dim == 1) {
 		chem->status = noloop;
 		goto _dropflow;
 	}
-
-	if(!follow_orders(&wolf->x[_dim-1],&wolf->x[0])) {
-		chem->status = noloop; 
-		goto _dropflow;
-	}
-	// it is a cycle <= end->begin
-
-				 
+		 
 	//elog(WARNING,"flowc_maximum: ->status!=noloop");
 	// error for 3-agreement: on omega ~= 1.1e-16
 	
@@ -83,7 +75,7 @@ TresChemin *wolfc_maximum(Twolf *wolf) {
 	/* maximum flow, as a floating point vector 
 	in order than at least one stock is exhausted by the flow
 	and than the ratio between successive elements of flowr is omegaCorrige */
-	_iExhausted = _wolfMaximum(chem); 
+	_iExhausted = _flowMaximum(chem); 
 	
 	/* the floating point vector is rounded 
 	to the nearest vector of positive integers */
@@ -97,11 +89,12 @@ _dropflow:
 	
 		// the flow is undefined
 		obMRange (_k,_dim)
-			wolf->x[_k].flowr = -1;		
+			flow->x[_k].flowr = -1;		
 	}
 		
 _end:
 	// elog(WARNING,"chem: %s",wolfc_cheminToStr(chem));
+	flow->status = chem->status;
 	return chem;
 }
 
@@ -109,8 +102,8 @@ _end:
  * 
  *****************************************************************************/
 static double _calOmega(TresChemin *chem) {
-	Twolf *wolf = chem->wolf;
-	short _n,_dim = wolf->dim;
+	Tflow *flow = chem->flow;
+	short _n,_dim = flow->dim;
 	double *omega = chem->omega;
 		
 	chem->prodOmega = 1.0;
@@ -119,15 +112,15 @@ static double _calOmega(TresChemin *chem) {
 		if((_n == _dim-1) && chem->lastignore) {
 			continue;
 		} else {
-			Torder *b = &wolf->x[_n];
+			Tfl *b = &flow->x[_n];
 
 			// compute omega and prodOmega
-			if(b->qtt_prov == 0 || b->qtt_requ == 0) {
+			if(b->qtt_prov == 0 || b->qtt_requ == 0 || b->proba == 0.0) {
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("_calOmega: qtt_prov or qtt_requ is zero for Torder[%i]",_n)));
+					 errmsg("_calOmega: qtt_prov or qtt_requ is zero for Tfl[%i]",_n)));
 			}		 
-			omega[_n] = ((double)(b->qtt_prov)) / ((double)(b->qtt_requ));
+			omega[_n] = GET_OMEGA(b);
 			chem->prodOmega *= omega[_n];
 		}
 	}
@@ -149,9 +142,9 @@ static void _calOwns(TresChemin *chem) {
 	
 	short *occOwn = chem->occOwn; 
 	short _n;
-	Twolf *wolf = chem->wolf;
-	short _dim = wolf->dim;
-	bool _res;		
+	Tflow *flow = chem->flow;
+	short _dim = flow->dim;
+	// bool _res;		
 	
 	// defines ownIndex and updates nbOwn
 	/****************************************************/
@@ -159,14 +152,14 @@ static void _calOwns(TresChemin *chem) {
 	obMRange(_n,_dim) {
 		short _m;
 		short _ownIndex = chem->nbOwn;		
-		Torder *b = &wolf->x[_n];
+		Tfl *b = &flow->x[_n];
 		short *ownIndex = chem->ownIndex;
 			
 		obMRange(_m,_ownIndex) {
 			
-			IDEMTXT(b->own,wolf->x[_m].own,_res);
+			// IDEMTXT(b->own,wolf->x[_m].own,_res);
 			// elog(WARNING,"own1: %s,own2: %s",follow_DatumTxtToStr(b->own),follow_DatumTxtToStr(wolf->x[_m].own));
-			if (_res) {
+			if (b->own == flow->x[_m].own) {
 				_ownIndex = _m;
 				break;// found
 			}
@@ -192,23 +185,14 @@ static void _calOwns(TresChemin *chem) {
 	obMRange(_n,_dim) {
 		short _m;
 		
-		Torder *o = &wolf->x[_n];
+		Tfl *o = &flow->x[_n];
 				 
 		// b.id are unique in box
 		obMRange(_m,_n) {
-			if(o->id == wolf->x[_m].id) {
+			if(o->id == flow->x[_m].id) {
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("createChemin: Torder[%i].id=%i found twice",_n,o->id)));
-			}
-		}
-	
-		// successive orders match
-		if(_n != 0 ) {
-			if(!follow_orders(&wolf->x[_n-1],o)) {
-				ereport(ERROR,
-					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("createChemin: no match Torder[%i] -> Torder[%i] ",_n-1,_n)));		
+					 errmsg("createChemin: Tfl[%i].id=%i found twice",_n,o->id)));
 			}
 		}
 	}
@@ -243,7 +227,7 @@ static void _calGains(TresChemin *chem) {
 	short *ownIndex = chem->ownIndex;
 	double *omega = chem->omega;
 	double *omegaCorrige = chem->omegaCorrige;
-	short _dim = chem->wolf->dim;
+	short _dim = chem->flow->dim;
 
 	// the gain is shared between owners
 	chem->gain = pow(chem->prodOmega, 1.0 /((double) chem->nbOwn));
@@ -306,15 +290,15 @@ and:
 	f[i] = f[0] * _piom[i]
 	
  *******************************************************************************/
-static short _wolfMaximum(TresChemin *chem) {
+static short _flowMaximum(TresChemin *chem) {
 	short 	_is, _jn; //,_jm;
 	double	*_piom = chem->piom; //  _fPiomega(i)
 	double  *omegaCorrige = chem->omegaCorrige;
 	double  *fluxExact = chem->fluxExact;
 	double	_min = -1.0, _cour;
 	short	_iExhausted;	
-	Twolf	*wolf = chem->wolf;
-	short 	_dim = wolf->dim;
+	Tflow	*flow = chem->flow;
+	short 	_dim = flow->dim;
 		
 	// piom are obtained on each node, 
 	/***********************************************************************/
@@ -333,7 +317,7 @@ static short _wolfMaximum(TresChemin *chem) {
 	// now _is is an index on nodes
 	_iExhausted = 0;
 	obMRange(_is,_dim) { // loop on nodes
-		_cour = ((double) (wolf->x[_is].qtt)) /_piom[_is]; 
+		_cour = ((double) (flow->x[_is].qtt)) /_piom[_is]; 
 		if ((_is == 0) || (_cour < _min)) {
 			_min = _cour;
 			_iExhausted = _is;
@@ -427,8 +411,8 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 	int64	*_flowNodes = chem->flowNodes;
 	int64	*_floor = chem->floor;
 	double 	_distcour, _distbest;
-	Twolf 	*wolf = chem->wolf;
-	short 	_dim = wolf->dim;
+	Tflow 	*flow = chem->flow;
+	short 	_dim = flow->dim;
 	double  *fluxExact = chem->fluxExact;
 	double  *omega = chem->omega;
 	short 	_ldim = (chem->lastignore)?(_dim-1):_dim;
@@ -438,7 +422,7 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 	/***********************************************************************/
 	obMRange(_i,_dim) {
 		if(_i == iExhausted) { // will not change
-			_floor[_i] = wolf->x[_i].qtt;
+			_floor[_i] = flow->x[_i].qtt;
 			continue; 
 		} else {
 			double _d = floor(fluxExact[_i]);
@@ -492,7 +476,7 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 		obMRange (_k,_dim) {
 		
 			// verify that order >= flow
-			if(wolf->x[_k].qtt < _flowNodes[_k]) {
+			if(flow->x[_k].qtt < _flowNodes[_k]) {
 				#ifdef WHY_REJECTED 
 					elog(WARNING,"_rounding 1: NOT order >= flow %s",flowc_vecIntStr(_dim,_flowNodes));
 				#endif
@@ -559,7 +543,7 @@ _continue:
 		//elog(WARNING,"flowc_maximum: _matbest=%x",_matbest);
 		
 		obMRange (_k,_dim) {
-			wolf->x[_k].flowr = _flowNodes[_k];	
+			flow->x[_k].flowr = _flowNodes[_k];	
 		}
 		
 		_ret = draft; 
@@ -570,14 +554,14 @@ _continue:
 /******************************************************************************
  * 
  *****************************************************************************/
-char * wolfc_cheminToStr(TresChemin *chem) {
+char * flowc_cheminToStr(TresChemin *chem) {
 	StringInfoData buf;
-	Twolf *wolf = chem->wolf;
-	short _dim = wolf->dim;
+	Tflow *flow = chem->flow;
+	short _dim = flow->dim;
 	short _n,_o;
 	
 	initStringInfo(&buf);
-	appendStringInfo(&buf, "\n%s\n",ywolf_allToStr(wolf));
+	appendStringInfo(&buf, "\n%s\n",yflow_ndboxToStr(flow,true));
 	if(chem->status == refused) {	
 		appendStringInfo(&buf, "CHEMIN refused prodOmega=%f ",chem->prodOmega);
 		appendStringInfo(&buf, "\nno[.].omega=[");
@@ -589,7 +573,7 @@ char * wolfc_cheminToStr(TresChemin *chem) {
 	} else if(chem->status == draft || chem->status == undefined) {
 	
 		appendStringInfo(&buf, "CHEMIN  %s lastignore=%c nbOwn=%i gain=%f prodOmega=%f ", 
-			ywolf_statusToStr(chem->status),
+			yflow_statusToStr(chem->status),
 			(chem->lastignore)?'t':'f',chem->nbOwn,chem->gain,chem->prodOmega);
 	
 		appendStringInfo(&buf, "\noccOwn[.]=[");
@@ -631,7 +615,7 @@ char * wolfc_cheminToStr(TresChemin *chem) {
 	} else  {
 	
 		appendStringInfo(&buf, "CHEMIN  %s lastignore=%c nbOwn=%i gain=%f prodOmega=%f ", 
-			ywolf_statusToStr(chem->status),
+			yflow_statusToStr(chem->status),
 			(chem->lastignore)?'t':'f',chem->nbOwn,chem->gain,chem->prodOmega);
 	}
 
@@ -640,7 +624,7 @@ char * wolfc_cheminToStr(TresChemin *chem) {
 /******************************************************************************
  * 
  *****************************************************************************/
-char * wolfc_vecIntStr(short dim,int64 *vecInt) {
+char * flowc_vecIntStr(short dim,int64 *vecInt) {
 	StringInfoData buf;
 	short _n;
 	
@@ -656,7 +640,7 @@ char * wolfc_vecIntStr(short dim,int64 *vecInt) {
 /******************************************************************************
  * 
  *****************************************************************************/
-char * wolfc_vecDoubleStr(short dim,double *vecDouble) {
+char * flowc_vecDoubleStr(short dim,double *vecDouble) {
 	StringInfoData buf;
 	short _n;
 	

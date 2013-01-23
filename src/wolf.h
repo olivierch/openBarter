@@ -15,6 +15,9 @@ when undefines, both are texts
 #define FLOW_MAX_DIM (64)
 #define obMRange(v,S) for ((v)=0;(v)<(S);(v)++)
 
+#define PG_GETARG_TFLOW(x)	((Tflow*)PG_GETARG_POINTER(x))
+#define PG_RETURN_TFLOW(x)	PG_RETURN_POINTER(x)
+
 /* used to compare two Datum representing a text */
 #define IDEMTXT(a,b,res) \
 do { \
@@ -26,7 +29,6 @@ do { \
 	} \
 } while(0)
 
-
 #define DATUM_TO_STR(d,s) \
 do { \
 	int __i = VARSIZE(d); \
@@ -34,6 +36,8 @@ do { \
 	memcpy(s,VARDATA(d),__i); \
 	s[__i] = '\0'; \
 } while(0);
+
+#define GET_OMEGA(b) (((double)(b->qtt_prov)) / ((double)(b->qtt_requ)) * (b->proba))
 
 /******************************************************************************
  * 
@@ -45,6 +49,7 @@ do { \
 
 // defines the status of the flow
 typedef enum Tstatusflow {
+	notcomputed,
 	empty, // flow empty, ( dim==0 or some qtt ==0 )
 	noloop, //  end.np != begin.nr
 	refused, // refused OMEGA < 1
@@ -54,7 +59,7 @@ typedef enum Tstatusflow {
 
 typedef struct Torder {
 	int 	id;
-	Datum 	own; // text
+	int 	own; // text
 	int		oid;
 	int64	qtt_requ;
 	Datum	qua_requ; // text or tsquery
@@ -72,12 +77,28 @@ typedef struct Torder {
 	double	dist;
 	#endif
 } Torder;
-
+/*
 typedef struct Twolf {
 	short 		dim;
 	Datum		*alld; // Datum to be freed
 	Torder		x[];
 } Twolf;
+*/
+typedef struct Tfl {
+	int64	qtt_prov,qtt_requ,qtt;
+	double proba;
+	int32	id,oid,own;
+	int64 	flowr;
+} Tfl; 
+
+typedef struct Tflow {
+	int32		vl_len_;		/* varlena header (do not touch directly!) */
+	short 		dim;
+	bool		lastignore;
+	Tstatusflow	status; 
+	Tfl			x[FLOW_MAX_DIM];
+	// status and x[.].flowr are set by set by flowc_maximum
+} Tflow; // sizeof(Tflow)=392 when FLOW_MAX_DIM=8
 
 typedef struct TresChemin {
 	bool	lastignore;
@@ -86,7 +107,7 @@ typedef struct TresChemin {
 	short 	occOwn[FLOW_MAX_DIM];
 	short   ownIndex[FLOW_MAX_DIM]; 
 	double	gain,prodOmega;
-	Twolf 	*wolf;
+	Tflow 	*flow;
 	double 	omegaCorrige[FLOW_MAX_DIM],fluxExact[FLOW_MAX_DIM],piom[FLOW_MAX_DIM],omega[FLOW_MAX_DIM]; 
 	int64	flowNodes[FLOW_MAX_DIM]; // result == Torder.flowr
 	int64	floor[FLOW_MAX_DIM];
@@ -112,11 +133,12 @@ typedef struct Tpoint {
 /******************************************************************************
  * 
  *****************************************************************************/
-extern char * wolfc_vecIntStr(short dim,int64 *vecInt);
-extern char * wolfc_vecDoubleStr(short dim,double *vecDouble);
-extern TresChemin *wolfc_maximum(Twolf *wolf);
-extern char * wolfc_cheminToStr(TresChemin *chem);
 
+extern char * flowc_vecIntStr(short dim,int64 *vecInt);
+extern char * flowc_vecDoubleStr(short dim,double *vecDouble);
+extern TresChemin *flowc_maximum(Tflow *flow);
+extern char * flowc_cheminToStr(TresChemin *chem);
+/*
 extern bool follow_orders(Torder *prev,Torder *next);
 extern double follow_rank(bool end,Torder *prev,Torder *next);
 extern char *follow_qua_provToStr(Datum d);
@@ -127,8 +149,22 @@ extern char *follow_DatumTxtToStr(Datum d);
 extern bool tsquery_match_vq(TSVector val,TSQuery query);
 
 extern char *ywolf_allToStr(Twolf *wolf);
-extern char *ywolf_statusToStr(Tstatusflow s);
+
 
 extern double earth_distance_internal(Tpoint *pt1, Tpoint *pt2);
+*/
+extern char *yflow_statusToStr(Tstatusflow s);
+extern char *yflow_ndboxToStr(Tflow *flow,bool internal);
+
+extern Tflow *flowm_cextends(Tfl *o,Tflow *f, bool before);
+extern Tflow *flowm_extends(Tfl *o,Tflow *f, bool before);
+extern Tflow *flowm_copy(Tflow *f);
+extern Tflow *flowm_init(void);
+
+extern void yorder_get_order(Datum eorder,Torder *orderp);
+extern void yorder_to_fl(Torder *o,Tfl *fl);
+extern bool yorder_match(Torder *prev,Torder *next);
+extern bool yorder_matche(Datum *prev,Datum *next);
+extern double yorder_match_proba(Torder *prev,Torder *next);
 
 
