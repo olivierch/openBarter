@@ -203,7 +203,7 @@ create index towner_name_idx on towner(name);
 SELECT _reference_time('towner');
 SELECT _grant_read('towner');
 --------------------------------------------------------------------------------
-/*
+/* USELESS!!!
 returns the id of an owner.
 if insert=false and not found, returns 0
 else
@@ -217,21 +217,36 @@ BEGIN
 
 	SELECT id INTO _wid FROM towner WHERE name=_name;
 	IF NOT found THEN
-		IF (_insert) THEN
-			IF (fgetconst('INSERT_OWN_UNKNOWN')=1) THEN
-				_wid := fcreateowner(_name);
-			ELSE
-				RAISE NOTICE 'The owner % is unknown',_name;
-				RAISE EXCEPTION USING ERRCODE='YU001';
-			END IF;
-		ELSE
-			_wid := 0;
-		END IF;
+		_wid := fcreateowner(_name);
 	END IF;
 	return _wid;
 END;
 $$ LANGUAGE PLPGSQL;
-
+--------------------------------------------------------------------------------
+CREATE FUNCTION fcreateowner(_name text) RETURNS int AS $$
+DECLARE
+	_wid int;
+BEGIN
+	LOOP
+		SELECT id INTO _wid FROM towner WHERE name=_name;
+		IF found THEN
+			RAISE WARNING 'The owner % was already created',_name;
+			return _wid;
+		END IF;
+		BEGIN
+			if(char_length(_name)<1) THEN
+				RAISE NOTICE 'Owner s name cannot be empty';
+				RAISE EXCEPTION USING ERRCODE='YU001';
+			END IF;
+			INSERT INTO towner (name) VALUES (_name) RETURNING id INTO _wid;
+			-- RAISE NOTICE 'owner % created',_name;
+			return _wid;
+		EXCEPTION WHEN unique_violation THEN
+			--
+		END;
+	END LOOP;
+END;
+$$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- TMVT
 -- id,nbc,nbt,grp,own_src,own_dst,qtt,nat,created
@@ -369,13 +384,14 @@ DECLARE
 	_first_mvt 	int;
 
 	--_flows		json[]:= ARRAY[]::json[];
-	_ypatmax	yorder[];
+	_cyclemax 	yflow;
 	_res	    int8[];
 	_tid		int;
 	_resx		yresexec%rowtype;
 	_time_begin	timestamp;
 	_qtt		int8;
 	_mid		int;
+	_cnt		int;
 BEGIN
 
 	lock table torder in share update exclusive mode;
@@ -391,17 +407,16 @@ BEGIN
 	DELETE FROM tstack WHERE id=_tid RETURNING * INTO STRICT _t;
 	-- RAISE NOTICE 'tstack %',_t;
 	
-	
 	IF NOT (_t.oid IS NULL) THEN
 		-- look for the referenced oid
 		SELECT o INTO _od from torder o WHERE (o.ord).id= _t.oid;
 		_o := (_od.ord);
 		IF NOT FOUND THEN
 			INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,refused,created) 
-				VALUES(1,1,NULL,_t.id,_t.usr,_t.oid,_o.own,_o.own,_o.qtt,_o.qua_prov,false,true,true,_t.created)
+				VALUES(1,1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,_t.qtt,_t.qua_prov,false,true,true,_t.created)
 				RETURNING id INTO _mid;
 			UPDATE tmvt SET grp = _mid WHERE id = _mid;
-			_ro.ord := _o;
+			_ro.ord := _o; -- empty!!!!
 			RETURN _ro; -- the referenced order was not found in the book
 		ELSE
 			_qtt	:= _o.qtt;
@@ -411,9 +426,13 @@ BEGIN
 		_qtt  	:= _t.qtt_prov;
 	END IF;
 	
+	SELECT id INTO _wid FROM towner WHERE name=_t.own;
+	IF NOT found THEN
+		_wid := fcreateowner(_t.own);
+	END IF;
 -- TODO record post_requ point,pos_prov point,dist float8,weigth float4[] of _t
 -- and RANK_NORMALIZATION from tconst
-	_o := ROW(_t.id,_t.own,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt,0)::yorder;
+	_o := ROW(_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt)::yorder;
 	
 	INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);	
 
@@ -422,10 +441,18 @@ BEGIN
 	_fmvtids := ARRAY[]::int[];
 	
 	_time_begin := clock_timestamp();
+	RAISE NOTICE 'order % inséré',_o;
 	
-	FOR _ypatmax IN SELECT _patmax  FROM fomega_max_iterator(_o.id) LOOP
-	
-		_resx := fexecute_flow(_ypatmax);
+	_cnt := fcreate_tmp(_o.id);
+	RAISE NOTICE 'ici1 %',_cnt;
+	LOOP	
+	-- FOR _ypatmax IN SELECT _cyclemax  FROM fomega_max_iterator(_o.id) LOOP
+		SELECT yflow_max(cycle) INTO _cyclemax FROM _tmp WHERE yflow_is_draft(cycle);	
+		IF(NOT FOUND) THEN
+			EXIT; -- from LOOP
+		END IF;
+		RAISE NOTICE 'flow trouvé';
+		_resx := fexecute_flow(_cyclemax);
 		_fmvtids := _fmvtids || _resx.mvts;
 		
 		_res := ywolf_qtts(_ypatmax);
@@ -433,7 +460,8 @@ BEGIN
 		_ro.qtt_out := _ro.qtt_out + _res[2];
 		
 		-- _flows := array_append(_flows,(yflow_to_json(_ypatmax)::text)::json);
-		
+		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax) WHERE yflow_is_draft(cycle);
+		RAISE NOTICE 'ici3';
 	END LOOP;
 	
 	IF (	(_ro.qtt_in != 0) AND 
@@ -452,43 +480,6 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fproducemvt() TO role_bo;
-
---------------------------------------------------------------------------------
-/* fomega_max_iterator
-creates a temporary table _tmp of potential exchanges
-among potential exchanges of _tmp, selects the ones having the product of omegas maximum
-*/
---------------------------------------------------------------------------------
-CREATE FUNCTION fomega_max_iterator(_pivotid int) 
-	RETURNS TABLE (_patmax yflow) AS $$
-DECLARE
-	_cnt 		int;
-BEGIN
-	------------------------------------------------------------------------
-	_cnt := fcreate_tmp(_pivotid);
-			
-	LOOP		
-		SELECT yflow_max(pat) INTO _patmax FROM _tmp;
-		
-		IF(NOT FOUND) THEN
-			EXIT; -- from LOOP
-		END IF;
-		
-		-- among potential exchange cycles of _tmp, selects the one having the product of omegas maximum
-		IF (NOT yflow_is_draft(_patmax)) THEN -- status != draft
-			EXIT; -- no potential exchange where found; exit from LOOP
-		END IF;
-		_cnt := _cnt + 1;
-		RETURN NEXT;
-
-		UPDATE _tmp SET pat = yflow_reduce(pat,_patmax);
-	END LOOP;
-	
-	-- DROP TABLE _tmp; it is dropped at the end of the transaction
-	
- 	RETURN;
-END; 
-$$ LANGUAGE PLPGSQL; 
 
 --------------------------------------------------------------------------------
 /* for an order O creates a temporary table _tmp of objects.
@@ -533,7 +524,7 @@ BEGIN
 				AND Y.depth < _MAXCYCLE 
 				AND NOT cycle 
 				AND NOT yflow_contains_id((X.ord).id,Y.path)
-		) SELECT yflow_finish(debut,path,fin) from search_backward 
+		) SELECT yflow_finish(debut,path,fin) as cycle from search_backward 
 		WHERE (fin).qua_prov=(debut).qua_requ AND yflow_match(fin,debut) 
 		LIMIT _MAXPATHFETCHED
 	);
@@ -566,7 +557,9 @@ DECLARE
 	_flowr		int8;
 	_o			yorder;
 	_usr		text;
-	_onext		yorder;
+	_own		text;
+	_ownnext	text;
+	_idownnext	int;
 	_or			torder%rowtype;
 	_mat		int8[][];
 BEGIN
@@ -574,10 +567,10 @@ BEGIN
 	
 	-- sanity check
 	IF( _nbcommit <2 ) THEN
-		RAISE EXCEPTION 'the flow should be draft' 
+		RAISE EXCEPTION 'the flow should be draft:_nbcommit = %',_nbcommit 
 			USING ERRCODE='YA003';
 	END IF;
-	-- RAISE NOTICE 'flow of % commits',_nbcommit;
+	RAISE NOTICE 'flow of % commits',_nbcommit;
 	
 	--lock table torder in share row exclusive mode;
 	lock table torder in share update exclusive mode;
@@ -605,7 +598,7 @@ BEGIN
 		_o.qtt  := _mat[_i][6];
 		_flowr:= _mat[_i][7]; 
 		
-		_onext.own := _mat[_next_i][2];	
+		_idownnext := _mat[_next_i][2];	
 		
 		-- sanity check
 		SELECT count(*) INTO _cnt FROM torder WHERE (ord).oid = _o.oid AND _flowr > (ord).qtt;
@@ -627,9 +620,12 @@ BEGIN
 		IF( (_or.ord).qtt = 0 ) THEN
 			_exhausted := true;
 		END IF;
+
+		SELECT id INTO STRICT _ownnext FROM towner WHERE id=_idownnext;
+		SELECT id INTO STRICT _own FROM towner WHERE id=_o.next;
 		
 		INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,refused,created) 
-			VALUES(_nbcommit,1,_first_mvt,_o.id,(_or.ord).usr,_o.oid,_o.own,_onext.own,_flowr,(_or.ord).qua_prov,false,_exhausted,false,statement_timestamp())
+			VALUES(_nbcommit,1,_first_mvt,_o.id,(_or.ord).usr,_o.oid,_own,_ownnext,_flowr,(_or.ord).qua_prov,false,_exhausted,false,statement_timestamp())
 			RETURNING id INTO _mvt_id;
 			
 		IF(_first_mvt IS NULL) THEN
