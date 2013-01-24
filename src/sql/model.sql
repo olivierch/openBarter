@@ -1,8 +1,8 @@
 \set ECHO none
 
-drop schema IF EXISTS test CASCADE;
-CREATE SCHEMA test;
-SET search_path TO test;
+drop schema IF EXISTS test0_6_1 CASCADE;
+CREATE SCHEMA test0_6_1;
+SET search_path TO test0_6_1;
 
 SET client_min_messages = warning;
 SET log_error_verbosity = terse;
@@ -13,8 +13,11 @@ create extension cube with version '1.0';
 drop extension if exists btree_gin cascade;
 create extension btree_gin with version '1.0';
 
-drop extension if exists wolf cascade;
-create extension wolf with version '1.0';
+drop extension if exists hstore cascade;
+create extension hstore with version '1.1';
+
+drop extension if exists flow cascade;
+create extension flow with version '1.0';
 
 --------------------------------------------------------------------------------
 -- main constants of the model
@@ -183,6 +186,23 @@ create index torder_id_idx on torder(((ord).id));
 create index torder_oid_idx on torder(((ord).oid));
 
 --------------------------------------------------------------------------------
+-- OWNER
+--------------------------------------------------------------------------------
+create table towner (
+	id	serial, 
+	name text UNIQUE,
+    created timestamp not NULL,
+    updated timestamp
+);
+
+SELECT _grant_read('towner');
+SELECT _reference_time('towner');
+
+comment on table torder is 'description of owners';
+
+create index towner_id_idx on towner(id);
+
+--------------------------------------------------------------------------------
 -- TMVT
 -- id,nbc,nbt,grp,own_src,own_dst,qtt,nat,created
 --------------------------------------------------------------------------------
@@ -340,6 +360,7 @@ BEGIN
 	-- SELECT * INTO STRICT _t from tstack WHERE id=_tid;
 	DELETE FROM tstack WHERE id=_tid RETURNING * INTO STRICT _t;
 	-- RAISE NOTICE 'tstack %',_t;
+	
 	
 	IF NOT (_t.oid IS NULL) THEN
 		-- look for the referenced oid
@@ -512,6 +533,7 @@ DECLARE
 	_cnt 		int;
 	_resx		yresexec%rowtype;
 	_qtt		int8;
+	_flowr		int8;
 	_o			yorder;
 	_usr		text;
 	_onext		yorder;
@@ -551,18 +573,18 @@ BEGIN
 		_o.own	:= _mat[_i][2];
 		_o.oid	:= _mat[_i][3];
 		_o.qtt  := _mat[_i][6];
-		_o.flowr:= _mat[_i][7]; 
+		_flowr:= _mat[_i][7]; 
 		
 		_onext.own := _mat[_next_i][2];	
 		
 		-- sanity check
-		SELECT count(*) INTO _cnt FROM torder WHERE (ord).oid = _o.oid AND _o.flowr > (ord).qtt;
+		SELECT count(*) INTO _cnt FROM torder WHERE (ord).oid = _o.oid AND _flowr > (ord).qtt;
 		IF(_cnt >0) THEN
 			SELECT * INTO _or FROM torder WHERE (ord).oid = _o.oid;
 			RAISE EXCEPTION 'the flow is not in sync with the database. the flow exeeds orders: % \n %',_or,_o  USING ERRCODE='YU003';
 		END IF;
 		
-		UPDATE torder SET ord.qtt = (ord).qtt - _o.flowr ,updated = statement_timestamp()
+		UPDATE torder SET ord.qtt = (ord).qtt - _flowr ,updated = statement_timestamp()
 			WHERE (ord).oid = _o.oid; 
 			
 		--sanity check
@@ -577,7 +599,7 @@ BEGIN
 		END IF;
 		
 		INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,refused,created) 
-			VALUES(_nbcommit,1,_first_mvt,_o.id,(_or.ord).usr,_o.oid,_o.own,_onext.own,_o.flowr,(_or.ord).qua_prov,false,_exhausted,false,statement_timestamp())
+			VALUES(_nbcommit,1,_first_mvt,_o.id,(_or.ord).usr,_o.oid,_o.own,_onext.own,_flowr,(_or.ord).qua_prov,false,_exhausted,false,statement_timestamp())
 			RETURNING id INTO _mvt_id;
 			
 		IF(_first_mvt IS NULL) THEN

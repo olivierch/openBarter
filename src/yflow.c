@@ -696,6 +696,7 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 }
 /******************************************************************************
 ******************************************************************************/
+/* unused
 static bool _yflow_hs_contains_keys(HStore	*h2,HStore *h1) {
 	
 	int			cnth1 = HS_COUNT(h1);
@@ -721,7 +722,7 @@ static bool _yflow_hs_contains_keys(HStore	*h2,HStore *h1) {
 	}
 	//elog(WARNING,"cnth1=%i",cnth1);
 	return contains;	
-}
+} */
 /******************************************************************************
 float weight = yflow_weigth(hstore w,hstore p,hstore r,bool all)
 weight = sum (if(p[i] == r[i] then w[i] else 0)/sum(w[i]) for i in w.keys
@@ -747,12 +748,12 @@ double yflow_weight_internal(HStore *w,HStore *p,HStore *r) {
 	HEntry	   *entw = HSARRPTR(w);
 	char	   *basw = HSSTRPTR(w);
 	
-	int			cntp = HS_COUNT(p);
+	//int			cntp = HS_COUNT(p);
 	HEntry	   *entp = HSARRPTR(p);
 	char	   *basp = HSSTRPTR(p);
 	int 	lowboundp = 0;
 		
-	int			cntr = HS_COUNT(r);
+	//int			cntr = HS_COUNT(r);
 	HEntry	   *entr = HSARRPTR(r);
 	char	   *basr = HSSTRPTR(r);
 	int 	lowboundr = 0;
