@@ -186,21 +186,51 @@ create index torder_id_idx on torder(((ord).id));
 create index torder_oid_idx on torder(((ord).oid));
 
 --------------------------------------------------------------------------------
--- OWNER
+-- TOWNER
 --------------------------------------------------------------------------------
 create table towner (
-	id	serial, 
-	name text UNIQUE,
-    created timestamp not NULL,
-    updated timestamp
+    id serial UNIQUE not NULL,
+    name text UNIQUE not NULL,
+    PRIMARY KEY (id),
+    UNIQUE(name),
+    CHECK(	
+    	char_length(name)>0 
+    )
 );
-
-SELECT _grant_read('towner');
+comment on table towner is 'owners of values exchanged';
+alter sequence towner_id_seq owned by towner.id;
+create index towner_name_idx on towner(name);
 SELECT _reference_time('towner');
+SELECT _grant_read('towner');
+--------------------------------------------------------------------------------
+/*
+returns the id of an owner.
+if insert=false and not found, returns 0
+else
+if the owner does'nt exist and INSERT_OWN_UNKNOWN==1, it is created
+*/
+--------------------------------------------------------------------------------
+CREATE FUNCTION fgetowner(_name text) RETURNS int AS $$
+DECLARE
+	_wid int;
+BEGIN
 
-comment on table torder is 'description of owners';
-
-create index towner_id_idx on towner(id);
+	SELECT id INTO _wid FROM towner WHERE name=_name;
+	IF NOT found THEN
+		IF (_insert) THEN
+			IF (fgetconst('INSERT_OWN_UNKNOWN')=1) THEN
+				_wid := fcreateowner(_name);
+			ELSE
+				RAISE NOTICE 'The owner % is unknown',_name;
+				RAISE EXCEPTION USING ERRCODE='YU001';
+			END IF;
+		ELSE
+			_wid := 0;
+		END IF;
+	END IF;
+	return _wid;
+END;
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 -- TMVT
