@@ -1,7 +1,9 @@
 #include "postgres.h"
 #include "fmgr.h"
 #include "lib/stringinfo.h"
-#include "tsearch/ts_type.h" // define TSQuery and TSVector
+#include "utils/array.h"
+#include "hstore.h"
+// #include "tsearch/ts_type.h" // define TSQuery and TSVector
 
 // #define ACTIVATE_DISTANCE
 /* ACTIVATE_FULLTEXT is defined when qua_prov and qua_requ are tsvector and tsquery
@@ -37,7 +39,7 @@ do { \
 	s[__i] = '\0'; \
 } while(0);
 
-#define GET_OMEGA(b) (((double)(b->qtt_prov)) / ((double)(b->qtt_requ)) * (b->proba))
+#define GET_OMEGA(b) (((double)(b->qtt_prov)) / ((double)(b->qtt_requ)))
 
 /******************************************************************************
  * 
@@ -155,6 +157,7 @@ extern double earth_distance_internal(Tpoint *pt1, Tpoint *pt2);
 */
 extern char *yflow_statusToStr(Tstatusflow s);
 extern char *yflow_ndboxToStr(Tflow *flow,bool internal);
+extern double yflow_weight_internal(HStore *w,HStore *p,HStore *r);
 
 extern Tflow *flowm_cextends(Tfl *o,Tflow *f, bool before);
 extern Tflow *flowm_extends(Tfl *o,Tflow *f, bool before);

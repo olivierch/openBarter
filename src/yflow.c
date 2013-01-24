@@ -10,13 +10,14 @@
 
 #include "lib/stringinfo.h"
 #include "libpq/pqformat.h"
-#include "utils/array.h"
+
 #include "utils/builtins.h"
 #include "utils/lsyscache.h" 
 #include "catalog/pg_type.h" 
 #include "funcapi.h" 
 
 #include "wolf.h"
+
 
 PG_MODULE_MAGIC;
 
@@ -426,13 +427,13 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 {
 	Tflow	*f0 = PG_GETARG_TFLOW(0);
 	Tflow	*f1 = PG_GETARG_TFLOW(1);
-	short			dim,i;
+	short			dim0,dim1,i;
 	double			_rank0,_rank1;
 	bool			_sup = false;
 	
-	dim = f0->dim;
+	dim0 = f0->dim;
 	// f0 is empty
-	if(dim == 0)
+	if(dim0 == 0)
 		goto _end;
 		
 	if(f0->status == notcomputed) {
@@ -442,16 +443,16 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 	}
 		
 	_rank0 = 1.0;
-	obMRange(i,dim) {
+	obMRange(i,dim0) {
 		Tfl *b = &f0->x[i];
 		if(b->flowr <=0 ) 
 			goto _end;	// wolf0 is not a draft
 		_rank0 *=  GET_OMEGA(b);				
 	}	
 
-	dim = f1->dim;
+	dim1 = f1->dim;
 	// wolf1 is empty
-	if(dim == 0)
+	if(dim1 == 0)
 		goto _end;
 		
 	if(f1->status == notcomputed) {
@@ -460,14 +461,31 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 		pfree(c);
 	}		
 	_rank1 = 1.0;
-	obMRange(i,dim) {
+	obMRange(i,dim1) {
 		Tfl *b = &f1->x[i];
 		if(b->flowr <=0) 
 			goto _end;	// f1 is not a draft
 		_rank1 *= GET_OMEGA(b);			
 	}	
 	
+	// comparing weight
+	if(_rank0 == _rank1) {
+		/* rank are geometric means of proba. Since 0 <=proba <=1
+		if it was a product,large cycles would be penalized.
+		*/
+		_rank0 = 1.0;
+		obMRange(i,dim0) 
+			_rank0 *=  (double) f0->x[i].proba;				
+		_rank0 = pow(_rank0,1.0/(double) dim0);
+		
+		_rank1 = 1.0;
+		obMRange(i,dim1) 
+			_rank1 *=  (double) f1->x[i].proba;
+		_rank1 = pow(_rank1,1.0/(double) dim1);					
+		
+	}
 	_sup = _rank0 > _rank1;
+	
 	//elog(WARNING,"yflow_maxg: wolf0: %s",ywolf_allToStr(wolf0));
 	//elog(WARNING,"yflow_maxg: wolf1: %s",ywolf_allToStr(wolf1));
 	//elog(WARNING,"ywolf_maxg: rank0=%f,rank1=%f",_rank0,_rank1);
@@ -551,7 +569,13 @@ Datum yflow_is_draft(PG_FUNCTION_ARGS)
 	Tflow	*f = PG_GETARG_TFLOW(0);
 	bool	isdraft = true;
 	short 	i;
-	
+
+	if(f->status == notcomputed) {
+		TresChemin *c;
+		c = flowc_maximum(f);
+		pfree(c);
+	}
+		
 	obMRange(i,f->dim) {
 		if (f->x[i].flowr <=0) {
 			isdraft = false;
@@ -669,6 +693,137 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 	PG_FREE_IF_COPY(f,0);
 	PG_RETURN_ARRAYTYPE_P(result);
 	
+}
+/******************************************************************************
+******************************************************************************/
+static bool _yflow_hs_contains_keys(HStore	*h2,HStore *h1) {
+	
+	int			cnth1 = HS_COUNT(h1);
+	HEntry	   *enth1 = HSARRPTR(h1);
+	char	   *bash1 = HSSTRPTR(h1);
+	bool		contains = true;	
+	int 		i;
+	int 		lowbound = 0;
+	
+	//elog(WARNING,"cnth1=%i",cnth1);
+	obMRange(i,cnth1) {
+		int 	l1 = HS_KEYLEN(enth1, i);
+		char 	*key1 = HS_KEY(enth1, bash1, i);
+		
+		int		idx = hstoreFindKey(h2, &lowbound,key1,l1);
+		
+		// elog(WARNING,"i=%i,cnth1=%i, key h2[%s],len=%i found in idx=%i",i,cnth1,key1,l1,idx);
+		
+		if(idx <0) {
+			contains = false;
+			break;
+		}
+	}
+	//elog(WARNING,"cnth1=%i",cnth1);
+	return contains;	
+}
+/******************************************************************************
+float weight = yflow_weigth(hstore w,hstore p,hstore r,bool all)
+weight = sum (if(p[i] == r[i] then w[i] else 0)/sum(w[i]) for i in w.keys
+weigth >= 0
+errors:
+	if w[i] is not float returns -3
+	if w[i] <0 returns -4
+******************************************************************************/
+PG_FUNCTION_INFO_V1(yflow_weight);
+Datum yflow_weight(PG_FUNCTION_ARGS);
+Datum yflow_weight(PG_FUNCTION_ARGS) {
+	HStore	   *w = PG_GETARG_HS(0);
+	HStore	   *p = PG_GETARG_HS(1);
+	HStore	   *r = PG_GETARG_HS(2);
+	
+	PG_RETURN_FLOAT8((float8)  yflow_weight_internal(w,p,r));
+}
+
+double yflow_weight_internal(HStore *w,HStore *p,HStore *r) {
+	double 		f = 0.0,s = 0.0,wp;
+	
+	int			cntw = HS_COUNT(w);
+	HEntry	   *entw = HSARRPTR(w);
+	char	   *basw = HSSTRPTR(w);
+	
+	int			cntp = HS_COUNT(p);
+	HEntry	   *entp = HSARRPTR(p);
+	char	   *basp = HSSTRPTR(p);
+	int 	lowboundp = 0;
+		
+	int			cntr = HS_COUNT(r);
+	HEntry	   *entr = HSARRPTR(r);
+	char	   *basr = HSSTRPTR(r);
+	int 	lowboundr = 0;
+	int			i;
+	
+	
+	// elog(WARNING,"cntw=%i,cntp=%i,cntr=%i,%c,%c",cntw,cntp,cntr,_yflow_hs_contains_keys(p,r)?'t':'f',_yflow_hs_contains_keys(w,r)?'t':'f');
+	// elog(WARNING,"cntw=%i,cntp=%i,cntr=%i,%c,%c",cntw,cntp,cntr,_yflow_hs_contains_keys(p,r)?'t':'f',_yflow_hs_contains_keys(w,r)?'t':'f');
+	/*
+	if(!(_yflow_hs_contains_keys(p,r))) {
+		f = -1.0;
+		goto _end;
+	}
+	if(all && (cntp!=cntr ) {
+		f = -5.0;
+		goto _end;
+	}		
+	if(!(_yflow_hs_contains_keys(r,w))) {
+		f = -2.0;
+		goto _end;
+	}
+	*/
+	
+	obMRange(i,cntw) {
+		char *cweight = HS_VAL(entw, basw, i);
+		// int lw = HS_VALLEN(entw, i);
+		char *end;
+		int 	lw = HS_KEYLEN(entw, i);
+		char 	*cw = HS_KEY(entw, basw, i);
+		
+		wp = strtod(cweight,&end);
+		if(cweight == end) {
+			f = -3.0; // this is not a float
+			goto _end;
+		}
+		if(wp < 0.0) {
+			f = -4.0; // the weigth < 0
+			goto _end;
+		}
+		
+		s += wp;
+		//elog(WARNING,"w[%i]=%f,%s,%i",i,wp,cw,klw);
+		{
+			int 	ir,ip;
+			
+			char	*cr,*cp;
+			int		lr,lp;
+			
+			ir = hstoreFindKey(r, &lowboundr,cw,lw);
+			lr = HS_VALLEN(entr, ir);
+			cr = HS_VAL(entr, basr, ir);
+			//elog(WARNING,"r[%i]=%s,%i",ir,cr,lr);
+			if(ir >=0) {
+				ip = hstoreFindKey(p, &lowboundp,cw,lw);
+				if(ip >=0) {
+					lp = HS_VALLEN(entp, ip);
+					cp = HS_VAL(entp, basp, ip);
+					//elog(WARNING,"p[%i]=%s,%i",ip,cp,lp);
+					
+					if((lr==lp) && (0 == memcmp(cp,cr,lr)))			
+						f += wp;
+				}
+			}
+		}
+
+	}		
+	if(s != 0.0)	 
+		f = f/s;
+	else f = 0.0;
+_end:
+	return f;
 }
 
 

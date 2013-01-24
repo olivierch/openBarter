@@ -2,6 +2,8 @@ drop schema IF EXISTS t CASCADE;
 CREATE SCHEMA t;
 SET search_path TO t;
 
+drop extension if exists hstore cascade;
+create extension hstore with version '1.1';
 
 drop extension if exists flow cascade;
 create extension flow with version '1.0';
@@ -77,7 +79,7 @@ BEGIN
 		UNION ALL
 		SELECT X.ord,X.ord || Y.path,Y.fin,(ord).id || Y.seq,Y.depth+1,(X.ord).id = ANY(Y.seq)
 		FROM torder X,search_backward Y
-		WHERE (X.ord).qua_prov=(Y.debut).qua_requ AND Y.depth <5 AND NOT cycle
+		WHERE (X.ord).qua_prov=(Y.debut).qua_requ AND Y.depth <5 AND NOT cycle AND NOT (X.ord).id = ANY(Y.seq)
 	) SELECT path from search_backward WHERE (fin).qua_prov=(debut).qua_requ
 	);
 
@@ -112,7 +114,7 @@ select count(*) from find(10);
 
 -- select yflow_show(x.fl) from (select yflow_max(y.fl) as fl from (SELECT find(10) as fl) y ) x;
 
-
+/*
 
 select yflow_is_draft('[(35, 93, 35, 21170, 2685, 2685, 1.000000),(636, 50, 636, 12213, 95415, 95415, 1.000000
 ),(389, 68, 389, 23785, 29283, 29283, 1.000000),(274, 12, 274, 58834, 80362, 80362, 1.000000),(12, 
@@ -126,6 +128,13 @@ select yflow_show('[(35, 93, 35, 21170, 2685, 2685, 1.000000),(636, 50, 636, 122
 ),(389, 68, 389, 23785, 29283, 29283, 1.000000),(274, 12, 274, 58834, 80362, 80362, 1.000000),(12, 
 55, 12, 35136, 55490, 55490, 1.000000)]'::yflow);
 select yflow_to_matrix('[(35, 93, 35, 21170, 2685, 2685, 1.000000),(636, 50, 636, 12213, 95415, 95415, 1.000000
+),(389, 68, 389, 23785, 29283, 29283, 1.000000),(274, 12, 274, 58834, 80362, 80362, 1.000000),(12, 
+55, 12, 35136, 55490, 55490, 1.000000)]'::yflow);
+*/
+select yflow_show('[(35, 93, 35, 21170, 2685, 2685, 1.000000),(636, 50, 636, 12213, 95415, 95415, 1.000000
+),(389, 68, 389, 23785, 29283, 29283, 1.000000),(274, 12, 274, 58834, 80362, 80362, 1.000000),(12, 
+55, 12, 35136, 55490, 55490, 1.000000)]'::yflow);
+select yflow_qtts('[(35, 93, 35, 21170, 2685, 2685, 1.000000),(636, 50, 636, 12213, 95415, 95415, 1.000000
 ),(389, 68, 389, 23785, 29283, 29283, 1.000000),(274, 12, 274, 58834, 80362, 80362, 1.000000),(12, 
 55, 12, 35136, 55490, 55490, 1.000000)]'::yflow);
 /*

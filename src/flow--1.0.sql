@@ -1,3 +1,5 @@
+
+
 CREATE TYPE yorder AS (
 	id int,
 	own int,
@@ -102,3 +104,9 @@ CREATE FUNCTION yflow_qtts(yflow)
 RETURNS int8[]
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION yflow_weight(hstore,hstore,hstore)
+RETURNS float8
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
