@@ -138,6 +138,12 @@ yflow_in(PG_FUNCTION_ARGS)
 		yflow_yyerror("bogus input for a yflow");
 
 	yflow_scanner_finish();
+	
+	{
+		TresChemin *c;
+		c = flowc_maximum(result);
+		pfree(c);
+	}	
 
 	//(void) flowc_maximum(result);
 
@@ -156,7 +162,7 @@ char *yflow_ndboxToStr(Tflow *yflow,bool internal) {
 	initStringInfo(&buf);
 
 	if(internal) {
-		appendStringInfo(&buf, "YFLOW %s ",yflow_statusToStr(yflow->status));
+		appendStringInfo(&buf, "YFLOW ");
 	}
 	appendStringInfoChar(&buf, '[');
 	if(dim >0) {
@@ -223,12 +229,9 @@ Datum yflow_dim(PG_FUNCTION_ARGS)
 Datum yflow_show(PG_FUNCTION_ARGS) {
 	Tflow	*X;
 	char *str;
-	TresChemin *c;
 	
 	X = PG_GETARG_TFLOW(0);
 	// elog(WARNING,"yflow_show: %s",yflow_ndboxToStr(X,true));
-	c = flowc_maximum(X);
-	pfree(c);
 	//str = flowc_cheminToStr(c);
 	str = yflow_ndboxToStr(X,true);
 	PG_RETURN_CSTRING(str);
@@ -383,6 +386,12 @@ Datum yflow_finish(PG_FUNCTION_ARGS) {
 	result = flowm_copy(f);
 	result->x[result->dim-1].proba = yorder_match_proba(&fin,&debut);
 
+	{
+		TresChemin *c;
+		c = flowc_maximum(result);
+		pfree(c);
+	}	
+
 	PG_RETURN_TFLOW(result);
 }
 /******************************************************************************
@@ -436,12 +445,6 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 	if(dim0 == 0)
 		goto _end;
 		
-	if(f0->status == notcomputed) {
-		TresChemin *c;
-		c = flowc_maximum(f0);
-		pfree(c);
-	}
-		
 	_rank0 = 1.0;
 	obMRange(i,dim0) {
 		Tfl *b = &f0->x[i];
@@ -454,12 +457,7 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 	// wolf1 is empty
 	if(dim1 == 0)
 		goto _end;
-		
-	if(f1->status == notcomputed) {
-		TresChemin *c;
-		c = flowc_maximum(f1);
-		pfree(c);
-	}		
+				
 	_rank1 = 1.0;
 	obMRange(i,dim1) {
 		Tfl *b = &f1->x[i];
@@ -510,8 +508,6 @@ if (f and fr are drafts)
 if (f or fr is not in (empty,draft))
 	error
 ******************************************************************************/
-#define FLOWISDOEU(f) ((f)->status != notcomputed)
-#define FLOWAREDOEU(f1,f2) (FLOWISDOEU(f1) && FLOWISDOEU(f2))
 
 Datum yflow_reduce(PG_FUNCTION_ARGS)
 {
@@ -525,39 +521,25 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 	//memcpy(r,f,sizeof(Tflow));
 	r = flowm_copy(f);
 	
-	if(r->status == notcomputed) {
-		c = flowc_maximum(r);
-		pfree(c);
-	}
-	if(fr->status == notcomputed) {
-		c = flowc_maximum(fr);
-		pfree(c);
+
+	//short _dim;
+	
+	//_dim = (r->lastignore) ? (r->dim-1) : r->dim; // lastignore?
+	obMRange(i,fr->dim) {
+		obMRange(j,r->dim)
+			if(r->x[j].oid == fr->x[i].oid) {
+				if(r->x[j].qtt >= fr->x[i].flowr)
+					r->x[j].qtt -= fr->x[i].flowr;
+				else 
+			    		ereport(ERROR,
+						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+						errmsg("yflow_reduce: the flow is greater than available")));
+			}
 	}
 	
-	if (!FLOWAREDOEU(r,fr)) 
-		ereport(ERROR,
-			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-			 errmsg("yflow_reduce: flows should be computed;%s and %s instead",yflow_statusToStr(r->status),yflow_statusToStr(fr->status))));
-	
-	if(r->status == draft && fr->status == draft) {
-		//short _dim;
-		
-		//_dim = (r->lastignore) ? (r->dim-1) : r->dim; // lastignore?
-		obMRange(i,fr->dim) {
-			obMRange(j,r->dim)
-				if(r->x[j].oid == fr->x[i].oid) {
-					if(r->x[j].qtt >= fr->x[i].flowr)
-						r->x[j].qtt -= fr->x[i].flowr;
-					else 
-				    		ereport(ERROR,
-							(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-							errmsg("yflow_reduce: the flow is greater than available")));
-				}
-		}
-		
-		c = flowc_maximum(r);
-		pfree(c);
-	}
+	c = flowc_maximum(r);
+	pfree(c);
+
 
 	PG_RETURN_TFLOW(r);
 
@@ -569,13 +551,9 @@ Datum yflow_is_draft(PG_FUNCTION_ARGS)
 	Tflow	*f = PG_GETARG_TFLOW(0);
 	bool	isdraft = true;
 	short 	i;
-
-	if(f->status == notcomputed) {
-		TresChemin *c;
-		c = flowc_maximum(f);
-		pfree(c);
-	}
 		
+	if(f->dim ==0) PG_RETURN_BOOL(false);
+	
 	obMRange(i,f->dim) {
 		if (f->x[i].flowr <=0) {
 			isdraft = false;
@@ -610,11 +588,6 @@ Datum yflow_to_matrix(PG_FUNCTION_ARGS)
 	flow = PG_GETARG_TFLOW(0);	
 
 	_dim = flow->dim;
-	if(flow->status == notcomputed) {
-		TresChemin *c;
-		c = flowc_maximum(flow);
-		pfree(c);
-	}
 
 	if(_dim == 0) {
 		result = construct_empty_array(INT8OID);
@@ -663,22 +636,28 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 	char        _typalign;
 	int         _dims[1];
 	int         _lbs[1];
-
-	if(f->status == notcomputed) {
-		TresChemin *c;
-		c = flowc_maximum(f);
-		pfree(c);
+	int8		_qtt_in =0,_qtt_out =0;
+	short		_i;
+	bool		_isDraft = true;
+	
+	obMRange(_i,f->dim) {
+		if(f->x[_i].flowr <=0) {
+			_isDraft = false;
+		}
 	}
-	if(f->status != draft)
-			ereport(ERROR,
+	if(_isDraft) {
+		_qtt_in = Int64GetDatum(f->x[f->dim-2].flowr);
+		_qtt_out = Int64GetDatum(f->x[f->dim-1].flowr);
+	} else {
+			ereport(WARNING,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("yflow_qtts: the flow should be draft")));
-	
+	}
 	_datum_out = palloc(sizeof(Datum) * 2);
 	_isnull = palloc(sizeof(bool) * 2);
-	_datum_out[0] = Int64GetDatum(f->x[f->dim-2].flowr); // qtt_in
+	_datum_out[0] = _qtt_in;
 	_isnull[0] = false;
-	_datum_out[1] = Int64GetDatum(f->x[f->dim-1].flowr); // qtt_out
+	_datum_out[1] = _qtt_out;
 	_isnull[1] = false;
 
 	_dims[0] = 2;

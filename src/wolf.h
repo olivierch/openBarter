@@ -97,7 +97,7 @@ typedef struct Tflow {
 	int32		vl_len_;		/* varlena header (do not touch directly!) */
 	short 		dim;
 	bool		lastignore;
-	Tstatusflow	status; 
+	// Tstatusflow	status; 
 	Tfl			x[FLOW_MAX_DIM];
 	// status and x[.].flowr are set by set by flowc_maximum
 } Tflow; // sizeof(Tflow)=392 when FLOW_MAX_DIM=8

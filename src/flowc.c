@@ -94,7 +94,6 @@ _dropflow:
 		
 _end:
 	// elog(WARNING,"chem: %s",wolfc_cheminToStr(chem));
-	flow->status = chem->status;
 	return chem;
 }
 

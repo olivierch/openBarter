@@ -19,7 +19,6 @@ Tflow *flowm_init(void) {
 	
 	f = palloc0(sb);
 	f->dim = 0;
-	f->status = notcomputed;
 	SET_VARSIZE(f, sb);
 	return f;
 }

@@ -514,19 +514,21 @@ BEGIN
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP  AS (
 */	
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
-		WITH RECURSIVE search_backward(debut,path,fin,depth,cycle) AS(
-			SELECT ord,yflow_init(ord),ord,1,false FROM torder WHERE (ord).id= _ordid
-			UNION ALL
-			SELECT X.ord,yflow_grow(X.ord,Y.debut,Y.path),Y.fin,Y.depth+1,yflow_contains_id((X.ord).id,Y.path)
-			FROM torder X,search_backward Y
-			WHERE (X.ord).qua_prov=(Y.debut).qua_requ 
-				AND yflow_match(X.ord,Y.debut) 
-				AND Y.depth < _MAXCYCLE 
-				AND NOT cycle 
-				AND NOT yflow_contains_id((X.ord).id,Y.path)
-		) SELECT yflow_finish(debut,path,fin) as cycle from search_backward 
-		WHERE (fin).qua_prov=(debut).qua_requ AND yflow_match(fin,debut) 
-		LIMIT _MAXPATHFETCHED
+		SELECT Z.cycle FROM (
+			WITH RECURSIVE search_backward(debut,path,fin,depth,cycle) AS(
+				SELECT ord,yflow_init(ord),ord,1,false FROM torder WHERE (ord).id= _ordid
+				UNION ALL
+				SELECT X.ord,yflow_grow(X.ord,Y.debut,Y.path),Y.fin,Y.depth+1,yflow_contains_id((X.ord).id,Y.path)
+				FROM torder X,search_backward Y
+				WHERE (X.ord).qua_prov=(Y.debut).qua_requ 
+					AND yflow_match(X.ord,Y.debut) 
+					AND Y.depth < _MAXCYCLE 
+					AND NOT cycle 
+					AND NOT yflow_contains_id((X.ord).id,Y.path)
+			) SELECT yflow_finish(debut,path,fin) as cycle from search_backward 
+			WHERE (fin).qua_prov=(debut).qua_requ AND yflow_match(fin,debut) 
+			LIMIT _MAXPATHFETCHED
+		) Z WHERE yflow_is_draft(Z.cycle)
 	);
 	RETURN 0;
 END;
