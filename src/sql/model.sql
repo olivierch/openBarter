@@ -7,14 +7,8 @@ SET search_path TO test0_6_1;
 SET client_min_messages = warning;
 SET log_error_verbosity = terse;
 
-drop extension if exists cube cascade;
-create extension cube with version '1.0';
-
 drop extension if exists btree_gin cascade;
 create extension btree_gin with version '1.0';
-
-drop extension if exists hstore cascade;
-create extension hstore with version '1.1';
 
 drop extension if exists flow cascade;
 create extension flow with version '1.0';
@@ -30,9 +24,9 @@ create table tconst(
 
 --------------------------------------------------------------------------------
 INSERT INTO tconst (name,value) VALUES 
-	('MAXCYCLE',16),
+	('MAXCYCLE',6), --must be less than yflow_get_maxdim()
 	('MAXPATHFETCHED',1024),
-	('RANK_NORMALIZATION',2|4),
+	-- ('RANK_NORMALIZATION',2|4),
 	-- it is the version of the model, not that of the extension
 	('VERSION-X.y.z',0),
 	('VERSION-x.Y.y',6),
@@ -52,8 +46,8 @@ BEGIN
 	IF(NOT FOUND) THEN
 		RAISE EXCEPTION 'the const % is not found',_name USING ERRCODE= 'YA002';
 	END IF;
-	IF(_name = 'MAXCYCLE' AND _ret >64) THEN
-		RAISE EXCEPTION 'obCMAXVALUE must be <=64' USING ERRCODE='YA002';
+	IF(_name = 'MAXCYCLE' AND _ret >yflow_get_maxdim()) THEN
+		RAISE EXCEPTION 'MAXVALUE must be <=%',yflow_get_maxdim() USING ERRCODE='YA002';
 	END IF;
 	RETURN _ret;
 END; 
@@ -185,6 +179,7 @@ create index torder_qua_prov_idx on torder using gin(((ord).qua_prov) text_ops);
 create index torder_id_idx on torder(((ord).id));
 create index torder_oid_idx on torder(((ord).oid));
 
+
 --------------------------------------------------------------------------------
 -- TOWNER
 --------------------------------------------------------------------------------
@@ -202,13 +197,16 @@ alter sequence towner_id_seq owned by towner.id;
 create index towner_name_idx on towner(name);
 SELECT _reference_time('towner');
 SELECT _grant_read('towner');
+
+
+-- id,own,oid,qtt_requ,qua_requ,qtt_prov,qua_prov,qtt
+create view vorder as
+select (o.ord).id as id,w.name as own,(o.ord).oid as oid,
+		(o.ord).qtt_requ as qtt_requ,(o.ord).qua_requ as qua_requ,
+		(o.ord).qtt_prov as qtt_prov,(o.ord).qua_prov as qua_prov,
+		(o.ord).qtt as qtt, o.created as created
+from torder o left join towner w on ((o.ord).own=w.id) where o.usr=current_user;
 --------------------------------------------------------------------------------
-/* USELESS!!!
-returns the id of an owner.
-if insert=false and not found, returns 0
-else
-if the owner does'nt exist and INSERT_OWN_UNKNOWN==1, it is created
-*/
 --------------------------------------------------------------------------------
 CREATE FUNCTION fgetowner(_name text) RETURNS int AS $$
 DECLARE
@@ -249,7 +247,7 @@ END;
 $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- TMVT
--- id,nbc,nbt,grp,own_src,own_dst,qtt,nat,created
+-- id,nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,order_created,created
 --------------------------------------------------------------------------------
 create table tmvt (
 	id serial UNIQUE not NULL,
@@ -266,8 +264,9 @@ create table tmvt (
 	nat text not NULL,
 	ack	boolean default false,
 	exhausted boolean default false,
-	refused boolean default false,
-	created timestamp not NULL,
+	refused int default 0,
+	order_created timestamp not NULL,
+	created	timestamp not NULL 
 	CHECK (
 		(nbc = 1 AND own_src = own_dst)
 	OR 	(nbc !=1) -- ( AND own_src != own_dst)
@@ -306,12 +305,8 @@ create table tstack (
     oid int, -- can be NULL
     qua_requ text NOT NULL ,
     qtt_requ dquantity NOT NULL,
-    pos_requ point,
     qua_prov text NOT NULL ,
     qtt_prov dquantity NOT NULL,
-    pos_prov point,
-    dist    float8,
-    weigth  float4[],
     created timestamp not NULL,   
     PRIMARY KEY (id)
 );
@@ -333,7 +328,8 @@ SELECT fifo_init('tstack');
 CREATE TYPE yresorder AS (
     ord yorder,
     qtt_in int8,
-    qtt_out int8
+    qtt_out int8,
+    err	int
 );
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION femptystack() RETURNS int AS $$
@@ -361,6 +357,57 @@ $$ LANGUAGE PLPGSQL;
 GRANT EXECUTE ON FUNCTION  femptystack() TO role_co;
 
 --------------------------------------------------------------------------------
+/* for an order O creates a temporary table _tmp of objects.
+Each object represents a chain of orders - a flows - going to O. 
+
+The table has columns
+	debut 	the first order of the path
+	path	the path
+	fin		the end of the path (O)
+	depth	the depth of exploration
+	cycle	a boolean true when the path contains the new order
+
+The number of paths fetched is limited to MAXPATHFETCHED
+Among those objects representing chains of orders, 
+only those making a potential exchange (draft) are recorded.
+*/
+--------------------------------------------------------------------------------
+/*
+CREATE VIEW vorderinsert AS
+	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
+	FROM torder ORDER BY ((qtt_prov::double precision)/(qtt_requ::double precision)) DESC; */
+--------------------------------------------------------------------------------
+CREATE FUNCTION fcreate_tmp(_ordid int) RETURNS int AS $$
+DECLARE 
+	_MAXPATHFETCHED	 int := fgetconst('MAXPATHFETCHED');  
+	_MAXCYCLE 	int := fgetconst('MAXCYCLE');
+	_cnt int;
+BEGIN
+/*	DROP TABLE IF EXISTS _tmp;
+*/	
+	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
+		SELECT Z.cycle FROM (
+			WITH RECURSIVE search_backward(debut,path,fin,depth,cycle) AS(
+				SELECT ord,yflow_init(ord),ord,1,false FROM torder WHERE (ord).id= _ordid
+				UNION ALL
+				SELECT X.ord,yflow_grow(X.ord,Y.debut,Y.path),Y.fin,Y.depth+1,yflow_contains_oid((X.ord).id,Y.path)
+				FROM torder X,search_backward Y
+				WHERE (X.ord).qua_prov=(Y.debut).qua_requ 
+					AND yflow_match(X.ord,Y.debut) 
+					AND Y.depth < _MAXCYCLE 
+					AND NOT cycle 
+					AND NOT yflow_contains_oid((X.ord).id,Y.path)
+			) SELECT yflow_finish(debut,path,fin) as cycle from search_backward 
+			WHERE (fin).qua_prov=(debut).qua_requ AND yflow_match(fin,debut) 
+			LIMIT _MAXPATHFETCHED
+		) Z -- WHERE yflow_is_draft(Z.cycle)
+	);
+	RETURN 0;
+END;
+$$ LANGUAGE PLPGSQL;
+
+
+--------------------------------------------------------------------------------
 -- order unstacked and inserted into torder
 /* if the referenced oid is found,
 	the order is inserted, and the process is loached
@@ -377,14 +424,16 @@ DECLARE
 	_wid		int;
 	_o			yorder;
 	_or			yorder;
-	_od			torder%rowtype;
+	_op			yorder; --torder%rowtype;
 	_t			tstack%rowtype;
 	_ro		    yresorder%rowtype;
 	_fmvtids	int[];
 	_first_mvt 	int;
+	_err		int;
 
 	--_flows		json[]:= ARRAY[]::json[];
 	_cyclemax 	yflow;
+	_cycle		yflow;
 	_res	    int8[];
 	_tid		int;
 	_resx		yresexec%rowtype;
@@ -392,46 +441,56 @@ DECLARE
 	_qtt		int8;
 	_mid		int;
 	_cnt		int;
+	_qua_prov	text; --hstore
+	_qtt_prov	int8;
+	_oid		int;
 BEGIN
 
 	lock table torder in share update exclusive mode;
 	_ro.ord 		:= NULL;
 	_ro.qtt_in 		:= 0;
 	_ro.qtt_out 	:= 0;
+	_ro.err			:= 0;
 	
 	SELECT id INTO _tid FROM tstack ORDER BY id ASC LIMIT 1;
 	IF(NOT FOUND) THEN
 		RETURN _ro; -- the stack is empty
 	END IF;
-	-- SELECT * INTO STRICT _t from tstack WHERE id=_tid;
+
 	DELETE FROM tstack WHERE id=_tid RETURNING * INTO STRICT _t;
-	-- RAISE NOTICE 'tstack %',_t;
 	
+	
+	_wid := fgetowner(_t.own);
+
 	IF NOT (_t.oid IS NULL) THEN
-		-- look for the referenced oid
-		SELECT o INTO _od from torder o WHERE (o.ord).id= _t.oid;
-		_o := (_od.ord);
-		IF NOT FOUND THEN
-			INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,refused,created) 
-				VALUES(1,1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,_t.qtt,_t.qua_prov,false,true,true,_t.created)
+
+		SELECT (ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
+			INTO _op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder WHERE (ord).id= _t.oid;
+
+		
+		IF (NOT FOUND) THEN 
+			_ro.err := -1; END IF;
+		IF (_op.own != _wid) THEN -- parent must have the same owner
+			_ro.err := -2; END IF;
+		IF (_op.oid != _op.id) THEN -- parent must not have parent
+			_ro.err := -3; END IF;
+			
+		IF (_ro.err != 0) THEN
+			INSERT INTO tmvt (nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,qtt,nat,ack,exhausted,refused,order_created,created) 
+				VALUES       (1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,_t.qtt_prov,_t.qua_prov,false,_ro.err,true,_t.created,statement_timestamp())
 				RETURNING id INTO _mid;
 			UPDATE tmvt SET grp = _mid WHERE id = _mid;
-			_ro.ord := _o; -- empty!!!!
+			_ro.ord := _op;
 			RETURN _ro; -- the referenced order was not found in the book
 		ELSE
-			_qtt	:= _o.qtt;
+			_qtt	:= _op.qtt;
+			_t.qua_prov := _op.qua_prov; 
 		END IF;
 	ELSE 
-		_t.oid 	:= _t.id;
+		_t.oid 	:= _t.id;		
 		_qtt  	:= _t.qtt_prov;
 	END IF;
 	
-	SELECT id INTO _wid FROM towner WHERE name=_t.own;
-	IF NOT found THEN
-		_wid := fcreateowner(_t.own);
-	END IF;
--- TODO record post_requ point,pos_prov point,dist float8,weigth float4[] of _t
--- and RANK_NORMALIZATION from tconst
 	_o := ROW(_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt)::yorder;
 	
 	INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);	
@@ -441,27 +500,33 @@ BEGIN
 	_fmvtids := ARRAY[]::int[];
 	
 	_time_begin := clock_timestamp();
-	RAISE NOTICE 'order % inséré',_o;
 	
 	_cnt := fcreate_tmp(_o.id);
-	RAISE NOTICE 'ici1 %',_cnt;
+
 	LOOP	
-	-- FOR _ypatmax IN SELECT _cyclemax  FROM fomega_max_iterator(_o.id) LOOP
+
 		SELECT yflow_max(cycle) INTO _cyclemax FROM _tmp WHERE yflow_is_draft(cycle);	
-		IF(NOT FOUND) THEN
+		IF(NOT yflow_is_draft(_cyclemax)) THEN
 			EXIT; -- from LOOP
 		END IF;
-		RAISE NOTICE 'flow trouvé';
-		_resx := fexecute_flow(_cyclemax);
+
+		IF(yflow_contains_oid(_oid,_cyclemax)) THEN
+			RAISE NOTICE 'Cyclemax found: %',yflow_show(_cyclemax);
+			RAISE NOTICE 'qtts: %',yflow_qtts(_cyclemax);
+		END IF;
+		_resx := fexecute_flow(_cyclemax,_oid);
 		_fmvtids := _fmvtids || _resx.mvts;
 		
-		_res := ywolf_qtts(_ypatmax);
+		_res := yflow_qtts(_cyclemax);
 		_ro.qtt_in  := _ro.qtt_in  + _res[1];
 		_ro.qtt_out := _ro.qtt_out + _res[2];
 		
-		-- _flows := array_append(_flows,(yflow_to_json(_ypatmax)::text)::json);
-		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax) WHERE yflow_is_draft(cycle);
-		RAISE NOTICE 'ici3';
+		IF (yflow_contains_oid(_oid,_cyclemax)) THEN
+			RAISE NOTICE '_tmp reduced qtt_in=% qtt_out=% with %',_res[1],_res[2],yflow_show(_cyclemax);
+		END IF;
+	
+		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax); -- WHERE yflow_is_draft(cycle);
+
 	END LOOP;
 	
 	IF (	(_ro.qtt_in != 0) AND 
@@ -474,66 +539,11 @@ BEGIN
 	-- set the number of movements in this transaction
 	UPDATE tmvt SET nbt= array_length(_fmvtids,1) WHERE id = ANY (_fmvtids);
 	
-	-- PERFORM finvalidate_treltried(_time_begin);
 	RETURN _ro;
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fproducemvt() TO role_bo;
-
---------------------------------------------------------------------------------
-/* for an order O creates a temporary table _tmp of objects.
-Each object represents a chain of orders - a flows - going to O. 
-The table has columns
-	id	id of an order X
-	ord	order X
-	nr	quality required by this order X
-	pat	path of orders - a flow - from X to O
-One object for each paths to O
-objects having the shortest path are fetched first
-objects having best orders (using the view vorderinsert) are fetched first
-The number of objects fetched is limited to MAXPATHFETCHED
-Among those objects representing chains of orders, 
-only those making a potential exchange (draft) are recorded.
-*/
---------------------------------------------------------------------------------
-/*
-CREATE VIEW vorderinsert AS
-	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
-	FROM torder ORDER BY ((qtt_prov::double precision)/(qtt_requ::double precision)) DESC; */
---------------------------------------------------------------------------------
-CREATE FUNCTION fcreate_tmp(_ordid int) RETURNS int AS $$
-DECLARE 
-	_MAXPATHFETCHED	 int := fgetconst('MAXPATHFETCHED'); 
-	-- _MAXBRANCHFETCHED	 int := fgetconst('MAXBRANCHFETCHED'); 
-	_MAXCYCLE 	int := fgetconst('MAXCYCLE');
-	_cnt int;
-BEGIN
-/*	DROP TABLE IF EXISTS _tmp;
-	RAISE NOTICE 'select * from fcreate_tmp(%,yorder_get%,%,%)',_id,_ord,_np,_nr;
-	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP  AS (
-*/	
-	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
-		SELECT Z.cycle FROM (
-			WITH RECURSIVE search_backward(debut,path,fin,depth,cycle) AS(
-				SELECT ord,yflow_init(ord),ord,1,false FROM torder WHERE (ord).id= _ordid
-				UNION ALL
-				SELECT X.ord,yflow_grow(X.ord,Y.debut,Y.path),Y.fin,Y.depth+1,yflow_contains_id((X.ord).id,Y.path)
-				FROM torder X,search_backward Y
-				WHERE (X.ord).qua_prov=(Y.debut).qua_requ 
-					AND yflow_match(X.ord,Y.debut) 
-					AND Y.depth < _MAXCYCLE 
-					AND NOT cycle 
-					AND NOT yflow_contains_id((X.ord).id,Y.path)
-			) SELECT yflow_finish(debut,path,fin) as cycle from search_backward 
-			WHERE (fin).qua_prov=(debut).qua_requ AND yflow_match(fin,debut) 
-			LIMIT _MAXPATHFETCHED
-		) Z WHERE yflow_is_draft(Z.cycle)
-	);
-	RETURN 0;
-END;
-$$ LANGUAGE PLPGSQL;
-
 
 --------------------------------------------------------------------------------
 /* fexecute_flow
@@ -543,20 +553,23 @@ from a flow representing a draft, for each order:
 */
 --------------------------------------------------------------------------------
 
-CREATE FUNCTION fexecute_flow(_flw yflow) RETURNS  yresexec AS $$
+CREATE FUNCTION fexecute_flow(_flw yflow,_oid int) RETURNS  yresexec AS $$
 DECLARE
 	_i			int;
 	_next_i		int;
 	_nbcommit	int;
 	
 	_first_mvt  int;
-	_exhausted	bool;
+	_exhausted	boolean;
+	_cntExhausted int;
 	_mvt_id		int;
 
 	_cnt 		int;
 	_resx		yresexec%rowtype;
 	_qtt		int8;
 	_flowr		int8;
+	_qttmin		int8;
+	_qttmax		int8;
 	_o			yorder;
 	_usr		text;
 	_own		text;
@@ -572,28 +585,20 @@ BEGIN
 		RAISE EXCEPTION 'the flow should be draft:_nbcommit = %',_nbcommit 
 			USING ERRCODE='YA003';
 	END IF;
-	RAISE NOTICE 'flow of % commits',_nbcommit;
+	-- RAISE NOTICE 'flow of % commits',_nbcommit;
 	
 	--lock table torder in share row exclusive mode;
 	lock table torder in share update exclusive mode;
-/*	
-	CREATE TYPE yresexec AS (
-    first_mvt int, -- id of the first mvt
-    nbc int, -- number of mvts
-    mvts int[] -- list of id des mvts
-); */
 	
 	_first_mvt := NULL;
 	_exhausted := false;
 	_resx.nbc := _nbcommit;	
 	_resx.mvts := ARRAY[]::int[];
-	_mat := yflow_to_matrix(flow);
+	_mat := yflow_to_matrix(_flw);
 	
 	_i := _nbcommit;
 	FOR _next_i IN 1 .. _nbcommit LOOP
 		------------------------------------------------------------------------
-		-- _onext  := _flw[_next_i];
-		-- _o	    := _flw[_i];
 		_o.id   := _mat[_i][1];
 		_o.own	:= _mat[_i][2];
 		_o.oid	:= _mat[_i][3];
@@ -603,31 +608,42 @@ BEGIN
 		_idownnext := _mat[_next_i][2];	
 		
 		-- sanity check
-		SELECT count(*) INTO _cnt FROM torder WHERE (ord).oid = _o.oid AND _flowr > (ord).qtt;
-		IF(_cnt >0) THEN
-			SELECT * INTO _or FROM torder WHERE (ord).oid = _o.oid;
-			RAISE EXCEPTION 'the flow is not in sync with the database. the flow exeeds orders: % \n %',_or,_o  USING ERRCODE='YU003';
+		SELECT count(*),min((ord).qtt),max((ord).qtt) INTO _cnt,_qttmin,_qttmax 
+			FROM torder WHERE (ord).oid = _o.oid;
+			
+		IF(_cnt = 0) THEN
+			RAISE EXCEPTION 'the stock % expected does not exist',_o.oid  USING ERRCODE='YU002';
 		END IF;
 		
+		IF( _qttmin != _qttmax ) THEN
+			RAISE EXCEPTION 'the value of stock % is not the same value for all orders',_o.oid  USING ERRCODE='YU002';
+		END IF;
+		
+		_cntExhausted := 0;
+		IF( _qttmin < _flowr ) THEN
+			RAISE EXCEPTION 'the stock % is smaller than the flow (% < %)',_o.oid,_qttmin,_flowr  USING ERRCODE='YU002';
+		ELSIF (_qttmin = _flowr) THEN
+			_cntExhausted := _cnt;
+		END IF;
+			
+		-- update all stocks of the order book
 		UPDATE torder SET ord.qtt = (ord).qtt - _flowr ,updated = statement_timestamp()
 			WHERE (ord).oid = _o.oid; 
-			
-		--sanity check
 		GET DIAGNOSTICS _cnt = ROW_COUNT;
 		IF(_cnt = 0) THEN
-			RAISE EXCEPTION 'the flow is not in sync with the database. torder[%] does not exist',_o.oid  USING ERRCODE='YU002';
+			RAISE EXCEPTION 'no orders with the stock % exist',_o.oid  USING ERRCODE='YU002';
 		END IF;
-		
-		SELECT * INTO _or FROM torder WHERE (ord).oid = _o.oid LIMIT 1;
-		IF( (_or.ord).qtt = 0 ) THEN
-			_exhausted := true;
-		END IF;
+			
 
-		SELECT id INTO STRICT _ownnext FROM towner WHERE id=_idownnext;
-		SELECT id INTO STRICT _own FROM towner WHERE id=_o.next;
+		SELECT * INTO _or FROM torder WHERE (ord).oid = _o.oid LIMIT 1;
+
+		SELECT name INTO STRICT _ownnext 	FROM towner WHERE id=_idownnext;
+		SELECT name INTO STRICT _own 		FROM towner WHERE id=_o.own;
 		
-		INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,ack,exhausted,refused,created) 
-			VALUES(_nbcommit,1,_first_mvt,_o.id,(_or.ord).usr,_o.oid,_own,_ownnext,_flowr,(_or.ord).qua_prov,false,_exhausted,false,statement_timestamp())
+		INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,
+						ack,exhausted,refused,order_created,created) 
+			VALUES(_nbcommit,1,_first_mvt,_o.id,_or.usr,_o.oid,_own,_ownnext,_flowr,(_or.ord).qua_prov,
+						false,_exhausted,0,_or.created,statement_timestamp())
 			RETURNING id INTO _mvt_id;
 			
 		IF(_first_mvt IS NULL) THEN
@@ -637,10 +653,15 @@ BEGIN
 		END IF;
 		_resx.mvts := array_append(_resx.mvts,_mvt_id);
 
-		IF( _exhausted ) THEN
-			DELETE FROM torder WHERE (ord).oid=_o.oid;
+		IF( _cntExhausted > 0) THEN
+			DELETE FROM torder WHERE (ord).oid=_o.oid AND (ord).qtt = 0 ;
+			GET DIAGNOSTICS _cnt = ROW_COUNT;
+			IF(_cnt != _cntExhausted) THEN
+				RAISE EXCEPTION 'the stock % is not exhasted',_o.oid  USING ERRCODE='YU002';
+			END IF;
+			_exhausted := true;
 		END IF;
-		-- RAISE NOTICE 'ici2 %',_xo;
+
 		_i := _next_i;
 		------------------------------------------------------------------------
 	END LOOP;
@@ -650,7 +671,6 @@ BEGIN
 		RAISE EXCEPTION 'the cycle should exhaust some order' 
 			USING ERRCODE='YA003';
 	END IF;
-	-- RAISE NOTICE 'ici3 %',_xo;
 	RETURN _resx;
 END;
 $$ LANGUAGE PLPGSQL;
@@ -671,7 +691,7 @@ returns (id,0) or (0,diag) with diag:
 --------------------------------------------------------------------------------
 
 CREATE FUNCTION 
-	fsubmitorder(_own text,_oid int,_qua_requ text,_qtt_requ int8,_pos_requ point,_qua_prov text,_qtt_prov int8,_pos_prov point,_dist float8,_weigth float4[])
+	fsubmitorder(_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
 	RETURNS yressubmit AS $$	
 DECLARE
 	_t			tstack%rowtype;
@@ -691,13 +711,13 @@ BEGIN
 		RETURN _r;
 	END IF;	
 	
-	INSERT INTO tstack(usr,own,oid,qua_requ,qtt_requ,pos_requ,qua_prov,qtt_prov,pos_prov,dist,weigth,created)
-	VALUES (current_user,_own,_oid,_qua_requ,_qtt_requ,_pos_requ,_qua_prov,_qtt_prov,_pos_prov,_dist,_weigth,statement_timestamp()) RETURNING * into _t;
+	INSERT INTO tstack(usr,own,oid,qua_requ,qtt_requ,qua_prov,qtt_prov,created)
+	VALUES (current_user,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,statement_timestamp()) RETURNING * into _t;
 	_r.id := _t.id;
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitorder(text,int,text,int8,point,text,int8,point,float8,float4[]) TO role_co;	
+GRANT EXECUTE ON FUNCTION  fsubmitorder(text,int,text,int8,text,int8) TO role_co;	
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION ackmvt() RETURNS int AS $$
@@ -720,42 +740,7 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  ackmvt() TO role_co;
 
---------------------------------------------------------------------------------
--- renumber a table with an index on id asc (init_fifo(_name) sets this index)
-CREATE FUNCTION _frenumber_table(_name text) RETURNS int AS $$
-DECLARE
-	_id  int;
-	_idr int;
-BEGIN
-	PERFORM setval(_name || '_id_seq',1,false);
-	LOOP
-		_idr := nextval(_name || '_id_seq');
-		_id := NULL;
-		EXECUTE 'SELECT id FROM ' || _name::regclass || ' WHERE id >= $1 ORDER BY id ASC LIMIT 1' INTO _id USING _idr;
-		EXIT WHEN _id IS NULL;
-		
-		CONTINUE WHEN _id = _idr;
-		EXECUTE 'UPDATE ' || _name::regclass || ' SET id = $1 WHERE id = $2' USING _idr,_id;
-	END LOOP;
-	RAISE NOTICE 'table % retumbered with % rows',_name,_idr;
-	RETURN _idr;
-END; 
-$$ LANGUAGE PLPGSQL;
-
-CREATE FUNCTION frenumber_tables() RETURNS TABLE(_table text,_cnt int) AS $$
-DECLARE
-	_cnt int;
-BEGIN
-	_table := 'torder';
-	_cnt := _frenumber_table(_table);
-	RETURN NEXT;
-	_table := 'tmvt';
-	_cnt := _frenumber_table(_table);
-	RETURN NEXT;
-	RETURN;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  frenumber_tables() TO admin;
+\i sql/stat.sql
 
 
 

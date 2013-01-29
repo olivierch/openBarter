@@ -19,27 +19,6 @@ void yorder_get_order(Datum eorder,Torder *orderp) {
 
 	bool isnull;
 	HeapTupleHeader tuple = ((HeapTupleHeader) PG_DETOAST_DATUM(eorder));
-/*	
-	orderp->id = DatumGetInt32(GetAttributeByName(t, "id", &isnull)); if(isnull) goto _end;
-	orderp->own = DatumGetInt32(GetAttributeByName(t, "own", &isnull)); if(isnull) goto _end;
-	orderp->oid = DatumGetInt32(GetAttributeByName(t, "oid", &isnull)); if(isnull) goto _end;
-	orderp->qtt_requ = DatumGetInt64(GetAttributeByName(t, "qtt_requ", &isnull)); if(isnull) goto _end;
-	orderp->qua_requ = (Datum) PG_DETOAST_DATUM(GetAttributeByName(t, "qua_requ", &isnull)); if(isnull) goto _end;
-	orderp->qtt_prov = DatumGetInt64(GetAttributeByName(t, "qtt_prov", &isnull)); if(isnull) goto _end;
-	orderp->qua_prov = (Datum) PG_DETOAST_DATUM(GetAttributeByName(t, "qua_prov", &isnull)); if(isnull) goto _end;
-	//elog(WARNING,"ywolf_get_order: order->qua_prov='%s'",follow_DatumTxtToStr(orderp->qua_prov));
-	orderp->qtt = DatumGetInt64(GetAttributeByName(t, "qtt", &isnull)); if(isnull) goto _end;
-	
-	orderp->id = DatumGetInt32(GetAttributeByNum(t, 1, &isnull)); if(isnull) goto _end;
-	orderp->own = DatumGetInt32(GetAttributeByNum(t, 2, &isnull)); if(isnull) goto _end;
-	orderp->oid = DatumGetInt32(GetAttributeByNum(t, 3, &isnull)); if(isnull) goto _end;
-	orderp->qtt_requ = DatumGetInt64(GetAttributeByNum(t, 4, &isnull)); if(isnull) goto _end;
-	orderp->qua_requ = (Datum) PG_DETOAST_DATUM(GetAttributeByNum(t, 5, &isnull)); if(isnull) goto _end;
-	orderp->qtt_prov = DatumGetInt64(GetAttributeByNum(t, 6, &isnull)); if(isnull) goto _end;
-	orderp->qua_prov = (Datum) PG_DETOAST_DATUM(GetAttributeByNum(t, 7, &isnull)); if(isnull) goto _end;
-	orderp->qtt = DatumGetInt64(GetAttributeByNum(t, 8, &isnull)); if(isnull) goto _end;
-*/
-
 	Oid			tupType;
 	int32		tupTypmod;
 	TupleDesc	tupDesc;
@@ -53,8 +32,6 @@ void yorder_get_order(Datum eorder,Torder *orderp) {
 	ItemPointerSetInvalid(&(tmptup.t_self));
 	tmptup.t_tableOid = InvalidOid;
 	tmptup.t_data = tuple;
-
-	//heap_getattr(&tmptup,attrno,tupDesc,&isNull);
 
 	orderp->id = DatumGetInt32(heap_getattr(&tmptup,1,tupDesc,&isnull)); if(isnull) goto _end;
 	orderp->own = DatumGetInt32(heap_getattr(&tmptup,2,tupDesc,&isnull)); if(isnull) goto _end;
@@ -70,7 +47,7 @@ void yorder_get_order(Datum eorder,Torder *orderp) {
 	return;
 _end:
 	ereport(ERROR,
-					(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
 			   errmsg("a field is null")));	
 	return;
 }

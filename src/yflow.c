@@ -31,77 +31,38 @@ extern void yflow_scanner_finish(void);
 PG_FUNCTION_INFO_V1(yflow_in);
 PG_FUNCTION_INFO_V1(yflow_out);
 PG_FUNCTION_INFO_V1(yflow_dim);
+PG_FUNCTION_INFO_V1(yflow_get_maxdim);
 PG_FUNCTION_INFO_V1(yflow_init);
 PG_FUNCTION_INFO_V1(yflow_grow);
 PG_FUNCTION_INFO_V1(yflow_finish);
-PG_FUNCTION_INFO_V1(yflow_contains_id);
+PG_FUNCTION_INFO_V1(yflow_contains_oid);
 PG_FUNCTION_INFO_V1(yflow_match);
 PG_FUNCTION_INFO_V1(yflow_maxg);
 PG_FUNCTION_INFO_V1(yflow_reduce);
 PG_FUNCTION_INFO_V1(yflow_is_draft);
 PG_FUNCTION_INFO_V1(yflow_to_matrix);
 PG_FUNCTION_INFO_V1(yflow_qtts);
-/*
-PG_FUNCTION_INFO_V1(yflow_get_yorder);
-PG_FUNCTION_INFO_V1(yflow_get_yorder_yflow);
-PG_FUNCTION_INFO_V1(yflow_get_yflow_yorder);
-PG_FUNCTION_INFO_V1(yflow_follow_yorder_yflow);
-PG_FUNCTION_INFO_V1(yflow_follow_yflow_yorder);
-*/
+
 PG_FUNCTION_INFO_V1(yflow_show);
-/*
-PG_FUNCTION_INFO_V1(yflow_eq);
-PG_FUNCTION_INFO_V1(yflow_left);
-PG_FUNCTION_INFO_V1(yflow_reduce);
-PG_FUNCTION_INFO_V1(yflow_last_iomega);
-PG_FUNCTION_INFO_V1(yflow_maxg);
-PG_FUNCTION_INFO_V1(yflow_status);
-PG_FUNCTION_INFO_V1(yflow_flr_omega);
-PG_FUNCTION_INFO_V1(yflow_to_matrix);
-PG_FUNCTION_INFO_V1(yflow_qtts);
-PG_FUNCTION_INFO_V1(yflow_get_last_order);
-PG_FUNCTION_INFO_V1(yflow_to_json);
-PG_FUNCTION_INFO_V1(yflows_array_to_json);
-PG_FUNCTION_INFO_V1(yflow_iterid);
-*/
+
 
 Datum yflow_in(PG_FUNCTION_ARGS);
 Datum yflow_out(PG_FUNCTION_ARGS);
 Datum yflow_dim(PG_FUNCTION_ARGS);
+Datum yflow_get_maxdim(PG_FUNCTION_ARGS);
 
 Datum yflow_init(PG_FUNCTION_ARGS);
 Datum yflow_grow(PG_FUNCTION_ARGS);
 Datum yflow_finish(PG_FUNCTION_ARGS);
-Datum yflow_contains_id(PG_FUNCTION_ARGS);
+Datum yflow_contains_oid(PG_FUNCTION_ARGS);
 Datum yflow_match(PG_FUNCTION_ARGS);
 Datum yflow_maxg(PG_FUNCTION_ARGS);
 Datum yflow_reduce(PG_FUNCTION_ARGS);
 Datum yflow_is_draft(PG_FUNCTION_ARGS);
 Datum yflow_to_matrix(PG_FUNCTION_ARGS);
 Datum yflow_qtts(PG_FUNCTION_ARGS);
-/*
-Datum yflow_get_yorder(PG_FUNCTION_ARGS);
-Datum yflow_get_yorder_yflow(PG_FUNCTION_ARGS);
-Datum yflow_get_yflow_yorder(PG_FUNCTION_ARGS);
-Datum yflow_follow_yorder_yflow(PG_FUNCTION_ARGS);
-Datum yflow_follow_yflow_yorder(PG_FUNCTION_ARGS);
-*/
+
 Datum yflow_show(PG_FUNCTION_ARGS);
-/*
-Datum yflow_eq(PG_FUNCTION_ARGS);
-Datum yflow_left(PG_FUNCTION_ARGS);
-Datum yflow_reduce(PG_FUNCTION_ARGS);
-Datum yflow_last_iomega(PG_FUNCTION_ARGS);
-Datum yflow_maxg(PG_FUNCTION_ARGS);
-Datum yflow_status(PG_FUNCTION_ARGS);
-Datum yflow_flr_omega(PG_FUNCTION_ARGS);
-Datum yflow_to_matrix(PG_FUNCTION_ARGS);
-Datum yflow_qtts(PG_FUNCTION_ARGS);
-Datum yflow_get_last_order(PG_FUNCTION_ARGS);
-Datum yflow_to_json(PG_FUNCTION_ARGS);
-Datum yflows_array_to_json(PG_FUNCTION_ARGS);
-Datum yflow_iterid(PG_FUNCTION_ARGS);
-*/
 
 char *yflow_pathToStr(Tflow *yflow);
 
@@ -222,7 +183,12 @@ Datum yflow_dim(PG_FUNCTION_ARGS)
 			errmsg("flow->dim not <=%i",FLOW_MAX_DIM)));
 	PG_RETURN_INT32(dim);
 }
-
+/******************************************************************************
+******************************************************************************/
+Datum yflow_get_maxdim(PG_FUNCTION_ARGS)
+{
+	PG_RETURN_INT32(FLOW_MAX_DIM);
+}
 
 /******************************************************************************
 ******************************************************************************/
@@ -247,7 +213,6 @@ Datum yflow_show(PG_FUNCTION_ARGS) {
 ******************************************************************************/
 char * yflow_statusToStr (Tstatusflow s){
 	switch(s) {
-	case notcomputed: return "notcomputed";
 	case noloop: return "noloop";
 	case draft: return "draft";
 	case refused: return "refused";
@@ -269,10 +234,16 @@ static Tflow* _yflow_get(Tfl *o,Tflow *f, bool before) {
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			errmsg("attempt to extend a yflow out of range")));
 			
-	obMRange(i,dim)
-		if(f->x[i].id == o->id) {
+	obMRange(i,dim) {
+
+		if(f->x[i].oid == o->oid) {
 			found = true;
-		}
+			break;
+		} else if(f->x[i].id == o->id) //  && f->x[i].oid != o->oid
+			ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				errmsg("same order with different oid")));
+	}
 		
 	if (found)
 		result = flowm_copy(f);
@@ -395,19 +366,19 @@ Datum yflow_finish(PG_FUNCTION_ARGS) {
 	PG_RETURN_TFLOW(result);
 }
 /******************************************************************************
- flow_finish(id,path) -> true when some order of the flow have the same id 
+ flow_contains_id(flow) -> true when some order of the flow have the same oid 
 ******************************************************************************/
-Datum yflow_contains_id(PG_FUNCTION_ARGS) {
-	int32	id = PG_GETARG_INT32(0);
+Datum yflow_contains_oid(PG_FUNCTION_ARGS) {
+	int32	oid = PG_GETARG_INT32(0);
 	Tflow	*f = PG_GETARG_TFLOW(1);
-	short 	i;
-	bool	result = false;;
+	short 	i,dim = f->dim;
+	bool	result = false;
 
-	obMRange(i,f->dim)
-		if(f->x[i].id == id) {
+	obMRange(i,dim)
+		if(f->x[i].oid == oid) {
 			result = true;
 			break;
-		}
+		} 
 
 	PG_RETURN_BOOL(result);
 }
@@ -511,26 +482,28 @@ if (f or fr is not in (empty,draft))
 
 Datum yflow_reduce(PG_FUNCTION_ARGS)
 {
-	Tflow	*f = PG_GETARG_TFLOW(0);
-	Tflow	*fr = PG_GETARG_TFLOW(1);
+	Tflow	*f0 = PG_GETARG_TFLOW(0);
+	Tflow	*f1 = PG_GETARG_TFLOW(1);
 	Tflow	*r;
 	short 	i,j;
 	TresChemin *c;
+	short _dim0;
 			 
 	//r = Ndbox_init(FLOW_MAX_DIM);
 	//memcpy(r,f,sizeof(Tflow));
-	r = flowm_copy(f);
+	r = flowm_copy(f0);
 	
 
-	//short _dim;
+	//
 	
-	//_dim = (r->lastignore) ? (r->dim-1) : r->dim; // lastignore?
-	obMRange(i,fr->dim) {
-		obMRange(j,r->dim)
-			if(r->x[j].oid == fr->x[i].oid) {
-				if(r->x[j].qtt >= fr->x[i].flowr)
-					r->x[j].qtt -= fr->x[i].flowr;
-				else 
+	_dim0 = (r->lastignore) ? (r->dim-1) : r->dim; // lastignore?
+	obMRange(i,f1->dim) {
+		obMRange(j,_dim0)
+			if(r->x[j].oid == f1->x[i].oid) {
+				if(r->x[j].qtt >= f1->x[i].flowr) {
+					r->x[j].qtt -= f1->x[i].flowr;
+					// elog(WARNING,"order %i stock %i reduced by %li to %li",r->x[j].id,r->x[j].oid,f1->x[i].flowr,r->x[j].qtt);
+				} else 
 			    		ereport(ERROR,
 						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 						errmsg("yflow_reduce: the flow is greater than available")));
@@ -539,7 +512,6 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 	
 	c = flowc_maximum(r);
 	pfree(c);
-
 
 	PG_RETURN_TFLOW(r);
 
@@ -550,11 +522,12 @@ Datum yflow_is_draft(PG_FUNCTION_ARGS)
 {
 	Tflow	*f = PG_GETARG_TFLOW(0);
 	bool	isdraft = true;
-	short 	i;
+	short 	i,_dim;
 		
-	if(f->dim ==0) PG_RETURN_BOOL(false);
-	
-	obMRange(i,f->dim) {
+	if(f->dim < 2) PG_RETURN_BOOL(false);
+	_dim = f->dim;
+	if(f->lastignore) _dim = _dim-1;
+	obMRange(i,_dim) {
 		if (f->x[i].flowr <=0) {
 			isdraft = false;
 			break;
@@ -636,7 +609,7 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 	char        _typalign;
 	int         _dims[1];
 	int         _lbs[1];
-	int8		_qtt_in =0,_qtt_out =0;
+	int64		_qtt_in =0,_qtt_out =0;
 	short		_i;
 	bool		_isDraft = true;
 	
@@ -646,8 +619,13 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 		}
 	}
 	if(_isDraft) {
-		_qtt_in = Int64GetDatum(f->x[f->dim-2].flowr);
+		//int64	_in,_out;
+		//elog(WARNING,"_qtt_in=%li _qtt_out=%li",f->x[f->dim-2].flowr,f->x[f->dim-1].flowr);
+		_qtt_in  = Int64GetDatum(f->x[f->dim-2].flowr);
 		_qtt_out = Int64GetDatum(f->x[f->dim-1].flowr);
+		//_in = DatumGetInt64(_qtt_in);
+		//_out = DatumGetInt64(_qtt_out);
+		//elog(WARNING,"_in=%li _out=%li",_in,_out);
 	} else {
 			ereport(WARNING,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
@@ -673,137 +651,6 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 	PG_RETURN_ARRAYTYPE_P(result);
 	
 }
-/******************************************************************************
-******************************************************************************/
-/* unused
-static bool _yflow_hs_contains_keys(HStore	*h2,HStore *h1) {
-	
-	int			cnth1 = HS_COUNT(h1);
-	HEntry	   *enth1 = HSARRPTR(h1);
-	char	   *bash1 = HSSTRPTR(h1);
-	bool		contains = true;	
-	int 		i;
-	int 		lowbound = 0;
-	
-	//elog(WARNING,"cnth1=%i",cnth1);
-	obMRange(i,cnth1) {
-		int 	l1 = HS_KEYLEN(enth1, i);
-		char 	*key1 = HS_KEY(enth1, bash1, i);
-		
-		int		idx = hstoreFindKey(h2, &lowbound,key1,l1);
-		
-		// elog(WARNING,"i=%i,cnth1=%i, key h2[%s],len=%i found in idx=%i",i,cnth1,key1,l1,idx);
-		
-		if(idx <0) {
-			contains = false;
-			break;
-		}
-	}
-	//elog(WARNING,"cnth1=%i",cnth1);
-	return contains;	
-} */
-/******************************************************************************
-float weight = yflow_weigth(hstore w,hstore p,hstore r,bool all)
-weight = sum (if(p[i] == r[i] then w[i] else 0)/sum(w[i]) for i in w.keys
-weigth >= 0
-errors:
-	if w[i] is not float returns -3
-	if w[i] <0 returns -4
-******************************************************************************/
-PG_FUNCTION_INFO_V1(yflow_weight);
-Datum yflow_weight(PG_FUNCTION_ARGS);
-Datum yflow_weight(PG_FUNCTION_ARGS) {
-	HStore	   *w = PG_GETARG_HS(0);
-	HStore	   *p = PG_GETARG_HS(1);
-	HStore	   *r = PG_GETARG_HS(2);
-	
-	PG_RETURN_FLOAT8((float8)  yflow_weight_internal(w,p,r));
-}
 
-double yflow_weight_internal(HStore *w,HStore *p,HStore *r) {
-	double 		f = 0.0,s = 0.0,wp;
-	
-	int			cntw = HS_COUNT(w);
-	HEntry	   *entw = HSARRPTR(w);
-	char	   *basw = HSSTRPTR(w);
-	
-	//int			cntp = HS_COUNT(p);
-	HEntry	   *entp = HSARRPTR(p);
-	char	   *basp = HSSTRPTR(p);
-	int 	lowboundp = 0;
-		
-	//int			cntr = HS_COUNT(r);
-	HEntry	   *entr = HSARRPTR(r);
-	char	   *basr = HSSTRPTR(r);
-	int 	lowboundr = 0;
-	int			i;
-	
-	
-	// elog(WARNING,"cntw=%i,cntp=%i,cntr=%i,%c,%c",cntw,cntp,cntr,_yflow_hs_contains_keys(p,r)?'t':'f',_yflow_hs_contains_keys(w,r)?'t':'f');
-	// elog(WARNING,"cntw=%i,cntp=%i,cntr=%i,%c,%c",cntw,cntp,cntr,_yflow_hs_contains_keys(p,r)?'t':'f',_yflow_hs_contains_keys(w,r)?'t':'f');
-	/*
-	if(!(_yflow_hs_contains_keys(p,r))) {
-		f = -1.0;
-		goto _end;
-	}
-	if(all && (cntp!=cntr ) {
-		f = -5.0;
-		goto _end;
-	}		
-	if(!(_yflow_hs_contains_keys(r,w))) {
-		f = -2.0;
-		goto _end;
-	}
-	*/
-	
-	obMRange(i,cntw) {
-		char *cweight = HS_VAL(entw, basw, i);
-		// int lw = HS_VALLEN(entw, i);
-		char *end;
-		int 	lw = HS_KEYLEN(entw, i);
-		char 	*cw = HS_KEY(entw, basw, i);
-		
-		wp = strtod(cweight,&end);
-		if(cweight == end) {
-			f = -3.0; // this is not a float
-			goto _end;
-		}
-		if(wp < 0.0) {
-			f = -4.0; // the weigth < 0
-			goto _end;
-		}
-		
-		s += wp;
-		//elog(WARNING,"w[%i]=%f,%s,%i",i,wp,cw,klw);
-		{
-			int 	ir,ip;
-			
-			char	*cr,*cp;
-			int		lr,lp;
-			
-			ir = hstoreFindKey(r, &lowboundr,cw,lw);
-			lr = HS_VALLEN(entr, ir);
-			cr = HS_VAL(entr, basr, ir);
-			//elog(WARNING,"r[%i]=%s,%i",ir,cr,lr);
-			if(ir >=0) {
-				ip = hstoreFindKey(p, &lowboundp,cw,lw);
-				if(ip >=0) {
-					lp = HS_VALLEN(entp, ip);
-					cp = HS_VAL(entp, basp, ip);
-					//elog(WARNING,"p[%i]=%s,%i",ip,cp,lp);
-					
-					if((lr==lp) && (0 == memcmp(cp,cr,lr)))			
-						f += wp;
-				}
-			}
-		}
-
-	}		
-	if(s != 0.0)	 
-		f = f/s;
-	else f = 0.0;
-_end:
-	return f;
-}
 
 

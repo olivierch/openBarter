@@ -2,7 +2,6 @@
 #include "fmgr.h"
 #include "lib/stringinfo.h"
 #include "utils/array.h"
-#include "hstore.h"
 // #include "tsearch/ts_type.h" // define TSQuery and TSVector
 
 // #define ACTIVATE_DISTANCE
@@ -51,7 +50,6 @@ do { \
 
 // defines the status of the flow
 typedef enum Tstatusflow {
-	notcomputed,
 	empty, // flow empty, ( dim==0 or some qtt ==0 )
 	noloop, //  end.np != begin.nr
 	refused, // refused OMEGA < 1
@@ -157,7 +155,6 @@ extern double earth_distance_internal(Tpoint *pt1, Tpoint *pt2);
 */
 extern char *yflow_statusToStr(Tstatusflow s);
 extern char *yflow_ndboxToStr(Tflow *flow,bool internal);
-extern double yflow_weight_internal(HStore *w,HStore *p,HStore *r);
 
 extern Tflow *flowm_cextends(Tfl *o,Tflow *f, bool before);
 extern Tflow *flowm_extends(Tfl *o,Tflow *f, bool before);

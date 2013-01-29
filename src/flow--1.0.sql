@@ -1,20 +1,14 @@
 
-
+-- id,own,oid,qtt_requ,qua_requ,qtt_prov,qua_prov,qtt
 CREATE TYPE yorder AS (
 	id int,
 	own int,
 	oid int, -- reference the order of the stock (can be id itself)
     qtt_requ int8,
     qua_requ text,
-    -- pos_requ cube,
     qtt_prov int8,
     qua_prov text,
-    -- pos_prov cube,
-    -- carre_prov cube, -- carre_prov @> pos_requ
     qtt int8
-    --- flowr int8,
-    -- dist	float,
-    
 );
 
 CREATE FUNCTION yflow_in(cstring)
@@ -34,6 +28,11 @@ CREATE TYPE yflow (
 	ALIGNMENT = double
 );
 COMMENT ON TYPE yflow IS 'yflow ''[(id,oid,own,qtt_requ,qtt_prov,qtt,proba), ...]''';
+
+CREATE FUNCTION yflow_get_maxdim()
+RETURNS int
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
 
 CREATE FUNCTION yflow_dim(yflow)
 RETURNS int
@@ -60,7 +59,7 @@ RETURNS yflow
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
 
-CREATE FUNCTION yflow_contains_id(int,yflow)
+CREATE FUNCTION yflow_contains_oid(int,yflow)
 RETURNS boolean
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
@@ -105,8 +104,4 @@ RETURNS int8[]
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
 
-CREATE FUNCTION yflow_weight(hstore,hstore,hstore)
-RETURNS float8
-AS 'MODULE_PATHNAME'
-LANGUAGE C IMMUTABLE STRICT;
 
