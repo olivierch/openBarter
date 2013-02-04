@@ -383,7 +383,7 @@ DECLARE
 	_MAXCYCLE 	int := fgetconst('MAXCYCLE');
 	_cnt int;
 BEGIN
-/* the statement LIMIT would not limit deep exploration if the condition on Z 
+/* the statement LIMIT would not avoid deep exploration if the condition on Z 
 was specified in the search_backward WHERE condition */
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
 		SELECT yflow_finish(Z.debut,Z.path,Z.fin) as cycle FROM (
