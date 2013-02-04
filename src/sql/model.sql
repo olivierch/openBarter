@@ -383,27 +383,31 @@ DECLARE
 	_MAXCYCLE 	int := fgetconst('MAXCYCLE');
 	_cnt int;
 BEGIN
-/*	DROP TABLE IF EXISTS _tmp;
-*/	
+/* the statement LIMIT would not limit deep exploration if the condition on Z 
+was specified in the search_backward WHERE condition */
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
-		SELECT Z.cycle FROM (
+		SELECT yflow_finish(Z.debut,Z.path,Z.fin) as cycle FROM (
 			WITH RECURSIVE search_backward(debut,path,fin,depth,cycle) AS(
-				SELECT ord,yflow_init(ord),ord,1,false FROM torder WHERE (ord).id= _ordid
+					SELECT ord,yflow_init(ord),
+						ord,1,false 
+					FROM torder WHERE (ord).id= _ordid
 				UNION ALL
-				SELECT X.ord,yflow_grow(X.ord,Y.debut,Y.path),Y.fin,Y.depth+1,yflow_contains_oid((X.ord).id,Y.path)
-				-- yflow_contains_oid((X.ord).oid !!!!
-				FROM torder X,search_backward Y
-				WHERE (X.ord).qua_prov=(Y.debut).qua_requ 
-					AND yflow_match(X.ord,Y.debut) 
-					AND Y.depth < _MAXCYCLE 
-					AND NOT cycle 
-					AND NOT yflow_contains_oid((X.ord).id,Y.path) -- yflow_contains_oid((X.ord).oid !!!!
-			) SELECT yflow_finish(debut,path,fin) as cycle from search_backward 
-			WHERE (fin).qua_prov=(debut).qua_requ AND yflow_match(fin,debut) 
+					SELECT X.ord,yflow_grow(X.ord,Y.debut,Y.path),
+						Y.fin,Y.depth+1,yflow_contains_oid((X.ord).oid,Y.path)
+					FROM torder X,search_backward Y
+					WHERE (X.ord).qua_prov=(Y.debut).qua_requ 
+						AND yflow_match(X.ord,Y.debut) 
+						AND Y.depth < _MAXCYCLE 
+						AND NOT cycle 
+						AND NOT yflow_contains_oid((X.ord).oid,Y.path) 
+			) SELECT debut,path,fin from search_backward 
 			LIMIT _MAXPATHFETCHED
-		) Z -- WHERE yflow_is_draft(Z.cycle)
+		) Z WHERE (Z.fin).qua_prov=(Z.debut).qua_requ 
+				AND yflow_match(Z.fin,Z.debut)
+				AND yflow_is_draft(yflow_finish(Z.debut,Z.path,Z.fin))
 	);
 	RETURN 0;
+	
 END;
 $$ LANGUAGE PLPGSQL;
 
