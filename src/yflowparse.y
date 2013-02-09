@@ -80,19 +80,26 @@ bid_list:
 	}
 	
 bid:	
-	O_PAREN FLOWINT COMMA FLOWINT COMMA FLOWINT COMMA FLOWINT COMMA FLOWINT COMMA FLOWINT COMMA NUMBER C_PAREN {
+	O_PAREN FLOWINT COMMA FLOWINT COMMA FLOWINT COMMA FLOWINT COMMA FLOWINT COMMA FLOWINT COMMA FLOWINT COMMA NUMBER C_PAREN {
 			Tflow **pf = resultat;
 			Tfl s;
 	
 			// id,oid,own,qtt_requ,qtt_prov,qtt,proba
-
-			s.id = (int32) ($2);
-			s.oid = (int32) ($4);
-			s.own = (int32) $6;
-			s.qtt_requ = $8;
-			s.qtt_prov = $10;
-			s.qtt = $12;
-			s.proba = $14;
+			s.type = (int32) ($2);
+	        if (!ORDER_TYPE_IS_VALID(s.type)) {
+                   ereport(ERROR,
+                      (errcode(ERRCODE_SYNTAX_ERROR),
+                       errmsg("bad order representation in yflow"),
+                       errdetail("A order in yflow cannot have type %d.",s.type)));
+                   YYABORT;
+            }
+			s.id = (int32) ($4);
+			s.oid = (int32) ($6);
+			s.own = (int32) $8;
+			s.qtt_requ = $10;
+			s.qtt_prov = $12;
+			s.qtt = $14;
+			s.proba = $16;
 			*pf = flowm_extends(&s,*pf,false);
 	}
 

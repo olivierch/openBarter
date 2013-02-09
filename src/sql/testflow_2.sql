@@ -1,27 +1,33 @@
--- on version 0.6.0
-\i sql/model.sql
+/*drop schema IF EXISTS test0_6_1 CASCADE;
+CREATE SCHEMA test0_6_1;
+SET search_path TO test0_6_1;
+
+create extension flow with version '1.0';
+
 RESET client_min_messages;
 RESET log_error_verbosity;
 SET client_min_messages = notice;
-SET log_error_verbosity = terse;
+SET log_error_verbosity = terse; 
+*/
+-- yflow ''[(type,id,oid,own,qtt_requ,qtt_prov,qtt,proba), ...]''
 
+-- order limit
+SELECT yflow_show('[(1,1,1,1,10,20,20,7.00),(1,2,2,1,10,20,20,7.00)]'::yflow); -- omega >1
+SELECT yflow_show('[(1,1,1,1,20,20,20,7.00),(1,2,2,1,20,20,20,7.00)]'::yflow); -- omega =1
+SELECT yflow_show('[(1,1,1,1,20,10,10,7.00),(1,2,2,1,20,10,10,7.00)]'::yflow); -- omega <1
 
-select * from fsubmitorder('a',NULL,'q2',10,'q1',20);
-select * from fproducemvt();
-select * from fsubmitorder('b',NULL,'q3',10,'q2',20);
-select * from fproducemvt();
-select * from fsubmitorder('c',NULL,'q1',10,'q3',20);
-select * from fproducemvt();
--- select * from femptystack();
-select id,nbc,nbt,grp,xid,xoid,own_src,own_dst,qtt,nat,ack from tmvt order by id desc limit 3; 
+-- order best
+SELECT yflow_show('[(2,1,1,1,10,20,20,7.00),(2,2,2,1,10,20,20,7.00)]'::yflow); -- omega >1
+SELECT yflow_show('[(2,1,1,1,20,20,20,7.00),(2,2,2,1,20,20,20,7.00)]'::yflow); -- omega =1
+SELECT yflow_show('[(2,1,1,1,20,10,10,7.00),(2,2,2,1,20,10,10,7.00)]'::yflow); -- omega <1
 
-select * from fsubmitorder('a',NULL,'q2',10,'q1',20);
-select * from fproducemvt();
-select * from fsubmitorder('b',NULL,'q3',10,'q2',20);
-select * from fproducemvt();
-select * from fsubmitorder('d',NULL,'q3',10,'q1',20);
-select * from fproducemvt();
-select * from fsubmitorder('c',NULL,'q1',20,'q3',40);
-select * from fproducemvt();
-select id,nbc,nbt,grp,xid,xoid,own_src,own_dst,qtt,nat,ack from tmvt order by id desc limit 5;
+-- order limit and best
+SELECT yflow_show('[(1,1,1,1,20,10,10,7.00),(2,2,2,1,20,10,10,7.00)]'::yflow); -- omega <1
+SELECT yflow_show('[(2,1,1,1,20,10,10,7.00),(1,2,2,1,20,10,10,7.00)]'::yflow); -- omega <1
 
+-- order limit lnNoQttLimit (4+1)
+SELECT yflow_show('[(1,1,1,1,10,20,100,7.00),(5,2,2,1,10,20,0,7.00)]'::yflow); -- omega >1
+
+-- order limit lnNoQttLimit+lnIgnoreOmega (8+4+1)
+SELECT yflow_show('[(1,1,1,1,10,20,100,7.00),(13,2,2,1,0,0,0,7.00)]'::yflow); -- omega >1
+SELECT yflow_qtts('[(1,1,1,1,10,20,100,7.00),(13,2,2,1,0,0,0,7.00)]'::yflow); -- omega >1

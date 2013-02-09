@@ -133,8 +133,9 @@ char *yflow_ndboxToStr(Tflow *yflow,bool internal) {
 		
 			if(i != 0) appendStringInfoChar(&buf, ',');
 
-			// id,oid,own,qtt_requ,qtt_prov,qtt,proba
-			appendStringInfo(&buf, "(%i, ", s->id);
+			// type,id,oid,own,qtt_requ,qtt_prov,qtt,proba
+			appendStringInfo(&buf, "(%i, ", s->type);
+			appendStringInfo(&buf, "%i, ", s->id);
 			appendStringInfo(&buf, "%i, ", s->oid);
 			appendStringInfo(&buf, "%i, ", s->own);
 			appendStringInfo(&buf, INT64_FORMAT ", ", s->qtt_requ);
@@ -219,6 +220,15 @@ char * yflow_statusToStr (Tstatusflow s){
 	case undefined: return "undefined";
 	case empty: return "empty";
 	default: return "unknown status!";
+	}
+}
+/******************************************************************************
+******************************************************************************/
+char * yflow_typeToStr (int32 t){
+	switch(ORDER_TYPE(t)) {
+	case ORDER_LIMIT: return "ORDER_LIMIT";
+	case ORDER_BEST: return "ORDER_BEST";
+	default: return "unknown type!";
 	}
 }
 /******************************************************************************
@@ -421,7 +431,7 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 		Tfl *b = &f0->x[i];
 		if(b->flowr <=0 ) 
 			goto _end;	// wolf0 is not a draft
-		_rank0 *=  GET_OMEGA(b);				
+		_rank0 *=  GET_OMEGA_P(b);				
 	}	
 
 	dim1 = f1->dim;
@@ -434,7 +444,7 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 		Tfl *b = &f1->x[i];
 		if(b->flowr <=0) 
 			goto _end;	// f1 is not a draft
-		_rank1 *= GET_OMEGA(b);			
+		_rank1 *= GET_OMEGA_P(b);			
 	}	
 	
 	// comparing weight
@@ -496,7 +506,7 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 
 	//
 	
-	_dim0 = (r->lastignore) ? (r->dim-1) : r->dim; // lastignore?
+	_dim0 = (FLOW_IS_NOQTTLIMIT(r)) ? (r->dim-1) : r->dim; 
 	obMRange(i,f1->dim) {
 		obMRange(j,_dim0)
 			if(r->x[j].oid == f1->x[i].oid) {
@@ -522,11 +532,10 @@ Datum yflow_is_draft(PG_FUNCTION_ARGS)
 {
 	Tflow	*f = PG_GETARG_TFLOW(0);
 	bool	isdraft = true;
-	short 	i,_dim;
+	short 	i,_dim = f->dim;
 		
-	if(f->dim < 2) PG_RETURN_BOOL(false);
-	_dim = f->dim;
-	if(f->lastignore) _dim = _dim-1;
+	if(_dim < 2) PG_RETURN_BOOL(false);
+
 	obMRange(i,_dim) {
 		if (f->x[i].flowr <=0) {
 			isdraft = false;

@@ -160,6 +160,7 @@ SELECT _grant_read('tconst');
 
 --------------------------------------------------------------------------------
 create domain dquantity AS int8 check( VALUE>0);
+create domain dtypeorder AS int check(VALUE=1 OR VALUE=2);
 
 --------------------------------------------------------------------------------
 -- ORDER
@@ -207,34 +208,20 @@ select (o.ord).id as id,w.name as own,(o.ord).oid as oid,
 		(o.ord).qtt as qtt, o.created as created
 from torder o left join towner w on ((o.ord).own=w.id) where o.usr=current_user;
 --------------------------------------------------------------------------------
+
 --------------------------------------------------------------------------------
 CREATE FUNCTION fgetowner(_name text) RETURNS int AS $$
-DECLARE
-	_wid int;
-BEGIN
-
-	SELECT id INTO _wid FROM towner WHERE name=_name;
-	IF NOT found THEN
-		_wid := fcreateowner(_name);
-	END IF;
-	return _wid;
-END;
-$$ LANGUAGE PLPGSQL;
---------------------------------------------------------------------------------
-CREATE FUNCTION fcreateowner(_name text) RETURNS int AS $$
 DECLARE
 	_wid int;
 BEGIN
 	LOOP
 		SELECT id INTO _wid FROM towner WHERE name=_name;
 		IF found THEN
-			RAISE WARNING 'The owner % was already created',_name;
 			return _wid;
 		END IF;
 		BEGIN
 			if(char_length(_name)<1) THEN
-				RAISE NOTICE 'Owner s name cannot be empty';
-				RAISE EXCEPTION USING ERRCODE='YU001';
+				RAISE EXCEPTION 'Owner s name cannot be empty' USING ERRCODE='YU001';
 			END IF;
 			INSERT INTO towner (name) VALUES (_name) RETURNING id INTO _wid;
 			-- RAISE NOTICE 'owner % created',_name;
@@ -251,6 +238,8 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 create table tmvt (
 	id serial UNIQUE not NULL,
+	type dtypeorder not NULL,
+	json text, -- can be NULL
 	nbc int not NULL, -- Number of mvts in the exchange
 	nbt int not NULL, -- Number of mvts in the transaction
 	grp int, -- References the first mvt of an exchange.
@@ -303,6 +292,7 @@ create table tstack (
     usr text NOT NULL,
     own text NOT NULL,
     oid int, -- can be NULL
+    type dtypeorder NOT NULL,
     qua_requ text NOT NULL ,
     qtt_requ dquantity NOT NULL,
     qua_prov text NOT NULL ,
@@ -315,6 +305,7 @@ comment on table tstack is 'Records a stack of orders';
 comment on column tstack.id is 'id of this order';
 comment on column tstack.oid is 'id of a parent order';
 comment on column tstack.own is 'owner of this order';
+comment on column tstack.type is 'type of order';
 comment on column tstack.qua_requ is 'quality required';
 comment on column tstack.qtt_requ is 'quantity required';
 comment on column tstack.qua_prov is 'quality provided';
@@ -324,37 +315,50 @@ alter sequence tstack_id_seq owned by tstack.id;
 
 SELECT _grant_read('tstack');
 SELECT fifo_init('tstack');
+
 --------------------------------------------------------------------------------
-CREATE TYPE yresorder AS (
-    ord yorder,
-    qtt_in int8,
-    qtt_out int8,
-    err	int
+CREATE TYPE yressubmit AS (
+    id int,
+    diag int
 );
 --------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION femptystack() RETURNS int AS $$
+-- order submission  
+/*
+returns (id,0) or (0,diag) with diag:
+	-1 _qua_prov = _qua_requ
+	-2 _qtt_prov <=0 or _qtt_requ <=0
+*/
+--------------------------------------------------------------------------------
+
+CREATE FUNCTION 
+	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
+	RETURNS yressubmit AS $$	
 DECLARE
-	_t tstack%rowtype;
-	_res yresorder%rowtype;
-	_cnt int := 0;
+	_t			tstack%rowtype;
+	_r			yressubmit%rowtype;
+	_o			int;
+	_tid		int;
 BEGIN
-	LOOP
-		SELECT * INTO _t FROM tstack ORDER BY created ASC LIMIT 1;
-		EXIT WHEN NOT FOUND; 
-		_cnt := _cnt +1;
-		
-		_res := fproducemvt();
-		DROP TABLE _tmp;
-/*		
-		IF((_cnt % 100) =0) THEN
-			CHECKPOINT;
-		END IF;
-*/	
-	END LOOP;
-	RETURN _cnt;
-END;
-$$ LANGUAGE PLPGSQL;
-GRANT EXECUTE ON FUNCTION  femptystack() TO role_co;
+	_r.id := 0;
+	_r.diag := 0;
+	IF(_qua_prov = _qua_requ) THEN
+		_r.diag := -1;
+		RETURN _r;
+	END IF;
+	
+	IF(_qtt_requ <=0 OR _qtt_prov <= 0) THEN
+		_r.diag := -2;
+		RETURN _r;
+	END IF;	
+	
+	INSERT INTO tstack(usr,own,oid,type,qua_requ,qtt_requ,qua_prov,qtt_prov,created)
+	VALUES (current_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,statement_timestamp()) RETURNING * into _t;
+	_r.id := _t.id;
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fsubmitorder(dtypeorder,text,int,text,int8,text,int8) TO role_co;	
+
 
 --------------------------------------------------------------------------------
 /* for an order O creates a temporary table _tmp of objects.
@@ -383,8 +387,8 @@ DECLARE
 	_MAXCYCLE 	int := fgetconst('MAXCYCLE');
 	_cnt int;
 BEGIN
-/* the statement LIMIT would not avoid deep exploration if the condition on Z 
-was specified in the search_backward WHERE condition */
+/* the statement LIMIT would not avoid deep exploration if the condition
+was specified  on Z in the search_backward WHERE condition */
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
 		SELECT yflow_finish(Z.debut,Z.path,Z.fin) as cycle FROM (
 			WITH RECURSIVE search_backward(debut,path,fin,depth,cycle) AS(
@@ -411,7 +415,6 @@ was specified in the search_backward WHERE condition */
 END;
 $$ LANGUAGE PLPGSQL;
 
-
 --------------------------------------------------------------------------------
 -- order unstacked and inserted into torder
 /* if the referenced oid is found,
@@ -424,6 +427,15 @@ CREATE TYPE yresexec AS (
     nbc int, -- number of mvts
     mvts int[] -- list of id des mvts
 );
+--------------------------------------------------------------------------------
+CREATE TYPE yresorder AS (
+    ord yorder,
+    qtt_in int8,
+    qtt_out int8,
+    err	int,
+    json text
+);
+--------------------------------------------------------------------------------
 CREATE FUNCTION fproducemvt() RETURNS yresorder AS $$
 DECLARE
 	_wid		int;
@@ -456,6 +468,7 @@ BEGIN
 	_ro.qtt_in 		:= 0;
 	_ro.qtt_out 	:= 0;
 	_ro.err			:= 0;
+	_ro.json		:= NULL;
 	
 	SELECT id INTO _tid FROM tstack ORDER BY id ASC LIMIT 1;
 	IF(NOT FOUND) THEN
@@ -469,20 +482,25 @@ BEGIN
 
 	IF NOT (_t.oid IS NULL) THEN
 
-		SELECT (ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
-			INTO _op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder WHERE (ord).id= _t.oid;
+		SELECT (ord).type,(ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
+			INTO _op.type,_op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder WHERE (ord).id= _t.oid;
 
 		
-		IF (NOT FOUND) THEN 
+		IF (NOT FOUND) THEN -- the parent must exist
+			_ro.json:= '{"error":"the parent order must exist"}';
 			_ro.err := -1; END IF;
-		IF (_op.own != _wid) THEN -- parent must have the same owner
+		IF (_op.own != _wid) THEN 
+			_ro.json:= '{"error":"the parent must have the same owner"}';
 			_ro.err := -2; END IF;
-		IF (_op.oid != _op.id) THEN -- parent must not have parent
+		IF (_op.oid != _op.id) THEN 
+			_ro.json:= '{"error":"the parent must not have parent"}';
 			_ro.err := -3; END IF;
 			
 		IF (_ro.err != 0) THEN
-			INSERT INTO tmvt (nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,qtt,nat,ack,exhausted,refused,order_created,created) 
-				VALUES       (1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,_t.qtt_prov,_t.qua_prov,false,_ro.err,true,_t.created,statement_timestamp())
+			INSERT INTO tmvt (type,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
+								qtt,nat,ack,exhausted,refused,order_created,created) 
+				VALUES       (_t.type,1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,
+								_t.qtt_prov,_t.qua_prov,false,_ro.err,true,_t.created,statement_timestamp())
 				RETURNING id INTO _mid;
 			UPDATE tmvt SET grp = _mid WHERE id = _mid;
 			_ro.ord := _op;
@@ -496,7 +514,7 @@ BEGIN
 		_qtt  	:= _t.qtt_prov;
 	END IF;
 	
-	_o := ROW(_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt)::yorder;
+	_o := ROW(_t.type,_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt)::yorder;
 	
 	INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);	
 
@@ -534,11 +552,11 @@ BEGIN
 
 	END LOOP;
 	
-	IF (	(_ro.qtt_in != 0) AND 
-		((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
+	IF (	(_ro.qtt_in != 0) AND ((_o.type & 3) = 1) -- ORDER_LIMIT
+	AND	((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
 		((_o.qtt_prov::double precision)	/(_o.qtt_requ::double precision))
 	) THEN
-		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order' USING ERRCODE='YA003';
+		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
 	
 	-- set the number of movements in this transaction
@@ -549,6 +567,31 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fproducemvt() TO role_bo;
+
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION femptystack() RETURNS int AS $$
+DECLARE
+	_t tstack%rowtype;
+	_res yresorder%rowtype;
+	_cnt int := 0;
+BEGIN
+	LOOP
+		SELECT * INTO _t FROM tstack ORDER BY created ASC LIMIT 1;
+		EXIT WHEN NOT FOUND; 
+		_cnt := _cnt +1;
+		
+		_res := fproducemvt();
+		DROP TABLE _tmp;
+/*		
+		IF((_cnt % 100) =0) THEN
+			CHECKPOINT;
+		END IF;
+*/	
+	END LOOP;
+	RETURN _cnt;
+END;
+$$ LANGUAGE PLPGSQL;
+GRANT EXECUTE ON FUNCTION  femptystack() TO role_co;
 
 --------------------------------------------------------------------------------
 /* fexecute_flow
@@ -645,9 +688,11 @@ BEGIN
 		SELECT name INTO STRICT _ownnext 	FROM towner WHERE id=_idownnext;
 		SELECT name INTO STRICT _own 		FROM towner WHERE id=_o.own;
 		
-		INSERT INTO tmvt (nbc,nbt,grp,xid,usr,xoid,own_src,own_dst,qtt,nat,
+		INSERT INTO tmvt (type,json,nbc,nbt,grp,
+						xid,usr,xoid,own_src,own_dst,qtt,nat,
 						ack,exhausted,refused,order_created,created) 
-			VALUES(_nbcommit,1,_first_mvt,_o.id,_or.usr,_o.oid,_own,_ownnext,_flowr,(_or.ord).qua_prov,
+			VALUES((_or.ord).type,NULL,_nbcommit,1,_first_mvt,
+						_o.id,_or.usr,_o.oid,_own,_ownnext,_flowr,(_or.ord).qua_prov,
 						false,_exhausted,0,_or.created,statement_timestamp())
 			RETURNING id INTO _mvt_id;
 			
@@ -679,50 +724,6 @@ BEGIN
 	RETURN _resx;
 END;
 $$ LANGUAGE PLPGSQL;
-
-
---------------------------------------------------------------------------------
-CREATE TYPE yressubmit AS (
-    id int,
-    diag int
-);
---------------------------------------------------------------------------------
--- order submission  
-/*
-returns (id,0) or (0,diag) with diag:
-	-1 _qua_prov = _qua_requ
-	-2 _qtt_prov <=0 or _qtt_requ <=0
-*/
---------------------------------------------------------------------------------
-
-CREATE FUNCTION 
-	fsubmitorder(_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
-	RETURNS yressubmit AS $$	
-DECLARE
-	_t			tstack%rowtype;
-	_r			yressubmit%rowtype;
-	_o			int;
-	_tid		int;
-BEGIN
-	_r.id := 0;
-	_r.diag := 0;
-	IF(_qua_prov = _qua_requ) THEN
-		_r.diag := -1;
-		RETURN _r;
-	END IF;
-	
-	IF(_qtt_requ <=0 OR _qtt_prov <= 0) THEN
-		_r.diag := -2;
-		RETURN _r;
-	END IF;	
-	
-	INSERT INTO tstack(usr,own,oid,qua_requ,qtt_requ,qua_prov,qtt_prov,created)
-	VALUES (current_user,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,statement_timestamp()) RETURNING * into _t;
-	_r.id := _t.id;
-	RETURN _r;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitorder(text,int,text,int8,text,int8) TO role_co;	
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION ackmvt() RETURNS int AS $$

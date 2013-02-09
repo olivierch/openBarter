@@ -11,7 +11,7 @@
 TresChemin *flowc_maximum(Tflow *flow);
 char * flowc_vecIntStr(short dim,int64 *vecInt);
 
-
+static TypeFlow _calType(TresChemin *chem);
 static double _calOmega(TresChemin *chem);
 static void _calOwns(TresChemin *chem);
 static void _calGains(TresChemin *chem);
@@ -25,44 +25,69 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem);
  *****************************************************************************/
 TresChemin *flowc_maximum(Tflow *flow) {
 	short _dim = flow->dim;
-	short _i; 
+	short _i,_ldim; 
 	short _iExhausted;
+	double _Omega;
 	TresChemin *chem;
 
 	chem = (TresChemin *) palloc(sizeof(TresChemin));
 
+	
 	chem->status = empty;
-	chem->lastignore = false;
+	chem->type = CYCLE_BEST;
 	chem->flow = flow;
+	chem->lnNoQttLimit = false;
+	chem->lnIgnoreOmega = false;
+	
 	
 	if(_dim == 0) 
 		goto _end;	
 
+	#ifdef GL_VERIFY
 	if(_dim > FLOW_MAX_DIM) 
 		ereport(ERROR,
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			 errmsg("max dimension %i reached for the flow",FLOW_MAX_DIM)));
- 
-	chem->lastignore = flow->x[_dim-1].qtt_requ == 0;
-		
+			
 	obMRange(_i,_dim) 
-		if(flow->x[_i].qtt == 0 || flow->x[_i].proba == 0.0) 
-			goto _dropflow; // box->status = empty
-		else if(flow->x[_i].qtt < 0 ||  flow->x[_i].proba < 0.0) 
+		if(flow->x[_i].qtt < 0 ||  flow->x[_i].proba < 0.0) 
 			ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("flow with qtt <0 or proba <0.0")));
+
+	obMRange(_i,_dim) {
+		short _m;		
+		Tfl *o = &flow->x[_i];
 				 
-	// elog(WARNING,"flowc_maximum: dim=%i",_dim);
+		// b.oid are unique in the flow
+		obMRange(_m,_i) {
+			if(o->oid == flow->x[_m].oid) {
+				ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("createChemin: Tfl[%i].oid=%i found twice",_i,o->oid)));
+			}
+		}
+	}
+	#endif
+				 
 	if(_dim == 1) {
 		chem->status = noloop;
 		goto _dropflow;
 	}
-		 
-	//elog(WARNING,"flowc_maximum: ->status!=noloop");
-	// error for 3-agreement: on omega ~= 1.1e-16
+
+	chem->lnNoQttLimit = FLOW_IS_NOQTTLIMIT(flow);
+	chem->lnIgnoreOmega = FLOW_IS_IGNOREOMEGA(flow);
+	// elog(WARNING,"chem->lnIgnoreOmega=%c chem->lnNoQttLimit=%c",(chem->lnIgnoreOmega)?'t':'f',(chem->lnNoQttLimit)?'t':'f');
+	_ldim = (chem->lnNoQttLimit)?(_dim-1):_dim;	
+	obMRange(_i,_ldim) 
+		if(flow->x[_i].qtt == 0) 
+			goto _dropflow;
+				
+	chem->type = _calType(chem);
+	// elog(WARNING,"chem->type=%i",chem->type); 
 	
-	if( _calOmega(chem) < 1.0) {
+	_Omega  = _calOmega(chem);
+	if( (chem->type == CYCLE_LIMIT) && (_Omega < 1.0)) {
 		chem->status = refused;
 		goto _dropflow;
 	}
@@ -100,17 +125,34 @@ _end:
 /******************************************************************************
  * 
  *****************************************************************************/
+static TypeFlow _calType(TresChemin *chem) {
+	Tflow *flow = chem->flow;
+	short _n,_ldim,_dim = flow->dim;
+	TypeFlow _type = CYCLE_BEST;
+
+	_ldim = (chem->lnIgnoreOmega)?(_dim - 1):_dim;
+	//elog(WARNING,"_ldim=%i",_ldim);
+	obMRange(_n,_ldim) 
+		//elog(WARNING,"n=%i,order_type=%i,%i",_n,ORDER_TYPE(flow->x[_n].type),ORDER_LIMIT);
+		if((ORDER_TYPE(flow->x[_n].type)) == ORDER_LIMIT ) {
+			_type = CYCLE_LIMIT;
+			break;	
+	}
+	//elog(WARNING,"cycle_type=%i",_type);
+	return _type;
+}
+/******************************************************************************
+ * 
+ *****************************************************************************/
 static double _calOmega(TresChemin *chem) {
 	Tflow *flow = chem->flow;
-	short _n,_dim = flow->dim;
+	short _n,_ldim,_dim = flow->dim;
 	double *omega = chem->omega;
 		
 	chem->prodOmega = 1.0;
 	
-	obMRange(_n,_dim) {		
-		if((_n == _dim-1) && chem->lastignore) {
-			continue;
-		} else {
+	_ldim = (chem->lnIgnoreOmega)?(_dim - 1):_dim;
+	obMRange(_n,_ldim) {		
 			Tfl *b = &flow->x[_n];
 
 			// compute omega and prodOmega
@@ -119,15 +161,15 @@ static double _calOmega(TresChemin *chem) {
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 					 errmsg("_calOmega: qtt_prov or qtt_requ is zero for Tfl[%i]",_n)));
 			}		 
-			omega[_n] = GET_OMEGA(b);
+			omega[_n] = GET_OMEGA_P(b);
 			chem->prodOmega *= omega[_n];
-		}
 	}
-	if (chem->lastignore) {
-		/* omega of the last node is not defined.
-		It is set in order than the product of omegas becomes 1.0 :
-		omega[_dim-1] 	= 1./product(omega[i] for i in [0,_dim-2] )
-		*/
+	
+	if (chem->lnIgnoreOmega) {
+		// omega of the last node is ignored.
+		//It is set in order than the product of omegas becomes 1.0 :
+		// omega[_dim-1] 	= 1./product(omega[i] for i in [0,_dim-2] )
+		
 		omega[_dim-1] = 1.0/chem->prodOmega;
 		chem->prodOmega = 1.0;
 	}
@@ -155,9 +197,6 @@ static void _calOwns(TresChemin *chem) {
 		short *ownIndex = chem->ownIndex;
 			
 		obMRange(_m,_ownIndex) {
-			
-			// IDEMTXT(b->own,wolf->x[_m].own,_res);
-			// elog(WARNING,"own1: %s,own2: %s",follow_DatumTxtToStr(b->own),follow_DatumTxtToStr(wolf->x[_m].own));
 			if (b->own == flow->x[_m].own) {
 				_ownIndex = _m;
 				break;// found
@@ -179,23 +218,7 @@ static void _calOwns(TresChemin *chem) {
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			 errmsg("createChemin: nbOwn equals zero")));		
 	}
-	 
-	#ifdef GL_VERIFY
-	obMRange(_n,_dim) {
-		short _m;
-		
-		Tfl *o = &flow->x[_n];
-				 
-		// b.id are unique in box
-		obMRange(_m,_n) {
-			if(o->id == flow->x[_m].id) {
-				ereport(ERROR,
-					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("createChemin: Tfl[%i].id=%i found twice",_n,o->id)));
-			}
-		}
-	}
-	#endif
+
 	
 	return;	
 }
@@ -221,7 +244,7 @@ the result omegaCorrige is such as the product(omegaCorrige[.])== 1
  *******************************************************************************/
 
 static void _calGains(TresChemin *chem) {
-	short _i, _occ;
+	short _i;
 	short *occOwn = chem->occOwn;
 	short *ownIndex = chem->ownIndex;
 	double *omega = chem->omega;
@@ -233,16 +256,18 @@ static void _calGains(TresChemin *chem) {
 
 	// it is shared between nodes
 	obMRange(_i,_dim) {
-		_occ = occOwn[ownIndex[_i]];
+		short _occ = occOwn[ownIndex[_i]];
+		
 		omegaCorrige[_i] = omega[_i];
-		if (_occ == 1)
-			omegaCorrige[_i] /= chem->gain;
-		else if (_occ > 1)
-			omegaCorrige[_i] /= pow(chem->gain, 1.0 / ((double) _occ));
-		else /* _occ is never zero */
+		if (_occ == 0)
 			ereport(ERROR,
 			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 			 errmsg("_calGains: nbOwn <=0 ")));
+			 
+		else if (_occ == 1)
+			omegaCorrige[_i] /= chem->gain;
+		else 
+			omegaCorrige[_i] /= pow(chem->gain, 1.0 / ((double) _occ));
 		
 	}
 
@@ -298,6 +323,7 @@ static short _flowMaximum(TresChemin *chem) {
 	short	_iExhausted;	
 	Tflow	*flow = chem->flow;
 	short 	_dim = flow->dim;
+	short   _ldim;
 		
 	// piom are obtained on each node, 
 	/***********************************************************************/
@@ -315,13 +341,17 @@ static short _flowMaximum(TresChemin *chem) {
 	/***********************************************************************/
 	// now _is is an index on nodes
 	_iExhausted = 0;
-	obMRange(_is,_dim) { // loop on nodes
+	
+	// the flow is not limited by the last node when it is a quote
+	_ldim = chem->lnNoQttLimit ? (_dim-1):_dim;
+	
+	obMRange(_is,_ldim) { // loop on nodes
 		_cour = ((double) (flow->x[_is].qtt)) /_piom[_is]; 
 		if ((_is == 0) || (_cour < _min)) {
 			_min = _cour;
 			_iExhausted = _is;
 		}
-	} /* _iExhausted in [0,_dim-1] 
+	} /* when quote _iExhausted in [0,_dim-2] else in [0,_dim-1] 
 	*/
 	
 	// propagation to other nodes
@@ -414,7 +444,6 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 	short 	_dim = flow->dim;
 	double  *fluxExact = chem->fluxExact;
 	double  *omega = chem->omega;
-	short 	_ldim = (chem->lastignore)?(_dim-1):_dim;
 	Tstatusflow _ret;
 
 	// computes floor[] from fluxExact[]
@@ -473,15 +502,16 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 		
 		// verify that flow <= box->k[.].qtt
 		obMRange (_k,_dim) {
-		
 			// verify that order >= flow
-			if(flow->x[_k].qtt < _flowNodes[_k]) {
-				#ifdef WHY_REJECTED 
-					elog(WARNING,"_rounding 1: NOT order >= flow %s",flowc_vecIntStr(_dim,_flowNodes));
-				#endif
-				goto _continue;
+			if(flow->x[_k].qtt < _flowNodes[_k]) 
+					if(!(chem->lnNoQttLimit && (_k == (_dim-1)))) {
+						#ifdef WHY_REJECTED 
+							elog(WARNING,"_rounding 1: NOT order >= flow %s",
+								flowc_vecIntStr(_dim,_flowNodes));
+						#endif
+						goto _continue;
 			}
-			
+	
 			// verify that flow > 0
 			if(_flowNodes[_k] <= 0) {
 				#ifdef WHY_REJECTED
@@ -500,18 +530,26 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 			* Omega ~= 1.0 
 		*/
 		
-		{ 
+		if(chem->type == CYCLE_LIMIT) { 
 			short _kp = _dim-1;
 			double _precision = 1.E-8;
 			
-			/* the test is not made on the last node when lastignore */
-			obMRange(_k,_ldim) {
-				if(omega[_k] + _precision < ((double) _flowNodes[_k]) / ((double) _flowNodes[_kp])) {
-					#ifdef WHY_REJECTED
-						elog(WARNING,"flowc_maximum 4: NOT omega %f>=%f %s",omega[_k],((double) _flowNodes[_k]) / ((double) _flowNodes[_kp]),flowc_vecIntStr(_dim,_flowNodes));
-					#endif
-					_ret = refused;
-					goto _continue;
+			obMRange(_k,_dim) {
+				if((ORDER_TYPE(flow->x[_k].type) == ORDER_LIMIT)
+					&& (! ((_k == (_dim-1)) && chem->lnIgnoreOmega) )
+				) {
+					double _omprime  = ((double) _flowNodes[_k]) / ((double) _flowNodes[_kp]);
+					//omega[_k]  == GET_OMEGA(flow->x[_k]);
+				
+					if((omega[_k] + _precision) < _omprime) {
+						#ifdef WHY_REJECTED
+							elog(WARNING,"flowc_maximum 4: NOT omega %f>=%f %s",
+								omega[_k],_omprime,
+								flowc_vecIntStr(_dim,_flowNodes));
+						#endif
+						_ret = refused;
+						goto _continue;
+					}
 				}
 				_kp = _k;
 			}
@@ -561,20 +599,13 @@ char * flowc_cheminToStr(TresChemin *chem) {
 	
 	initStringInfo(&buf);
 	appendStringInfo(&buf, "\n%s\n",yflow_ndboxToStr(flow,true));
-	if(chem->status == refused) {	
-		appendStringInfo(&buf, "CHEMIN refused prodOmega=%f ",chem->prodOmega);
-		appendStringInfo(&buf, "\nno[.].omega=[");
-		obMRange(_n,_dim) {
-			appendStringInfo(&buf, "%f, ", chem->omega[_n]);
-		}
-		appendStringInfo(&buf, "]\n");
-		
-	} else if(chem->status == draft || chem->status == undefined) {
-	
-		appendStringInfo(&buf, "CHEMIN  %s lastignore=%c nbOwn=%i gain=%f prodOmega=%f ", 
-			yflow_statusToStr(chem->status),
-			(chem->lastignore)?'t':'f',chem->nbOwn,chem->gain,chem->prodOmega);
-	
+
+	appendStringInfo(&buf, "CHEMIN  status=%s type=%s nbOwn=%i gain=%f prodOmega=%f ", 
+		yflow_statusToStr(chem->status),
+		yflow_typeToStr(chem->type),chem->nbOwn,chem->gain,chem->prodOmega);
+			
+	if(chem->status == draft || chem->status == undefined) {
+
 		appendStringInfo(&buf, "\noccOwn[.]=[");
 		_o = chem->nbOwn;
 		obMRange(_n,_o) {
@@ -611,12 +642,7 @@ char * flowc_cheminToStr(TresChemin *chem) {
 			appendStringInfo(&buf, INT64_FORMAT ", ", chem->flowNodes[_n]);
 		}	
 		appendStringInfo(&buf, "]\n");
-	} else  {
-	
-		appendStringInfo(&buf, "CHEMIN  %s lastignore=%c nbOwn=%i gain=%f prodOmega=%f ", 
-			yflow_statusToStr(chem->status),
-			(chem->lastignore)?'t':'f',chem->nbOwn,chem->gain,chem->prodOmega);
-	}
+	} 
 
 	return buf.data;
 }

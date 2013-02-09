@@ -1,6 +1,7 @@
 
 -- id,own,oid,qtt_requ,qua_requ,qtt_prov,qua_prov,qtt
 CREATE TYPE yorder AS (
+	type int,
 	id int,
 	own int,
 	oid int, -- reference the order of the stock (can be id itself)
@@ -27,7 +28,7 @@ CREATE TYPE yflow (
 	OUTPUT = yflow_out,
 	ALIGNMENT = double
 );
-COMMENT ON TYPE yflow IS 'yflow ''[(id,oid,own,qtt_requ,qtt_prov,qtt,proba), ...]''';
+COMMENT ON TYPE yflow IS 'yflow ''[(type,id,oid,own,qtt_requ,qtt_prov,qtt,proba), ...]''';
 
 CREATE FUNCTION yflow_get_maxdim()
 RETURNS int

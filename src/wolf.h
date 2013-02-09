@@ -38,8 +38,8 @@ do { \
 	s[__i] = '\0'; \
 } while(0);
 
-#define GET_OMEGA(b) (((double)(b->qtt_prov)) / ((double)(b->qtt_requ)))
-
+#define GET_OMEGA(b) (((double)(b.qtt_prov)) / ((double)(b.qtt_requ)))
+#define GET_OMEGA_P(b) (((double)(b->qtt_prov)) / ((double)(b->qtt_requ)))
 /******************************************************************************
  * 
  *****************************************************************************/
@@ -47,6 +47,22 @@ do { \
 /******************************************************************************
  * 
  *****************************************************************************/
+#define ORDER_LIMIT 1
+#define ORDER_BEST  2
+
+#define ORDER_TYPE_MASK 3
+
+#define ORDER_NOQTTLIMIT 4 // ORDER_TYPE_MASK+1
+#define ORDER_IGNOREOMEGA 8
+
+#define ORDER_TYPE(o) ((o) & ORDER_TYPE_MASK)
+#define ORDER_IS_NOQTTLIMIT(o) ((o) & ORDER_NOQTTLIMIT)
+#define ORDER_IS_IGNOREOMEGA(o) ((o) & ORDER_IGNOREOMEGA)
+
+#define ORDER_TYPE_IS_VALID(o) ((0 < (o)) && ((o) <= 15))
+
+#define FLOW_IS_NOQTTLIMIT(f) ORDER_IS_NOQTTLIMIT(((f)->x[(f)->dim-1].type))
+#define FLOW_IS_IGNOREOMEGA(f) ORDER_IS_IGNOREOMEGA(((f)->x[(f)->dim-1].type))
 
 // defines the status of the flow
 typedef enum Tstatusflow {
@@ -57,36 +73,28 @@ typedef enum Tstatusflow {
 	draft // solution found, accepted
 } Tstatusflow;
 
+typedef enum TypeFlow {
+	CYCLE_LIMIT = ORDER_LIMIT,
+	CYCLE_BEST = ORDER_BEST
+} TypeFlow;
+
 typedef struct Torder {
+	int		type;
 	int 	id;
-	int 	own; // text
+	int 	own; 
 	int		oid;
 	int64	qtt_requ;
-	Datum	qua_requ; // text or tsquery
-	#ifdef 	ACTIVATE_DISTANCE
-	Point   pos_requ;
-	#endif
+	Datum	qua_requ; // text 
 	int64	qtt_prov;
-	Datum	qua_prov; // text or tsvector
-	#ifdef 	ACTIVATE_DISTANCE
-	Point	pos_prov;
-	#endif
+	Datum	qua_prov; // text 
 	int64	qtt;
 	int64	flowr;
-	#ifdef  ACTIVE_DISTANCE
-	double	dist;
-	#endif
 } Torder;
-/*
-typedef struct Twolf {
-	short 		dim;
-	Datum		*alld; // Datum to be freed
-	Torder		x[];
-} Twolf;
-*/
+
 typedef struct Tfl {
 	int64	qtt_prov,qtt_requ,qtt;
-	double proba;
+	double 	proba;
+	int32 	type;
 	int32	id,oid,own;
 	int64 	flowr;
 } Tfl; 
@@ -94,14 +102,14 @@ typedef struct Tfl {
 typedef struct Tflow {
 	int32		vl_len_;		/* varlena header (do not touch directly!) */
 	short 		dim;
-	bool		lastignore;
-	// Tstatusflow	status; 
+	//TypeFlow	type;
 	Tfl			x[FLOW_MAX_DIM];
-	// status and x[.].flowr are set by set by flowc_maximum
 } Tflow; // sizeof(Tflow)=392 when FLOW_MAX_DIM=8
 
 typedef struct TresChemin {
-	bool	lastignore;
+	TypeFlow	type;
+	bool	lnNoQttLimit;
+	bool	lnIgnoreOmega;
 	Tstatusflow status;
 	short	nbOwn; 
 	short 	occOwn[FLOW_MAX_DIM];
@@ -116,44 +124,14 @@ typedef struct TresChemin {
 /******************************************************************************
  * 
  *****************************************************************************/
-// looks like NDBOX of cube extension
-typedef struct Tcarre {
-	int32		vl_len_;		/* varlena header (do not touch directly!) */
-	unsigned int dim;
-	double		latmin,latmax,lonmin,lonmax;
-} Tcarre;
-
-typedef struct Tpoint {
-	int32		vl_len_;		/* varlena header (do not touch directly!) */
-	unsigned int dim;
-	double		x,y;
-} Tpoint;
-#define PG_RETURN_NDBOX(x)	PG_RETURN_POINTER(x)
-
-/******************************************************************************
- * 
- *****************************************************************************/
 
 extern char * flowc_vecIntStr(short dim,int64 *vecInt);
 extern char * flowc_vecDoubleStr(short dim,double *vecDouble);
 extern TresChemin *flowc_maximum(Tflow *flow);
 extern char * flowc_cheminToStr(TresChemin *chem);
-/*
-extern bool follow_orders(Torder *prev,Torder *next);
-extern double follow_rank(bool end,Torder *prev,Torder *next);
-extern char *follow_qua_provToStr(Datum d);
-extern char *follow_qua_requToStr(Datum d);
-extern char *follow_DatumTxtToStr(Datum d);
 
-
-extern bool tsquery_match_vq(TSVector val,TSQuery query);
-
-extern char *ywolf_allToStr(Twolf *wolf);
-
-
-extern double earth_distance_internal(Tpoint *pt1, Tpoint *pt2);
-*/
 extern char *yflow_statusToStr(Tstatusflow s);
+extern char *yflow_typeToStr (int32 t);
 extern char *yflow_ndboxToStr(Tflow *flow,bool internal);
 
 extern Tflow *flowm_cextends(Tfl *o,Tflow *f, bool before);
