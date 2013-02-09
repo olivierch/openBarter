@@ -39,6 +39,7 @@ PG_FUNCTION_INFO_V1(yflow_contains_oid);
 PG_FUNCTION_INFO_V1(yflow_match);
 PG_FUNCTION_INFO_V1(yflow_maxg);
 PG_FUNCTION_INFO_V1(yflow_reduce);
+PG_FUNCTION_INFO_V1(yflow_reducequote);
 PG_FUNCTION_INFO_V1(yflow_is_draft);
 PG_FUNCTION_INFO_V1(yflow_to_matrix);
 PG_FUNCTION_INFO_V1(yflow_qtts);
@@ -58,6 +59,7 @@ Datum yflow_contains_oid(PG_FUNCTION_ARGS);
 Datum yflow_match(PG_FUNCTION_ARGS);
 Datum yflow_maxg(PG_FUNCTION_ARGS);
 Datum yflow_reduce(PG_FUNCTION_ARGS);
+Datum yflow_reducequote(PG_FUNCTION_ARGS);
 Datum yflow_is_draft(PG_FUNCTION_ARGS);
 Datum yflow_to_matrix(PG_FUNCTION_ARGS);
 Datum yflow_qtts(PG_FUNCTION_ARGS);
@@ -325,6 +327,8 @@ Datum yflow_grow(PG_FUNCTION_ARGS) {
 	result = _yflow_get(&fnew,f,true);
 	result->x[0].proba = yorder_match_proba(&new,&debut);
 	result->x[0].flowr = 0;
+	
+	PG_FREE_IF_COPY(f, 2);
 	PG_RETURN_TFLOW(result);
 
 }
@@ -373,6 +377,7 @@ Datum yflow_finish(PG_FUNCTION_ARGS) {
 		pfree(c);
 	}	
 
+	PG_FREE_IF_COPY(f, 1);
 	PG_RETURN_TFLOW(result);
 }
 /******************************************************************************
@@ -390,6 +395,7 @@ Datum yflow_contains_oid(PG_FUNCTION_ARGS) {
 			break;
 		} 
 
+	PG_FREE_IF_COPY(f, 1);
 	PG_RETURN_BOOL(result);
 }
 /******************************************************************************
@@ -489,7 +495,6 @@ if (f and fr are drafts)
 if (f or fr is not in (empty,draft))
 	error
 ******************************************************************************/
-
 Datum yflow_reduce(PG_FUNCTION_ARGS)
 {
 	Tflow	*f0 = PG_GETARG_TFLOW(0);
@@ -497,18 +502,11 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 	Tflow	*r;
 	short 	i,j;
 	TresChemin *c;
-	short _dim0;
 			 
-	//r = Ndbox_init(FLOW_MAX_DIM);
-	//memcpy(r,f,sizeof(Tflow));
 	r = flowm_copy(f0);
 	
-
-	//
-	
-	_dim0 = (FLOW_IS_NOQTTLIMIT(r)) ? (r->dim-1) : r->dim; 
 	obMRange(i,f1->dim) {
-		obMRange(j,_dim0)
+		obMRange(j,r->dim)
 			if(r->x[j].oid == f1->x[i].oid) {
 				if(r->x[j].qtt >= f1->x[i].flowr) {
 					r->x[j].qtt -= f1->x[i].flowr;
@@ -522,7 +520,72 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 	
 	c = flowc_maximum(r);
 	pfree(c);
+	
+	PG_FREE_IF_COPY(f0, 0);
+	PG_FREE_IF_COPY(f1, 1);
+	PG_RETURN_TFLOW(r);
 
+}
+/******************************************************************************
+works as flow_reduce, but
+
+******************************************************************************/
+Datum yflow_reducequote(PG_FUNCTION_ARGS)
+{
+	bool	begin = PG_GETARG_BOOL(0);
+	Tflow	*f0 = PG_GETARG_TFLOW(1);
+	Tflow	*f1 = PG_GETARG_TFLOW(2);
+	Tflow	*r;
+	short 	i,j;
+	TresChemin *c;
+	Tfl 	*lastr,*lastf1;
+
+	r = flowm_copy(f0);
+	 
+	obMRange(i,f1->dim) {
+		obMRange(j,r->dim-1) { // the last node of r is not reduced
+			if(r->x[j].oid == f1->x[i].oid) {
+				if(r->x[j].qtt >= f1->x[i].flowr) {
+					r->x[j].qtt -= f1->x[i].flowr;
+					// elog(WARNING,"order %i stock %i reduced by %li to %li",r->x[j].id,r->x[j].oid,f1->x[i].flowr,r->x[j].qtt);
+				} else {
+			    		ereport(ERROR,
+						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+						errmsg("yflow_reducequote: the flow is greater than available")));
+				}
+			}
+		}
+		
+	}
+	
+	lastr  = &r->x[r->dim-1];
+	lastf1 = &f1->x[f1->dim-1];
+	
+	// sanity check
+	if(lastr->id != lastf1->id)
+			ereport(ERROR,
+						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+						errmsg("yflow_reducequote: the last nodes are not the same")));
+						
+	if(begin) {
+		// sanity check
+		if((lastr->type & ORDER_IGNOREOMEGA) == 0)
+			ereport(ERROR,
+						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+						errmsg("yflow_reducequote: the flow should be with IGNOREOMEGA when begin is True")));		
+		// omega is set
+		lastr->qtt_prov = lastf1->flowr;
+		lastr->qtt_requ = f1->x[f1->dim-2].flowr;
+	} 
+	
+	lastr->type = (lastr->type & ORDER_TYPE_MASK) | ORDER_NOQTTLIMIT; 
+	// IGNOREOMEGA is reset
+	
+	c = flowc_maximum(r);
+	pfree(c);
+
+	PG_FREE_IF_COPY(f0, 1);
+	PG_FREE_IF_COPY(f1, 2);
 	PG_RETURN_TFLOW(r);
 
 }
@@ -542,7 +605,7 @@ Datum yflow_is_draft(PG_FUNCTION_ARGS)
 			break;
 		}
 	}
-	
+	PG_FREE_IF_COPY(f, 0);
 	PG_RETURN_BOOL(isdraft);
 }
 /******************************************************************************

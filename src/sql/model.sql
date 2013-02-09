@@ -160,11 +160,17 @@ SELECT _grant_read('tconst');
 
 --------------------------------------------------------------------------------
 create domain dquantity AS int8 check( VALUE>0);
-create domain dtypeorder AS int check(VALUE=1 OR VALUE=2);
+
 
 --------------------------------------------------------------------------------
 -- ORDER
 --------------------------------------------------------------------------------
+create domain dtypeorder AS int check(VALUE>0 OR VALUE<7);
+-- bbc
+-- bb 1 order limit
+-- bb 2 order best
+-- c set when quote
+
 create table torder ( 
 	usr text,
     ord yorder,
@@ -297,6 +303,7 @@ create table tstack (
     qtt_requ dquantity NOT NULL,
     qua_prov text NOT NULL ,
     qtt_prov dquantity NOT NULL,
+    qtt dquantity NOT NULL,
     created timestamp not NULL,   
     PRIMARY KEY (id)
 );
@@ -329,9 +336,20 @@ returns (id,0) or (0,diag) with diag:
 	-2 _qtt_prov <=0 or _qtt_requ <=0
 */
 --------------------------------------------------------------------------------
-
 CREATE FUNCTION 
 	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
+	RETURNS yressubmit AS $$
+DECLARE
+	_r			yressubmit%rowtype;	
+BEGIN
+	_r := fsubmitorder(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt_prov);
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fsubmitorder(dtypeorder,text,int,text,int8,text,int8) TO role_co;
+--------------------------------------------------------------------------------
+CREATE FUNCTION 
+	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
 	RETURNS yressubmit AS $$	
 DECLARE
 	_t			tstack%rowtype;
@@ -351,13 +369,13 @@ BEGIN
 		RETURN _r;
 	END IF;	
 	
-	INSERT INTO tstack(usr,own,oid,type,qua_requ,qtt_requ,qua_prov,qtt_prov,created)
-	VALUES (current_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,statement_timestamp()) RETURNING * into _t;
+	INSERT INTO tstack(usr,own,oid,type,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,created)
+	VALUES (current_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,statement_timestamp()) RETURNING * into _t;
 	_r.id := _t.id;
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitorder(dtypeorder,text,int,text,int8,text,int8) TO role_co;	
+GRANT EXECUTE ON FUNCTION  fsubmitorder(dtypeorder,text,int,text,int8,text,int8,int8) TO role_co;	
 
 
 --------------------------------------------------------------------------------
@@ -381,7 +399,7 @@ CREATE VIEW vorderinsert AS
 	SELECT id,yorder_get(id,own,nr,qtt_requ,np,qtt_prov,qtt) as ord,np,nr
 	FROM torder ORDER BY ((qtt_prov::double precision)/(qtt_requ::double precision)) DESC; */
 --------------------------------------------------------------------------------
-CREATE FUNCTION fcreate_tmp(_ordid int) RETURNS int AS $$
+CREATE FUNCTION fcreate_tmp(_ord yorder) RETURNS int AS $$
 DECLARE 
 	_MAXPATHFETCHED	 int := fgetconst('MAXPATHFETCHED');  
 	_MAXCYCLE 	int := fgetconst('MAXCYCLE');
@@ -392,9 +410,9 @@ was specified  on Z in the search_backward WHERE condition */
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
 		SELECT yflow_finish(Z.debut,Z.path,Z.fin) as cycle FROM (
 			WITH RECURSIVE search_backward(debut,path,fin,depth,cycle) AS(
-					SELECT ord,yflow_init(ord),
-						ord,1,false 
-					FROM torder WHERE (ord).id= _ordid
+					SELECT _ord,yflow_init(_ord),
+						_ord,1,false 
+					-- FROM torder WHERE (ord).id= _ordid
 				UNION ALL
 					SELECT X.ord,yflow_grow(X.ord,Y.debut,Y.path),
 						Y.fin,Y.depth+1,yflow_contains_oid((X.ord).oid,Y.path)
@@ -430,8 +448,9 @@ CREATE TYPE yresexec AS (
 --------------------------------------------------------------------------------
 CREATE TYPE yresorder AS (
     ord yorder,
-    qtt_in int8,
-    qtt_out int8,
+    qtt_requ int8,
+    qtt_prov int8,
+    qtt int8,
     err	int,
     json text
 );
@@ -465,8 +484,9 @@ BEGIN
 
 	lock table torder in share update exclusive mode;
 	_ro.ord 		:= NULL;
-	_ro.qtt_in 		:= 0;
-	_ro.qtt_out 	:= 0;
+	_ro.qtt_requ	:= 0;
+	_ro.qtt_prov	:= 0;
+	_ro.qtt			:= 0;
 	_ro.err			:= 0;
 	_ro.json		:= NULL;
 	
@@ -497,10 +517,12 @@ BEGIN
 			_ro.err := -3; END IF;
 			
 		IF (_ro.err != 0) THEN
-			INSERT INTO tmvt (type,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
-								qtt,nat,ack,exhausted,refused,order_created,created) 
-				VALUES       (_t.type,1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,
-								_t.qtt_prov,_t.qua_prov,false,_ro.err,true,_t.created,statement_timestamp())
+			INSERT INTO tmvt (	type,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
+								qtt,nat,ack,exhausted,refused,order_created,created
+							 ) 
+				VALUES       (	_t.type,1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,
+								_t.qtt,_t.qua_prov,false,_ro.err,true,_t.created,statement_timestamp()
+							 )
 				RETURNING id INTO _mid;
 			UPDATE tmvt SET grp = _mid WHERE id = _mid;
 			_ro.ord := _op;
@@ -511,54 +533,51 @@ BEGIN
 		END IF;
 	ELSE 
 		_t.oid 	:= _t.id;		
-		_qtt  	:= _t.qtt_prov;
+		_qtt  	:= _t.qtt;
 	END IF;
 	
 	_o := ROW(_t.type,_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt)::yorder;
 	
-	INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);	
-
+	IF(_t.type < 4) THEN -- the order is a barter
+		INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);
+	ELSE
+		_ro := fproducequote(_o);	
+		RETURN _ro;
+	END IF;
+	
 	_ro.ord      	:= _o;
 	 
 	_fmvtids := ARRAY[]::int[];
 	
 	_time_begin := clock_timestamp();
 	
-	_cnt := fcreate_tmp(_o.id);
+	_cnt := fcreate_tmp(_o);
 
 	LOOP	
-
+		-- BIG PB ON TEST_3
 		SELECT yflow_max(cycle) INTO _cyclemax FROM _tmp WHERE yflow_is_draft(cycle);	
 		IF(NOT yflow_is_draft(_cyclemax)) THEN
 			EXIT; -- from LOOP
 		END IF;
 
-		IF(yflow_contains_oid(_oid,_cyclemax)) THEN
-			RAISE NOTICE 'Cyclemax found: %',yflow_show(_cyclemax);
-			RAISE NOTICE 'qtts: %',yflow_qtts(_cyclemax);
-		END IF;
 		_resx := fexecute_flow(_cyclemax,_oid);
 		_fmvtids := _fmvtids || _resx.mvts;
 		
 		_res := yflow_qtts(_cyclemax);
-		_ro.qtt_in  := _ro.qtt_in  + _res[1];
-		_ro.qtt_out := _ro.qtt_out + _res[2];
-		
-		IF (yflow_contains_oid(_oid,_cyclemax)) THEN
-			RAISE NOTICE '_tmp reduced qtt_in=% qtt_out=% with %',_res[1],_res[2],yflow_show(_cyclemax);
-		END IF;
+		_ro.qtt_requ := _ro.qtt_requ + _res[1];
+		_ro.qtt_prov := _ro.qtt_prov + _res[2];
 	
-		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax); -- WHERE yflow_is_draft(cycle);
-
+		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax); 
+		DELETE FROM _tmp WHERE NOT yflow_is_draft(cycle);
 	END LOOP;
 	
-	IF (	(_ro.qtt_in != 0) AND ((_o.type & 3) = 1) -- ORDER_LIMIT
-	AND	((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
+	IF (	(_ro.qtt_requ != 0) AND ((_o.type & 3) = 1) -- ORDER_LIMIT
+	AND	((_ro.qtt_prov::double precision)	/(_ro.qtt_requ::double precision)) > 
 		((_o.qtt_prov::double precision)	/(_o.qtt_requ::double precision))
 	) THEN
 		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
-	
+	_ro.qtt := _ro.qtt_prov;
 	-- set the number of movements in this transaction
 	UPDATE tmvt SET nbt= array_length(_fmvtids,1) WHERE id = ANY (_fmvtids);
 	
@@ -594,7 +613,7 @@ $$ LANGUAGE PLPGSQL;
 GRANT EXECUTE ON FUNCTION  femptystack() TO role_co;
 
 --------------------------------------------------------------------------------
-/* fexecute_flow
+/* fexecute_flow used for a barter
 from a flow representing a draft, for each order:
 	inserts a new movement
 	updates the order
@@ -746,6 +765,7 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  ackmvt() TO role_co;
 
+-- \i sql/quote.sql
 \i sql/stat.sql
 
 
