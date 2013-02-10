@@ -87,8 +87,11 @@ TresChemin *flowc_maximum(Tflow *flow) {
 	// elog(WARNING,"chem->type=%i",chem->type); 
 	
 	_Omega  = _calOmega(chem);
-	if( (chem->type == CYCLE_LIMIT) && (_Omega < 1.0)) {
+	if( (chem->type == CYCLE_LIMIT) && (_Omega < 1.0 )) {
 		chem->status = refused;
+		#ifdef WHY_REJECTED 
+			elog(WARNING,"flowc_maximum: refused: 1.0 - Omega =%.10e",1.0-_Omega);
+		#endif
 		goto _dropflow;
 	}
 		
@@ -532,29 +535,49 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 		
 		{ // order limits are observed for all nodes except for the last node when lnIgnoreOmega 
 			short _kp;
-			//double _Omegap;
+			double _Omegap;
 
 			_kp = _dim-1;
 			//_Omegap = 1.0;
 			obMRange(_k,_dim) {
 				double _omprime  = ((double) _flowNodes[_k]) / ((double) _flowNodes[_kp]);
 				
-				if( !((chem->lnIgnoreOmega) && (_k == _dim-1))
-					&& (ORDER_TYPE(flow->x[_k].type) == ORDER_LIMIT)
-				) {
-						if( !( _omprime <= (omega[_k] + OB_PRECISION) )
-						) {
+				if (ORDER_TYPE(flow->x[_k].type) == ORDER_LIMIT) {
+					if((chem->lnIgnoreOmega) && (_k == _dim-1)) {
+						//if( !( _omprime > (omega[_k] - OB_PRECISION) ) ) {
+						if( !( _omprime > omega[_k]) ) {
 							#ifdef WHY_REJECTED
-								elog(WARNING,"flowc_maximum 4: NOT omega %f<=%f %s",
+								elog(WARNING,"_rounding 3:lnIgnoreOmega NOT omprime > omega[%i] %.10e>%.10e %s",_k,
 									_omprime,omega[_k],flowc_vecIntStr(_dim,_flowNodes));
 							#endif
 							_ret = refused;
 							goto _continue;
 						}
+					} else {
+						//if( !( _omprime <= (omega[_k] + OB_PRECISION) ) ) {
+						if( !( _omprime <= omega[_k] ) ) {
+							#ifdef WHY_REJECTED
+								elog(WARNING,"_rounding 4: NOT _omprime <= omega[%i] %.10e<=%.10e %s",_k,
+									_omprime,omega[_k],flowc_vecIntStr(_dim,_flowNodes));
+							#endif
+							_ret = refused;
+							goto _continue;
+						}
+					}
 				}
 				//_Omegap  *= _omprime;
 				_kp = _k;
 			}
+			/*
+			if(_Omegap < (1.0 - OB_PRECISION)) {
+			// if(_Omegap < 1.0) {
+				#ifdef WHY_REJECTED
+					elog(WARNING,"_rounding 5: NOT 1.0-Omegap = %.10e  %s",1.0 -_Omegap, // + OB_PRECISION),
+						flowc_vecIntStr(_dim,_flowNodes));
+				#endif
+				_ret = refused;
+				goto _continue;
+			} */
 		}
 		
 
@@ -584,6 +607,9 @@ _continue:
 		obMRange (_k,_dim) {
 			flow->x[_k].flowr = _flowNodes[_k];	
 		}
+		#ifdef WHY_REJECTED
+			elog(WARNING,"flowc_maximum: chosen= %s",flowc_vecIntStr(_dim,_flowNodes));
+		#endif
 		
 		_ret = draft; 
 	} // else _ret is undefined or refused

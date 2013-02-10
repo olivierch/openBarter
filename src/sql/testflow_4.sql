@@ -1,11 +1,21 @@
 -- on version 0.6.0
-
+/*
 \i sql/model.sql
 
 RESET client_min_messages;
 RESET log_error_verbosity;
 SET client_min_messages = notice;
 SET log_error_verbosity = terse;
+*/
+SET search_path TO test0_6_1;
+truncate torder;
+truncate tstack;
+SELECT setval('tstack_id_seq',1,false);
+truncate tmvt;
+SELECT setval('tmvt_id_seq',1,false);
+truncate towner;
+SELECT setval('towner_id_seq',1,false);
+
 
 select * from fsubmitorder(1,'a',NULL,'q2',10,'q1',20);
 select * from fproducemvt();

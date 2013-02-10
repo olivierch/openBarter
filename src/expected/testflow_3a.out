@@ -1,0 +1,64 @@
+SET search_path TO test0_6_1;
+truncate torder;
+truncate tstack;
+truncate tmvt;
+truncate towner;
+SELECT setval('tstack_id_seq',1,false);
+ setval 
+--------
+      1
+(1 row)
+
+copy torder from '/home/olivier/ob92/src/sql/torder_test_10000.sql';
+copy towner from '/home/olivier/ob92/src/sql/towner_test_10000.sql';
+truncate tstack;
+SELECT setval('tstack_id_seq',10000,true);
+ setval 
+--------
+  10000
+(1 row)
+
+select * from fsubmitorder(5,'own82',NULL,'qlt22',1,'qlt23',1,1);select * from fproducemvt();
+  id   | diag 
+-------+------
+ 10001 |    0
+(1 row)
+
+                 ord                  | qtt_requ | qtt_prov |  qtt  | err | json 
+--------------------------------------+----------+----------+-------+-----+------
+ (5,10001,72,10001,1,qlt22,1,qlt23,1) |    67432 |    30183 | 30183 |   0 | 
+(1 row)
+
+select * from fsubmitorder(1,'own82',NULL,'qlt22',67432,'qlt23',30183,30183);select * from fproducemvt();
+  id   | diag 
+-------+------
+ 10002 |    0
+(1 row)
+
+                       ord                        | qtt_requ | qtt_prov |  qtt  | err | json 
+--------------------------------------------------+----------+----------+-------+-----+------
+ (1,10002,72,10002,67432,qlt22,30183,qlt23,30183) |    67432 |    30183 | 30183 |   0 | 
+(1 row)
+
+select * from fsubmitorder(6,'own82',NULL,'qlt22',1,'qlt23',1,1);select * from fproducemvt(); 
+  id   | diag 
+-------+------
+ 10003 |    0
+(1 row)
+
+                 ord                  | qtt_requ | qtt_prov |  qtt  | err | json 
+--------------------------------------+----------+----------+-------+-----+------
+ (6,10003,72,10003,1,qlt22,1,qlt23,1) |    61017 |    45276 | 76596 |   0 | 
+(1 row)
+
+select * from fsubmitorder(2,'own82',NULL,'qlt22',61017,'qlt23',45276,45276);select * from fproducemvt();
+  id   | diag 
+-------+------
+ 10004 |    0
+(1 row)
+
+                       ord                        | qtt_requ | qtt_prov |  qtt  | err | json 
+--------------------------------------------------+----------+----------+-------+-----+------
+ (2,10004,72,10004,61017,qlt22,45276,qlt23,45276) |    61017 |    45276 | 45276 |   0 | 
+(1 row)
+

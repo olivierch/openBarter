@@ -44,6 +44,7 @@ do { \
  * 
  *****************************************************************************/
 #define GL_VERIFY
+// #define WHY_REJECTED
 /******************************************************************************
  * 
  *****************************************************************************/
@@ -64,7 +65,7 @@ do { \
 #define FLOW_IS_NOQTTLIMIT(f) ORDER_IS_NOQTTLIMIT(((f)->x[(f)->dim-1].type))
 #define FLOW_IS_IGNOREOMEGA(f) ORDER_IS_IGNOREOMEGA(((f)->x[(f)->dim-1].type))
 
-#define OB_PRECISION 1.E-30
+#define OB_PRECISION 1.E-12
 
 // defines the status of the flow
 typedef enum Tstatusflow {

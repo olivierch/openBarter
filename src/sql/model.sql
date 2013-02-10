@@ -165,7 +165,7 @@ create domain dquantity AS int8 check( VALUE>0);
 --------------------------------------------------------------------------------
 -- ORDER
 --------------------------------------------------------------------------------
-create domain dtypeorder AS int check(VALUE>0 OR VALUE<7);
+create domain dtypeorder AS int check((VALUE & 3)>0 AND VALUE<7);
 -- bbc
 -- bb 1 order limit
 -- bb 2 order best
@@ -348,14 +348,14 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fsubmitorder(dtypeorder,text,int,text,int8,text,int8) TO role_co;
 --------------------------------------------------------------------------------
-CREATE FUNCTION 
+CREATE OR REPLACE FUNCTION 
 	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
 	RETURNS yressubmit AS $$	
 DECLARE
-	_t			tstack%rowtype;
-	_r			yressubmit%rowtype;
-	_o			int;
-	_tid		int;
+	_t			 tstack%rowtype;
+	_r			 yressubmit%rowtype;
+	_o			 int;
+	_tid		 int;
 BEGIN
 	_r.id := 0;
 	_r.diag := 0;
@@ -364,10 +364,15 @@ BEGIN
 		RETURN _r;
 	END IF;
 	
-	IF(_qtt_requ <=0 OR _qtt_prov <= 0) THEN
+	IF(_qtt_requ <=0 OR _qtt_prov <= 0 OR _qtt <= 0) THEN
 		_r.diag := -2;
 		RETURN _r;
-	END IF;	
+	END IF;
+	
+	IF(NOT ((_type & 3)>0 AND _type <7)) THEN
+		_r.diag := -3;
+		RETURN _r;
+	END IF;
 	
 	INSERT INTO tstack(usr,own,oid,type,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,created)
 	VALUES (current_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,statement_timestamp()) RETURNING * into _t;
@@ -554,11 +559,11 @@ BEGIN
 	_cnt := fcreate_tmp(_o);
 
 	LOOP	
-		-- BIG PB ON TEST_3
 		SELECT yflow_max(cycle) INTO _cyclemax FROM _tmp WHERE yflow_is_draft(cycle);	
 		IF(NOT yflow_is_draft(_cyclemax)) THEN
 			EXIT; -- from LOOP
 		END IF;
+		-- _ro.json := yflow_out(_cyclemax);
 
 		_resx := fexecute_flow(_cyclemax,_oid);
 		_fmvtids := _fmvtids || _resx.mvts;
@@ -628,6 +633,7 @@ DECLARE
 	
 	_first_mvt  int;
 	_exhausted	boolean;
+	_mvtexhausted boolean;
 	_cntExhausted int;
 	_mvt_id		int;
 
@@ -687,10 +693,13 @@ BEGIN
 		END IF;
 		
 		_cntExhausted := 0;
+		_mvtexhausted := false;
 		IF( _qttmin < _flowr ) THEN
 			RAISE EXCEPTION 'the stock % is smaller than the flow (% < %)',_o.oid,_qttmin,_flowr  USING ERRCODE='YU002';
 		ELSIF (_qttmin = _flowr) THEN
 			_cntExhausted := _cnt;
+			_exhausted := true;
+			_mvtexhausted := true;
 		END IF;
 			
 		-- update all stocks of the order book
@@ -712,7 +721,7 @@ BEGIN
 						ack,exhausted,refused,order_created,created) 
 			VALUES((_or.ord).type,NULL,_nbcommit,1,_first_mvt,
 						_o.id,_or.usr,_o.oid,_own,_ownnext,_flowr,(_or.ord).qua_prov,
-						false,_exhausted,0,_or.created,statement_timestamp())
+						false,_mvtexhausted,0,_or.created,statement_timestamp())
 			RETURNING id INTO _mvt_id;
 			
 		IF(_first_mvt IS NULL) THEN
@@ -728,7 +737,6 @@ BEGIN
 			IF(_cnt != _cntExhausted) THEN
 				RAISE EXCEPTION 'the stock % is not exhasted',_o.oid  USING ERRCODE='YU002';
 			END IF;
-			_exhausted := true;
 		END IF;
 
 		_i := _next_i;
@@ -765,7 +773,7 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  ackmvt() TO role_co;
 
--- \i sql/quote.sql
+\i sql/quote.sql
 \i sql/stat.sql
 
 

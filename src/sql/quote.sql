@@ -1,6 +1,6 @@
 
 --------------------------------------------------------------------------------
-CREATE FUNCTION fproducequote(_o yorder) RETURNS yresorder AS $$
+CREATE OR REPLACE FUNCTION fproducequote(_o yorder) RETURNS yresorder AS $$
 DECLARE
 	_ro		    yresorder%rowtype;
 	_time_begin	timestamp;
@@ -21,7 +21,8 @@ BEGIN
 	
 	_time_begin := clock_timestamp();
 	
-	_o.type := _o.type & 12; -- NOQTTLIMIT IGNOREOMEGA
+	_o.type := (_o.type & 3) |12; -- NOQTTLIMIT IGNOREOMEGA
+	-- RAISE WARNING 'Quote %', _o;
 	_cnt := fcreate_tmp(_o);
 	
 	LOOP
@@ -30,14 +31,16 @@ BEGIN
 		IF(NOT yflow_is_draft(_cyclemax)) THEN
 			EXIT; -- from LOOP
 		END IF;	
-	
+		
+		-- _ro.json := yflow_out(_cyclemax);
+		
 		_res := yflow_qtts(_cyclemax);
 		IF (_begin) THEN
 			_ro.qtt_requ  := _res[1];
 			_ro.qtt_prov  := _res[2];
 			_ro.qtt		  := _res[2];
 		ELSE
-			_ro.qtt		  := _res[2];
+			_ro.qtt		  := _ro.qtt + _res[2];
 		END IF;
 					
 /* 	the first update, last node of each cycle are updated:
@@ -50,11 +53,11 @@ BEGIN
 		_begin := false;	
 		DELETE FROM _tmp WHERE NOT yflow_is_draft(cycle);
 	END LOOP;
-	
-	IF (	(_ro.qtt_in != 0) AND ((_o.type & 3) = 1) -- ORDER_LIMIT
-	AND	((_ro.qtt_out::double precision)	/(_ro.qtt_in::double precision)) > 
+
+	IF (	(_ro.qtt_requ != 0) AND ((_o.type & 3) = 1) -- ORDER_LIMIT
+	AND	((_ro.qtt_prov::double precision)	/(_ro.qtt_requ::double precision)) > 
 		((_o.qtt_prov::double precision)	/(_o.qtt_requ::double precision))
-	) THEN
+	) THEN	
 		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
 

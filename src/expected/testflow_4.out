@@ -1,125 +1,92 @@
 -- on version 0.6.0
+/*
 \i sql/model.sql
-\set ECHO none
-psql:sql/model.sql:3: NOTICE:  drop cascades to 27 other objects
-DETAIL:  drop cascades to extension btree_gin
-drop cascades to extension flow
-drop cascades to table test0_6_1.tconst
-drop cascades to function test0_6_1.fgetconst(text)
-drop cascades to function test0_6_1.fifo_init(text)
-drop cascades to function test0_6_1.ftime_updated()
-drop cascades to function test0_6_1._reference_time(text)
-drop cascades to function test0_6_1._grant_read(text)
-drop cascades to type test0_6_1.dquantity
-drop cascades to type test0_6_1.dtypeorder
-drop cascades to table test0_6_1.torder
-drop cascades to table test0_6_1.towner
-drop cascades to view test0_6_1.vorder
-drop cascades to function test0_6_1.fgetowner(text)
-drop cascades to table test0_6_1.tmvt
-drop cascades to table test0_6_1.tstack
-drop cascades to type test0_6_1.yressubmit
-drop cascades to function test0_6_1.fsubmitorder(test0_6_1.dtypeorder,text,integer,text,bigint,text,bigint)
-drop cascades to function test0_6_1.fsubmitorder(test0_6_1.dtypeorder,text,integer,text,bigint,text,bigint,bigint)
-drop cascades to function test0_6_1.fcreate_tmp(test0_6_1.yorder)
-drop cascades to type test0_6_1.yresexec
-drop cascades to type test0_6_1.yresorder
-drop cascades to function test0_6_1.fproducemvt()
-drop cascades to function test0_6_1.femptystack()
-drop cascades to function test0_6_1.fexecute_flow(test0_6_1.yflow,integer)
-drop cascades to function test0_6_1.ackmvt()
-drop cascades to function test0_6_1.fgetcounts()
- _create_roles 
----------------
-             0
+
+RESET client_min_messages;
+RESET log_error_verbosity;
+SET client_min_messages = notice;
+SET log_error_verbosity = terse;
+*/
+SET search_path TO test0_6_1;
+truncate torder;
+truncate tstack;
+SELECT setval('tstack_id_seq',1,false);
+ setval 
+--------
+      1
 (1 row)
 
- _grant_read 
--------------
- 
+truncate tmvt;
+SELECT setval('tmvt_id_seq',1,false);
+ setval 
+--------
+      1
 (1 row)
 
- _grant_read 
--------------
- 
+truncate towner;
+SELECT setval('towner_id_seq',1,false);
+ setval 
+--------
+      1
 (1 row)
 
- _reference_time 
------------------
-               0
-(1 row)
-
- _grant_read 
--------------
- 
-(1 row)
-
- _grant_read 
--------------
- 
-(1 row)
-
- fifo_init 
------------
- 
-(1 row)
-
- _grant_read 
--------------
- 
-(1 row)
-
- fifo_init 
------------
- 
-(1 row)
-
+select * from fsubmitorder(1,'a',NULL,'q2',10,'q1',20);
  id | diag 
 ----+------
   1 |    0
 (1 row)
 
+select * from fproducemvt();
            ord            | qtt_requ | qtt_prov | qtt | err | json 
 --------------------------+----------+----------+-----+-----+------
  (1,1,1,1,10,q2,20,q1,20) |        0 |        0 |   0 |   0 | 
 (1 row)
 
+select * from fsubmitorder(1,'b',NULL,'q3',20,'q2',40);
  id | diag 
 ----+------
   2 |    0
 (1 row)
 
+select * from fproducemvt();
            ord            | qtt_requ | qtt_prov | qtt | err | json 
 --------------------------+----------+----------+-----+-----+------
  (1,2,2,2,20,q3,40,q2,40) |        0 |        0 |   0 |   0 | 
 (1 row)
 
+select * from fsubmitorder(1,'b',2   ,'q1',20,'q2',40);
  id | diag 
 ----+------
   3 |    0
 (1 row)
 
+select * from fproducemvt();
            ord            | qtt_requ | qtt_prov | qtt | err | json 
 --------------------------+----------+----------+-----+-----+------
  (1,3,2,2,20,q1,40,q2,40) |       20 |       20 |  20 |   0 | 
 (1 row)
 
+-- select * from femptystack();
+select id,nbc,nbt,grp,xid,xoid,own_src,own_dst,qtt,nat,ack from tmvt order by id desc limit 2;
  id | nbc | nbt | grp | xid | xoid | own_src | own_dst | qtt | nat | ack 
 ----+-----+-----+-----+-----+------+---------+---------+-----+-----+-----
   2 |   2 |   2 |   1 |   1 |    1 | a       | b       |  20 | q1  | f
   1 |   2 |   2 |   1 |   3 |    2 | b       | a       |  20 | q2  | f
 (2 rows)
 
+select * from fsubmitorder(1,'a',NULL,'q2',10,'q1',20);
  id | diag 
 ----+------
   4 |    0
 (1 row)
 
+select * from fproducemvt();
            ord            | qtt_requ | qtt_prov | qtt | err | json 
 --------------------------+----------+----------+-----+-----+------
  (1,4,1,4,10,q2,20,q1,20) |       20 |       20 |  20 |   0 | 
 (1 row)
 
+select id,nbc,nbt,grp,xid,xoid,own_src,own_dst,qtt,nat,ack from tmvt order by id desc limit 2;
  id | nbc | nbt | grp | xid | xoid | own_src | own_dst | qtt | nat | ack 
 ----+-----+-----+-----+-----+------+---------+---------+-----+-----+-----
   4 |   2 |   2 |   3 |   3 |    2 | b       | a       |  20 | q2  | f
