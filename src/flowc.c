@@ -530,30 +530,32 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 			* Omega ~= 1.0 
 		*/
 		
-		if(chem->type == CYCLE_LIMIT) { 
-			short _kp = _dim-1;
-			double _precision = 1.E-8;
-			
+		{ // order limits are observed for all nodes except for the last node when lnIgnoreOmega 
+			short _kp;
+			//double _Omegap;
+
+			_kp = _dim-1;
+			//_Omegap = 1.0;
 			obMRange(_k,_dim) {
-				if((ORDER_TYPE(flow->x[_k].type) == ORDER_LIMIT)
-					&& (! ((_k == (_dim-1)) && chem->lnIgnoreOmega) )
-				) {
-					double _omprime  = ((double) _flowNodes[_k]) / ((double) _flowNodes[_kp]);
-					//omega[_k]  == GET_OMEGA(flow->x[_k]);
+				double _omprime  = ((double) _flowNodes[_k]) / ((double) _flowNodes[_kp]);
 				
-					if((omega[_k] + _precision) < _omprime) {
-						#ifdef WHY_REJECTED
-							elog(WARNING,"flowc_maximum 4: NOT omega %f>=%f %s",
-								omega[_k],_omprime,
-								flowc_vecIntStr(_dim,_flowNodes));
-						#endif
-						_ret = refused;
-						goto _continue;
-					}
+				if( !((chem->lnIgnoreOmega) && (_k == _dim-1))
+					&& (ORDER_TYPE(flow->x[_k].type) == ORDER_LIMIT)
+				) {
+						if( !( _omprime <= (omega[_k] + OB_PRECISION) )
+						) {
+							#ifdef WHY_REJECTED
+								elog(WARNING,"flowc_maximum 4: NOT omega %f<=%f %s",
+									_omprime,omega[_k],flowc_vecIntStr(_dim,_flowNodes));
+							#endif
+							_ret = refused;
+							goto _continue;
+						}
 				}
+				//_Omegap  *= _omprime;
 				_kp = _k;
 			}
-		} // order limits are observed
+		}
 		
 
 		// choose the best

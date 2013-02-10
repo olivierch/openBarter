@@ -64,6 +64,8 @@ do { \
 #define FLOW_IS_NOQTTLIMIT(f) ORDER_IS_NOQTTLIMIT(((f)->x[(f)->dim-1].type))
 #define FLOW_IS_IGNOREOMEGA(f) ORDER_IS_IGNOREOMEGA(((f)->x[(f)->dim-1].type))
 
+#define OB_PRECISION 1.E-30
+
 // defines the status of the flow
 typedef enum Tstatusflow {
 	empty, // flow empty, ( dim==0 or some qtt ==0 )

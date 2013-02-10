@@ -572,7 +572,7 @@ Datum yflow_reducequote(PG_FUNCTION_ARGS)
 		if((lastr->type & ORDER_IGNOREOMEGA) == 0)
 			ereport(ERROR,
 						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-						errmsg("yflow_reducequote: the flow should be with IGNOREOMEGA when begin is True")));		
+						errmsg("yflow_reducequote: the flow should have IGNOREOMEGA when begin is True")));		
 		// omega is set
 		lastr->qtt_prov = lastf1->flowr;
 		lastr->qtt_requ = f1->x[f1->dim-2].flowr;

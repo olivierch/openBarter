@@ -42,7 +42,7 @@ BEGIN
 					
 /* 	the first update, last node of each cycle are updated:
 		- omega is set to _ro.qtt_requ,_ro.qtt_prov
-		- type is set to NOQTTLIMIT
+		- type: NOQTTLIMIT is set, IGNOREOMEGA is reset
 	
 	for all updates, yflow_reduce is applied except on the first node
 */
