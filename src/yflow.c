@@ -45,7 +45,7 @@ PG_FUNCTION_INFO_V1(yflow_to_matrix);
 PG_FUNCTION_INFO_V1(yflow_qtts);
 
 PG_FUNCTION_INFO_V1(yflow_show);
-
+PG_FUNCTION_INFO_V1(yflow_to_json);
 
 Datum yflow_in(PG_FUNCTION_ARGS);
 Datum yflow_out(PG_FUNCTION_ARGS);
@@ -65,6 +65,7 @@ Datum yflow_to_matrix(PG_FUNCTION_ARGS);
 Datum yflow_qtts(PG_FUNCTION_ARGS);
 
 Datum yflow_show(PG_FUNCTION_ARGS);
+Datum yflow_to_json(PG_FUNCTION_ARGS);
 
 char *yflow_pathToStr(Tflow *yflow);
 
@@ -210,6 +211,40 @@ Datum yflow_show(PG_FUNCTION_ARGS) {
 	pfree(c);
 	PG_RETURN_CSTRING(str);
 */
+}
+/******************************************************************************
+******************************************************************************/
+Datum yflow_to_json(PG_FUNCTION_ARGS) {
+	Tflow *yflow = PG_GETARG_TFLOW(0);
+	StringInfoData 	buf;
+	int	dim = yflow->dim;
+	int	i;
+
+	initStringInfo(&buf);
+
+	appendStringInfoChar(&buf, '[');
+	if(dim >0) {
+		for (i = 0; i < dim; i++)
+		{	
+			Tfl *s = &yflow->x[i];
+		
+			if(i != 0) appendStringInfo(&buf, ",\n");
+
+			// type,id,oid,own,qtt_requ,qtt_prov,qtt,proba
+			appendStringInfo(&buf, "{\"type\":%i, ", s->type);
+			appendStringInfo(&buf, "\"id\":%i, ", s->id);
+			appendStringInfo(&buf, "\"oid\":%i, ", s->oid);
+			appendStringInfo(&buf, "\"own\":%i, ", s->own);
+			appendStringInfo(&buf, "\"qtt_requ\":" INT64_FORMAT ", ", s->qtt_requ);
+			appendStringInfo(&buf, "\"qtt_prov\":" INT64_FORMAT ", ", s->qtt_prov);
+			appendStringInfo(&buf, "\"qtt\":" INT64_FORMAT ", ", s->qtt);
+		
+			appendStringInfo(&buf,"\"proba\":%.10e,\"flowr\":" INT64_FORMAT "}",s->proba, s->flowr);
+		}
+	}
+	appendStringInfoChar(&buf, ']');
+	
+	PG_RETURN_TEXT_P(cstring_to_text(buf.data));
 }
 
 /******************************************************************************
@@ -589,6 +624,7 @@ Datum yflow_reducequote(PG_FUNCTION_ARGS)
 	PG_RETURN_TFLOW(r);
 
 }
+
 /******************************************************************************
 ******************************************************************************/
 Datum yflow_is_draft(PG_FUNCTION_ARGS)

@@ -535,7 +535,7 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 		
 		{ // order limits are observed for all nodes except for the last node when lnIgnoreOmega 
 			short _kp;
-			double _Omegap;
+			//double _Omegap;
 
 			_kp = _dim-1;
 			//_Omegap = 1.0;

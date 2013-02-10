@@ -15,6 +15,7 @@ select * from fsubmitorder(1,'own82',NULL,'qlt22',67432,'qlt23',30183,30183);sel
 
 select * from fsubmitorder(6,'own82',NULL,'qlt22',1,'qlt23',1,1);select * from fproducemvt(); 
 select * from fsubmitorder(2,'own82',NULL,'qlt22',61017,'qlt23',45276,45276);select * from fproducemvt();
+select id,type,json from tmvt where type >3;
 
 
 

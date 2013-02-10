@@ -546,7 +546,7 @@ BEGIN
 	IF(_t.type < 4) THEN -- the order is a barter
 		INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);
 	ELSE
-		_ro := fproducequote(_o);	
+		_ro := fproducequote(_t,_o);	
 		RETURN _ro;
 	END IF;
 	
