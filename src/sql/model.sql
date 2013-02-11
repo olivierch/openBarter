@@ -26,14 +26,10 @@ create table tconst(
 INSERT INTO tconst (name,value) VALUES 
 	('MAXCYCLE',6), --must be less than yflow_get_maxdim()
 	('MAXPATHFETCHED',1024),
-	-- ('RANK_NORMALIZATION',2|4),
 	-- it is the version of the model, not that of the extension
 	('VERSION-X.y.z',0),
-	('VERSION-x.Y.y',6),
+	('VERSION-x.Y.y',7),
 	('VERSION-x.y.Z',0);
-	
-	-- maximum number of paths of the set on which the competition occurs
-	-- ('MAXBRANCHFETCHED',20);
 
 
 --------------------------------------------------------------------------------

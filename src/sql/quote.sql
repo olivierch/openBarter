@@ -18,7 +18,7 @@ BEGIN
 	_ro.qtt_requ 	:= 0;
 	_ro.qtt			:= 0;
 	_ro.err			:= 0;
-	_ro.json		:= '[';
+	_ro.json		:= '';
 	
 	_time_begin := clock_timestamp();
 	
@@ -63,7 +63,7 @@ BEGIN
 	) THEN	
 		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
-	_ro.json := _ro.json || ']';
+	_ro.json :='{"qtt_requ":' || _ro.qtt_requ || ',"qtt_prov":' || _ro.qtt_prov || ',"qtt":' || _ro.qtt ||',"paths":[' || _ro.json || ']}';
 	
 	INSERT INTO tmvt (	type,json,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
 						qtt,nat,ack,exhausted,refused,order_created,created
