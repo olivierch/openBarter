@@ -64,6 +64,7 @@ BEGIN
 		NULL;	
 	END;
 	ALTER ROLE role_co NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+	GRANT USAGE ON SCHEMA test TO role_co;
 	
 	BEGIN 
 		CREATE ROLE role_bo; 
@@ -71,6 +72,7 @@ BEGIN
 		NULL;	
 	END;
 	ALTER ROLE role_bo NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+	GRANT USAGE ON SCHEMA test TO role_bo;
 	
 	BEGIN 
 		CREATE ROLE role_client;
@@ -86,18 +88,19 @@ BEGIN
 	EXCEPTION WHEN duplicate_object THEN
 		NULL;
 	END;
-	ALTER ROLE batch NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION; 
-	ALTER ROLE batch LOGIN CONNECTION LIMIT 1;
-	ALTER ROLE batch INHERIT;
+	ALTER ROLE role_batch NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION; 
+	ALTER ROLE role_batch LOGIN CONNECTION LIMIT 1;
+	ALTER ROLE role_batch INHERIT;
 	GRANT role_bo TO role_batch;
 	
 	BEGIN 
-		CREATE ROLE admin;
+		CREATE ROLE role_admin;
 	EXCEPTION WHEN duplicate_object THEN
 		NULL;
 	END;
-	ALTER ROLE admin NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION; 
-	ALTER ROLE admin LOGIN CONNECTION LIMIT 1;
+	ALTER ROLE role_admin NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION; 
+	ALTER ROLE role_admin LOGIN CONNECTION LIMIT 1;
+	GRANT USAGE ON SCHEMA test TO role_admin;
 	RETURN 0;
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -207,7 +210,7 @@ create view vorder as
 select (o.ord).id as id,w.name as own,(o.ord).oid as oid,
 		(o.ord).qtt_requ as qtt_requ,(o.ord).qua_requ as qua_requ,
 		(o.ord).qtt_prov as qtt_prov,(o.ord).qua_prov as qua_prov,
-		(o.ord).qtt as qtt, o.created as created
+		(o.ord).qtt as qtt, o.created as created, o.updated as updated
 from torder o left join towner w on ((o.ord).own=w.id) where o.usr=current_user;
 --------------------------------------------------------------------------------
 
@@ -247,7 +250,7 @@ create table tmvt (
 	grp int, -- References the first mvt of an exchange.
 	-- can be NULL
 	xid int not NULL,
-	usr text,
+	usr text not NULL,
 	xoid int not NULL,
 	own_src text not NULL, 
 	own_dst text not NULL,
@@ -617,7 +620,7 @@ GRANT EXECUTE ON FUNCTION  femptystack() TO role_co;
 /* fexecute_flow used for a barter
 from a flow representing a draft, for each order:
 	inserts a new movement
-	updates the order
+	updates the order book
 */
 --------------------------------------------------------------------------------
 
@@ -672,7 +675,7 @@ BEGIN
 		_o.own	:= _mat[_i][2];
 		_o.oid	:= _mat[_i][3];
 		_o.qtt  := _mat[_i][6];
-		_flowr:= _mat[_i][7]; 
+		_flowr  := _mat[_i][7]; 
 		
 		_idownnext := _mat[_next_i][2];	
 		
