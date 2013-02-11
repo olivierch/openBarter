@@ -1,4 +1,4 @@
--- on version 0.6.0
+
 \i sql/model.sql
 RESET client_min_messages;
 RESET log_error_verbosity;

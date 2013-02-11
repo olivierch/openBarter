@@ -1,8 +1,8 @@
 \set ECHO none
 
-drop schema IF EXISTS test0_6_1 CASCADE;
-CREATE SCHEMA test0_6_1;
-SET search_path TO test0_6_1;
+drop schema IF EXISTS test CASCADE;
+CREATE SCHEMA test;
+SET search_path TO test;
 
 SET client_min_messages = warning;
 SET log_error_verbosity = terse;

@@ -1,6 +1,6 @@
-/*drop schema IF EXISTS test0_6_1 CASCADE;
-CREATE SCHEMA test0_6_1;
-SET search_path TO test0_6_1;
+/*drop schema IF EXISTS test CASCADE;
+CREATE SCHEMA test;
+SET search_path TO test;
 
 create extension flow with version '1.0';
 

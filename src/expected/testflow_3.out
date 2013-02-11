@@ -1,7 +1,6 @@
--- on version 0.6.0
 \i sql/model.sql
 \set ECHO none
-psql:sql/model.sql:3: NOTICE:  schema "test0_6_1" does not exist, skipping
+psql:sql/model.sql:3: NOTICE:  schema "test" does not exist, skipping
  _create_roles 
 ---------------
              0

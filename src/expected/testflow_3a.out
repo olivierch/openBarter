@@ -1,4 +1,4 @@
-SET search_path TO test0_6_1;
+SET search_path TO test;
 truncate torder;
 truncate tstack;
 truncate tmvt;
