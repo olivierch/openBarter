@@ -525,7 +525,7 @@ BEGIN
 								qtt,nat,ack,exhausted,refused,order_created,created
 							 ) 
 				VALUES       (	_t.type,1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,
-								_t.qtt,_t.qua_prov,false,_ro.err,true,_t.created,statement_timestamp()
+								_t.qtt,_t.qua_prov,false,true,_ro.err,_t.created,statement_timestamp()
 							 )
 				RETURNING id INTO _mid;
 			UPDATE tmvt SET grp = _mid WHERE id = _mid;
