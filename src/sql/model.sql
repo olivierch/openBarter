@@ -1,14 +1,14 @@
 \set ECHO none
 
-drop schema IF EXISTS test CASCADE;
-CREATE SCHEMA test;
-SET search_path TO test;
+-- drop schema IF EXISTS test CASCADE;
+-- CREATE SCHEMA market;
+-- SET search_path TO market;
 
 SET client_min_messages = warning;
 SET log_error_verbosity = terse;
 
-drop extension if exists btree_gin cascade;
-create extension btree_gin with version '1.0';
+-- drop extension if exists btree_gin cascade;
+-- create extension btree_gin with version '1.0';
 
 drop extension if exists flow cascade;
 create extension flow with version '1.0';
@@ -26,10 +26,10 @@ create table tconst(
 INSERT INTO tconst (name,value) VALUES 
 	('MAXCYCLE',6), --must be less than yflow_get_maxdim()
 	('MAXPATHFETCHED',1024),
-	-- it is the version of the model, not that of the extension
-	('VERSION-X.y.z',0),
-	('VERSION-x.Y.y',7),
-	('VERSION-x.y.Z',0);
+	-- it is the version X.Y.Z of the model, not that of the extension
+	('VERSION-X',0),
+	('VERSION-Y',7),
+	('VERSION-Z',0);
 
 
 --------------------------------------------------------------------------------
@@ -48,59 +48,100 @@ BEGIN
 	RETURN _ret;
 END; 
 $$ LANGUAGE PLPGSQL STABLE;
+--------------------------------------------------------------------------------
+CREATE FUNCTION fsetconst(_name text,_value int) RETURNS text AS $$
+DECLARE
+	_ret text;
+BEGIN
+	IF(		(_name='MAXCYCLE' AND _value <= yflow_get_maxdim())
+		OR 	(_name='MAXPATHFETCHED' AND _value >= 1 )
+		) THEN
+		UPDATE tconst SET value=_value WHERE name=_name;
+		_ret := '% set to %',_name,_value;
+	ELSE 
+		_ret := 'these values are not allowed';
+	END IF;
+	RETURN _ret;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fsetconst(text,int) TO role_bo;
 
 --------------------------------------------------------------------------------
--- definition of roles
---	batch <- role_bo
---	user <- client <- role_co 
+CREATE FUNCTION fversion() RETURNS text AS $$
+DECLARE
+	_ret text;
+	_x	 int;
+	_y	 int;
+	_z	 int;
+BEGIN
+	SELECT value INTO _x FROM tconst WHERE name='VERSION-X';
+	SELECT value INTO _y FROM tconst WHERE name='VERSION-Y';
+	SELECT value INTO _z FROM tconst WHERE name='VERSION-Z';
+	RETURN 'openBarter VERSION-' || ((_x)::text) || '.' || ((_y)::text)|| '.' || ((_z)::text);
+END; 
+$$ LANGUAGE PLPGSQL STABLE;
+GRANT EXECUTE ON FUNCTION  fversion() TO role_co,role_bo;
+
+--------------------------------------------------------------------------------
+/* definition of roles
+
+	-- role_co-->role_client---->clientA
+	--                       \-->clientB
+	
+	-- role_bo---->role_batch
+	
+	-- role_admin
+	
+	access by clients can be disabled/enabled with a single command:
+		REVOKE role_co FROM role_client
+		GRANT role_co TO role_client
+		
+	same thing for role batch with role_bo:
+		REVOKE role_bo FROM role_batch
+		GRANT role_bo TO role_batch
+*/
 --------------------------------------------------------------------------------
 CREATE FUNCTION _create_roles() RETURNS int AS $$
 DECLARE
 	_rol text;
 BEGIN
+	-- role_co-->role_client---->clientA
+	--                       \-->clientB
 	BEGIN 
 		CREATE ROLE role_co; 
 	EXCEPTION WHEN duplicate_object THEN
 		NULL;	
 	END;
 	ALTER ROLE role_co NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
-	GRANT USAGE ON SCHEMA test TO role_co;
-	
-	BEGIN 
-		CREATE ROLE role_bo; 
-	EXCEPTION WHEN duplicate_object THEN
-		NULL;	
-	END;
-	ALTER ROLE role_bo NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
-	GRANT USAGE ON SCHEMA test TO role_bo;
 	
 	BEGIN 
 		CREATE ROLE role_client;
 	EXCEPTION WHEN duplicate_object THEN
 		NULL;
 	END;
-	ALTER ROLE role_client INHERIT;
+	ALTER ROLE role_client INHERIT LOGIN;
 	GRANT role_co TO role_client;
 
-	-- a single connection is allowed	
+	-- a single connection is allowed for role_batch and role_admin
+	
+	-- role_bo---->role_batch
+	-- role_admin
+	BEGIN 
+		CREATE ROLE role_bo; 
+	EXCEPTION WHEN duplicate_object THEN
+		NULL;	
+	END;
+	ALTER ROLE role_bo NOSUPERUSER NOCREATEDB CREATEROLE NOREPLICATION INHERIT; 
+	ALTER ROLE role_bo LOGIN CONNECTION LIMIT 1;
+		
 	BEGIN 
 		CREATE ROLE role_batch;
 	EXCEPTION WHEN duplicate_object THEN
 		NULL;
 	END;
-	ALTER ROLE role_batch NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION; 
-	ALTER ROLE role_batch LOGIN CONNECTION LIMIT 1;
-	ALTER ROLE role_batch INHERIT;
+
 	GRANT role_bo TO role_batch;
-	
-	BEGIN 
-		CREATE ROLE role_admin;
-	EXCEPTION WHEN duplicate_object THEN
-		NULL;
-	END;
-	ALTER ROLE role_admin NOINHERIT NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION; 
-	ALTER ROLE role_admin LOGIN CONNECTION LIMIT 1;
-	GRANT USAGE ON SCHEMA test TO role_admin;
+
 	RETURN 0;
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -164,11 +205,12 @@ create domain dquantity AS int8 check( VALUE>0);
 --------------------------------------------------------------------------------
 -- ORDER
 --------------------------------------------------------------------------------
-create domain dtypeorder AS int check((VALUE & 3)>0 AND VALUE<7);
--- bbc
+create domain dtypeorder AS int check((VALUE & 3)>0 AND VALUE<23);
+-- bbc0a
 -- bb 1 order limit
 -- bb 2 order best
--- c set when quote
+-- c set when best quote
+-- a set when quote
 
 create table torder ( 
 	usr text,
@@ -181,7 +223,7 @@ SELECT _grant_read('torder');
 
 comment on table torder is 'description of orders';
 
-create index torder_qua_prov_idx on torder using gin(((ord).qua_prov) text_ops);
+create index torder_qua_prov_idx on torder(((ord).qua_prov)); -- using gin(((ord).qua_prov) text_ops);
 create index torder_id_idx on torder(((ord).id));
 create index torder_oid_idx on torder(((ord).oid));
 
@@ -254,17 +296,19 @@ create table tmvt (
 	xoid int not NULL,
 	own_src text not NULL, 
 	own_dst text not NULL,
-	qtt dquantity not NULL,
+	qtt int8 not NULL,
 	nat text not NULL,
 	ack	boolean default false,
 	exhausted boolean default false,
 	refused int default 0,
 	order_created timestamp not NULL,
 	created	timestamp not NULL 
-	CHECK (
+	CHECK ((
 		(nbc = 1 AND own_src = own_dst)
-	OR 	(nbc !=1) -- ( AND own_src != own_dst)
-	),
+		OR 	(nbc !=1) -- ( AND own_src != own_dst)
+	) AND (
+		qtt >=0
+	)),
 	CONSTRAINT ctmvt_grp FOREIGN KEY (grp) references tmvt(id) ON UPDATE CASCADE
 );
 SELECT _grant_read('tmvt');
@@ -300,9 +344,9 @@ create table tstack (
     type dtypeorder NOT NULL,
     qua_requ text NOT NULL ,
     qtt_requ dquantity NOT NULL,
-    qua_prov text NOT NULL ,
-    qtt_prov dquantity NOT NULL,
-    qtt dquantity NOT NULL,
+    qua_prov text ,
+    qtt_prov dquantity ,
+    qtt dquantity ,
     created timestamp not NULL,   
     PRIMARY KEY (id)
 );
@@ -327,6 +371,46 @@ CREATE TYPE yressubmit AS (
     id int,
     diag int
 );
+
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qua_prov text)
+	RETURNS yressubmit AS $$	
+DECLARE
+	_r			 yressubmit%rowtype;
+BEGIN
+	IF(NOT (0 < _type AND _type <4)) THEN
+		_r.diag := -3;
+		RETURN _r;
+	END IF;	
+	-- NOQTTLIMIT IGNOREOMEGA
+	_r := fsubmitorder((_type & 3) | 12,_own,NULL,_qua_requ,1,_qua_prov,1,1);
+	
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,text) TO role_co;
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
+	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
+	RETURNS yressubmit AS $$	
+DECLARE
+	_r			 yressubmit%rowtype;
+BEGIN
+	IF(NOT (0 < _type AND _type <4)) THEN
+		_r.diag := -3;
+		RETURN _r;
+	END IF;	
+	IF((_qtt_requ <=0) OR (_qtt_prov <= 0)) THEN
+		_r.diag := -2;
+		RETURN _r;
+	END IF;	
+	_r := fsubmitorder((_type & 3) | 16,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt_prov);
+	
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8) TO role_co;
 --------------------------------------------------------------------------------
 -- order submission  
 /*
@@ -336,16 +420,43 @@ returns (id,0) or (0,diag) with diag:
 */
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
+	fsubmitbarter(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
 	RETURNS yressubmit AS $$
 DECLARE
 	_r			yressubmit%rowtype;	
 BEGIN
-	_r := fsubmitorder(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt_prov);
+	IF(NOT (0 < _type AND _type <4)) THEN
+		_r.diag := -3;
+		RETURN _r;
+	END IF;
+	IF( _oid IS NULL) THEN
+		IF((_qtt_requ <=0) OR (_qtt_prov <= 0) OR (_qua_prov IS NULL) OR (_qtt IS NULL)) THEN
+			_r.diag := -2;
+			RETURN _r;
+		END IF;		
+	ELSE
+		IF(NOT( (_qua_prov IS NULL) AND (_qtt_prov IS NULL) AND (_qtt IS NULL))) THEN
+			_r.diag := -4;
+			RETURN _r;
+		END IF;
+	END IF;
+	_r := fsubmitorder(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt);
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitorder(dtypeorder,text,int,text,int8,text,int8) TO role_co;
+GRANT EXECUTE ON FUNCTION  fsubmitbarter(dtypeorder,text,int,text,int8,text,int8,int8) TO role_co;
+--------------------------------------------------------------------------------
+CREATE FUNCTION 
+	fsubmitbarter(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
+	RETURNS yressubmit AS $$
+DECLARE
+	_r			yressubmit%rowtype;	
+BEGIN
+	_r := fsubmitbarter(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt_prov);
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fsubmitbarter(dtypeorder,text,int,text,int8,text,int8) TO role_co;
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION 
 	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
@@ -363,24 +474,12 @@ BEGIN
 		RETURN _r;
 	END IF;
 	
-	IF(_qtt_requ <=0 OR _qtt_prov <= 0 OR _qtt <= 0) THEN
-		_r.diag := -2;
-		RETURN _r;
-	END IF;
-	
-	IF(NOT ((_type & 3)>0 AND _type <7)) THEN
-		_r.diag := -3;
-		RETURN _r;
-	END IF;
-	
 	INSERT INTO tstack(usr,own,oid,type,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,created)
 	VALUES (current_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,statement_timestamp()) RETURNING * into _t;
 	_r.id := _t.id;
 	RETURN _r;
 END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitorder(dtypeorder,text,int,text,int8,text,int8,int8) TO role_co;	
-
+$$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 /* for an order O creates a temporary table _tmp of objects.
@@ -504,8 +603,10 @@ BEGIN
 	
 	_wid := fgetowner(_t.own);
 
-	IF NOT (_t.oid IS NULL) THEN
-
+	IF (_t.oid IS NULL) THEN
+		_t.oid 	:= _t.id;		
+		_qtt  	:= _t.qtt;
+	ELSE 
 		SELECT (ord).type,(ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
 			INTO _op.type,_op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder WHERE (ord).id= _t.oid;
 
@@ -520,7 +621,11 @@ BEGIN
 			_ro.json:= '{"error":"the parent must not have parent"}';
 			_ro.err := -3; END IF;
 			
-		IF (_ro.err != 0) THEN
+		IF (_ro.err = 0) THEN
+			_qtt	:= _op.qtt;
+			_t.qtt_prov := _op.qtt_prov;
+			_t.qua_prov := _op.qua_prov;
+		ELSE 
 			INSERT INTO tmvt (	type,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
 								qtt,nat,ack,exhausted,refused,order_created,created
 							 ) 
@@ -531,13 +636,7 @@ BEGIN
 			UPDATE tmvt SET grp = _mid WHERE id = _mid;
 			_ro.ord := _op;
 			RETURN _ro; -- the referenced order was not found in the book
-		ELSE
-			_qtt	:= _op.qtt;
-			_t.qua_prov := _op.qua_prov; 
 		END IF;
-	ELSE 
-		_t.oid 	:= _t.id;		
-		_qtt  	:= _t.qtt;
 	END IF;
 	
 	_o := ROW(_t.type,_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt)::yorder;
@@ -752,7 +851,7 @@ END;
 $$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
-CREATE FUNCTION ackmvt() RETURNS int AS $$
+CREATE FUNCTION fackmvt() RETURNS int AS $$
 DECLARE
 	_cnt	int;
 	_m  tmvt%rowtype;
@@ -770,7 +869,7 @@ BEGIN
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  ackmvt() TO role_co;
+GRANT EXECUTE ON FUNCTION  fackmvt() TO role_co;
 
 \i sql/quote.sql
 \i sql/stat.sql

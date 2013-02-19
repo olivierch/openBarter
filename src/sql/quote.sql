@@ -21,9 +21,7 @@ BEGIN
 	_ro.json		:= '';
 	
 	_time_begin := clock_timestamp();
-	
-	_o.type := (_o.type & 3) |12; -- NOQTTLIMIT IGNOREOMEGA
-	-- RAISE WARNING 'Quote %', _o;
+	_o.type := (_t.type & 15);
 	_cnt := fcreate_tmp(_o);
 	
 	LOOP
@@ -35,24 +33,33 @@ BEGIN
 		IF(NOT _begin) THEN
 			_ro.json := _ro.json || ',' || chr(10); -- ,\n
 		END IF;
-		_ro.json := _ro.json || yflow_to_json(_cyclemax);
 		
 		_res := yflow_qtts(_cyclemax);
-		IF (_begin) THEN
-			_ro.qtt_requ  := _res[1];
-			_ro.qtt_prov  := _res[2];
-			_ro.qtt		  := _res[2];
+		
+		_ro.json := _ro.json || yflow_to_jsona(_cyclemax);
+		-- RAISE WARNING '_res % %',_res,yflow_to_jsona(_cyclemax);
+		
+		IF (_begin ) THEN
+			IF((_t.type & 8) = 8) THEN-- _begin AND IGNOREOMEGA
+				_ro.qtt_requ  := _res[1];
+				_ro.qtt_prov  := _res[2];
+				_ro.qtt		  := _res[2];
+			ELSE
+				_ro.qtt_requ  := _o.qtt_requ;
+				_ro.qtt_prov  := _o.qtt_prov;
+				_ro.qtt		  := _res[2];
+			END IF;
 		ELSE
-			_ro.qtt		  := _ro.qtt + _res[2];
+			_ro.qtt		  := _ro.qtt + _res[2];			
 		END IF;
 					
-/* 	the first update, last node of each cycle are updated:
+/* 	node having IGNOREOMEGA:
 		- omega is set to _ro.qtt_requ,_ro.qtt_prov
-		- type: NOQTTLIMIT is set, IGNOREOMEGA is reset
+		- IGNOREOMEGA is reset
 	
-	for all updates, yflow_reduce is applied except on the first node
+	for all updates, yflow_reduce is applied except for node with NOQTTLIMIT
 */
-		UPDATE _tmp SET cycle = yflow_reducequote(_begin,cycle,_cyclemax);
+		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax);
 		_begin := false;	
 		DELETE FROM _tmp WHERE NOT yflow_is_draft(cycle);
 	END LOOP;
@@ -63,7 +70,7 @@ BEGIN
 	) THEN	
 		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
-	_ro.json :='{"qtt_requ":' || _ro.qtt_requ || ',"qtt_prov":' || _ro.qtt_prov || ',"qtt":' || _ro.qtt ||',"paths":[' || _ro.json || ']}';
+	_ro.json :='{"qtt_requ":' || _ro.qtt_requ || ',"qtt_prov":' || _ro.qtt_prov || ',"qtt":' || _ro.qtt  || ',"paths":[' || chr(10) || _ro.json || chr(10) ||']}';
 	
 	INSERT INTO tmvt (	type,json,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
 						qtt,nat,ack,exhausted,refused,order_created,created

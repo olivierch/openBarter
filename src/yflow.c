@@ -39,13 +39,13 @@ PG_FUNCTION_INFO_V1(yflow_contains_oid);
 PG_FUNCTION_INFO_V1(yflow_match);
 PG_FUNCTION_INFO_V1(yflow_maxg);
 PG_FUNCTION_INFO_V1(yflow_reduce);
-PG_FUNCTION_INFO_V1(yflow_reducequote);
 PG_FUNCTION_INFO_V1(yflow_is_draft);
 PG_FUNCTION_INFO_V1(yflow_to_matrix);
 PG_FUNCTION_INFO_V1(yflow_qtts);
 
 PG_FUNCTION_INFO_V1(yflow_show);
 PG_FUNCTION_INFO_V1(yflow_to_json);
+PG_FUNCTION_INFO_V1(yflow_to_jsona);
 
 Datum yflow_in(PG_FUNCTION_ARGS);
 Datum yflow_out(PG_FUNCTION_ARGS);
@@ -59,13 +59,13 @@ Datum yflow_contains_oid(PG_FUNCTION_ARGS);
 Datum yflow_match(PG_FUNCTION_ARGS);
 Datum yflow_maxg(PG_FUNCTION_ARGS);
 Datum yflow_reduce(PG_FUNCTION_ARGS);
-Datum yflow_reducequote(PG_FUNCTION_ARGS);
 Datum yflow_is_draft(PG_FUNCTION_ARGS);
 Datum yflow_to_matrix(PG_FUNCTION_ARGS);
 Datum yflow_qtts(PG_FUNCTION_ARGS);
 
 Datum yflow_show(PG_FUNCTION_ARGS);
 Datum yflow_to_json(PG_FUNCTION_ARGS);
+Datum yflow_to_jsona(PG_FUNCTION_ARGS);
 
 char *yflow_pathToStr(Tflow *yflow);
 
@@ -219,28 +219,75 @@ Datum yflow_to_json(PG_FUNCTION_ARGS) {
 	StringInfoData 	buf;
 	int	dim = yflow->dim;
 	int	i;
+	
+	if(dim ==1)
+			ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				errmsg("flow with dim =1")));
 
 	initStringInfo(&buf);
 
 	appendStringInfoChar(&buf, '[');
-	if(dim >0) {
-		for (i = 0; i < dim; i++)
-		{	
-			Tfl *s = &yflow->x[i];
-		
-			if(i != 0) appendStringInfo(&buf, ",\n");
+	for (i = 0; i < dim; i++)
+	{	
+		Tfl *s = &yflow->x[i];
+	
+		if(i != 0) appendStringInfo(&buf, ",\n");
 
-			// type,id,oid,own,qtt_requ,qtt_prov,qtt,proba
-			appendStringInfo(&buf, "{\"type\":%i, ", s->type);
-			appendStringInfo(&buf, "\"id\":%i, ", s->id);
-			appendStringInfo(&buf, "\"oid\":%i, ", s->oid);
-			appendStringInfo(&buf, "\"own\":%i, ", s->own);
+		// type,id,oid,own,qtt_requ,qtt_prov,qtt,proba
+		appendStringInfo(&buf, "{\"type\":%i, ", s->type);
+		appendStringInfo(&buf, "\"id\":%i, ", s->id);
+		appendStringInfo(&buf, "\"oid\":%i, ", s->oid);
+		appendStringInfo(&buf, "\"own\":%i, ", s->own);
+		appendStringInfo(&buf, "\"qtt_requ\":" INT64_FORMAT ", ", s->qtt_requ);
+		appendStringInfo(&buf, "\"qtt_prov\":" INT64_FORMAT ", ", s->qtt_prov);
+		appendStringInfo(&buf, "\"qtt\":" INT64_FORMAT ", ", s->qtt);
+	
+		appendStringInfo(&buf,"\"proba\":%.10e,\"flowr\":" INT64_FORMAT "}",s->proba, s->flowr);
+	}
+	appendStringInfoChar(&buf, ']');
+	
+	PG_RETURN_TEXT_P(cstring_to_text(buf.data));
+}
+/******************************************************************************
+******************************************************************************/
+Datum yflow_to_jsona(PG_FUNCTION_ARGS) {
+	Tflow *yflow = PG_GETARG_TFLOW(0);
+	StringInfoData 	buf;
+	int	dim = yflow->dim;
+	int	i;
+
+	initStringInfo(&buf);
+
+	appendStringInfoChar(&buf, '[');
+	if(dim ==1)
+			ereport(ERROR,
+				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+				errmsg("yflow_to_jsona: flow with dim =1")));
+	for (i = 0; i < dim; i++)
+	{	
+		Tfl *s = &yflow->x[i];
+	
+		if(i != 0) appendStringInfo(&buf, ",\n");
+
+		// type,id,oid,own,qtt_requ,qtt_prov,qtt,proba
+		appendStringInfo(&buf, "{\"type\":%i, ", s->type);
+		appendStringInfo(&buf, "\"id\":%i, ", s->id);
+		appendStringInfo(&buf, "\"oid\":%i, ", s->oid);
+		appendStringInfo(&buf, "\"own\":%i, ", s->own);
+		
+		if((i == dim-1) && (FLOW_IS_IGNOREOMEGA(yflow))) {
+			Tfl *sp = &yflow->x[i-1];
+			
+			appendStringInfo(&buf, "\"qtt_requ\":" INT64_FORMAT ", ", sp->flowr);
+			appendStringInfo(&buf, "\"qtt_prov\":" INT64_FORMAT ", ", s->flowr);
+			appendStringInfo(&buf, "\"qtt\":" INT64_FORMAT ", ", s->flowr);
+		} else {
 			appendStringInfo(&buf, "\"qtt_requ\":" INT64_FORMAT ", ", s->qtt_requ);
 			appendStringInfo(&buf, "\"qtt_prov\":" INT64_FORMAT ", ", s->qtt_prov);
 			appendStringInfo(&buf, "\"qtt\":" INT64_FORMAT ", ", s->qtt);
-		
-			appendStringInfo(&buf,"\"proba\":%.10e,\"flowr\":" INT64_FORMAT "}",s->proba, s->flowr);
 		}
+		appendStringInfo(&buf,"\"flowr\":" INT64_FORMAT "}", s->flowr);
 	}
 	appendStringInfoChar(&buf, ']');
 	
@@ -540,48 +587,19 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 			 
 	r = flowm_copy(f0);
 	
-	obMRange(i,f1->dim) {
-		obMRange(j,r->dim)
-			if(r->x[j].oid == f1->x[i].oid) {
-				if(r->x[j].qtt >= f1->x[i].flowr) {
-					r->x[j].qtt -= f1->x[i].flowr;
-					// elog(WARNING,"order %i stock %i reduced by %li to %li",r->x[j].id,r->x[j].oid,f1->x[i].flowr,r->x[j].qtt);
-				} else 
-			    		ereport(ERROR,
+	// sanity check
+	if(r->x[r->dim-1].id != f1->x[f1->dim-1].id)
+			ereport(ERROR,
 						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-						errmsg("yflow_reduce: the flow is greater than available")));
-			}
-	}
+						errmsg("yflow_reduce: the last nodes are not the same")));
 	
-	c = flowc_maximum(r);
-	pfree(c);
-	
-	PG_FREE_IF_COPY(f0, 0);
-	PG_FREE_IF_COPY(f1, 1);
-	PG_RETURN_TFLOW(r);
-
-}
-/******************************************************************************
-works as flow_reduce, but
-
-******************************************************************************/
-Datum yflow_reducequote(PG_FUNCTION_ARGS)
-{
-	bool	begin = PG_GETARG_BOOL(0);
-	Tflow	*f0 = PG_GETARG_TFLOW(1);
-	Tflow	*f1 = PG_GETARG_TFLOW(2);
-	Tflow	*r;
-	short 	i,j;
-	TresChemin *c;
-	Tfl 	*lastr,*lastf1;
-
-	r = flowm_copy(f0);
-	 
 	obMRange(i,f1->dim) {
-		obMRange(j,r->dim-1) { // the last node of r is not reduced
-			if(r->x[j].oid == f1->x[i].oid) {
-				if(r->x[j].qtt >= f1->x[i].flowr) {
-					r->x[j].qtt -= f1->x[i].flowr;
+		obMRange(j,r->dim) { 
+			Tfl *or  = &r->x[j];
+			
+			if( (!ORDER_IS_NOQTTLIMIT(or->type)) && (or->oid == f1->x[i].oid)) {
+				if(or->qtt >= f1->x[i].flowr) {
+					or->qtt -= f1->x[i].flowr;
 					// elog(WARNING,"order %i stock %i reduced by %li to %li",r->x[j].id,r->x[j].oid,f1->x[i].flowr,r->x[j].qtt);
 				} else {
 			    		ereport(ERROR,
@@ -589,38 +607,27 @@ Datum yflow_reducequote(PG_FUNCTION_ARGS)
 						errmsg("yflow_reducequote: the flow is greater than available")));
 				}
 			}
-		}
-		
+		}		
 	}
 	
-	lastr  = &r->x[r->dim-1];
-	lastf1 = &f1->x[f1->dim-1];
-	
-	// sanity check
-	if(lastr->id != lastf1->id)
-			ereport(ERROR,
-						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-						errmsg("yflow_reducequote: the last nodes are not the same")));
-						
-	if(begin) {
-		// sanity check
-		if((lastr->type & ORDER_IGNOREOMEGA) == 0)
-			ereport(ERROR,
-						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-						errmsg("yflow_reducequote: the flow.type=%i should have IGNOREOMEGA when begin is True",lastr->type)));		
-		// omega is set
-		lastr->qtt_prov = lastf1->flowr;
-		lastr->qtt_requ = f1->x[f1->dim-2].flowr;
+	{
+		Tfl *lastr  = &r->x[r->dim-1];
+		
+		if(ORDER_IS_IGNOREOMEGA(lastr->type)) {
+			// omega is set
+			lastr->qtt_prov = f1->x[f1->dim-1].flowr;
+			lastr->qtt_requ = f1->x[f1->dim-2].flowr;
+			
+			lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);
+			// IGNOREOMEGA is reset
+		}
 	} 
-	
-	lastr->type = (lastr->type & ORDER_TYPE_MASK) | ORDER_NOQTTLIMIT; 
-	// IGNOREOMEGA is reset
 	
 	c = flowc_maximum(r);
 	pfree(c);
-
-	PG_FREE_IF_COPY(f0, 1);
-	PG_FREE_IF_COPY(f1, 2);
+	
+	PG_FREE_IF_COPY(f0, 0);
+	PG_FREE_IF_COPY(f1, 1);
 	PG_RETURN_TFLOW(r);
 
 }

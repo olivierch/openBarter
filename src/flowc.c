@@ -545,9 +545,9 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 				if (ORDER_TYPE(flow->x[_k].type) == ORDER_LIMIT) {
 					if((chem->lnIgnoreOmega) && (_k == _dim-1)) {
 						//if( !( _omprime > (omega[_k] - OB_PRECISION) ) ) {
-						if( !( _omprime > omega[_k]) ) {
+						if( !( _omprime >= omega[_k]) ) {
 							#ifdef WHY_REJECTED
-								elog(WARNING,"_rounding 3:lnIgnoreOmega NOT omprime > omega[%i] %.10e>%.10e %s",_k,
+								elog(WARNING,"_rounding 3:lnIgnoreOmega NOT omprime > omega[%i] %.10e>=%.10e %s",_k,
 									_omprime,omega[_k],flowc_vecIntStr(_dim,_flowNodes));
 							#endif
 							_ret = refused;

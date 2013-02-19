@@ -1,4 +1,4 @@
-SET search_path TO test;
+-- SET search_path TO test;
 truncate torder;
 truncate tstack;
 truncate tmvt;
@@ -18,20 +18,22 @@ SELECT setval('tstack_id_seq',10000,true);
   10000
 (1 row)
 
-select * from fsubmitorder(5,'own82',NULL,'qlt22',1,'qlt23',1,1);select * from fproducemvt();
+select * from fsubmitquote(1,'own82','qlt22','qlt23');select * from fproducemvt();
   id   | diag 
 -------+------
  10001 |    0
 (1 row)
 
-                 ord                  | qtt_requ | qtt_prov |  qtt  | err |                                                                                              json                                                                                              
---------------------------------------+----------+----------+-------+-----+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- (5,10001,72,10001,1,qlt22,1,qlt23,1) |    67432 |    30183 | 30183 |   0 | {"qtt_requ":67432,"qtt_prov":30183,"qtt":30183,"paths":[[{"type":2, "id":8928, "oid":8928, "own":72, "qtt_requ":49263, "qtt_prov":87732, "qtt":87732, "proba":1.0000000000e+00,"flowr":53751},+
-                                      |          |          |       |     | {"type":1, "id":515, "oid":515, "own":69, "qtt_requ":53751, "qtt_prov":67432, "qtt":67432, "proba":1.0000000000e+00,"flowr":67432},                                                           +
-                                      |          |          |       |     | {"type":13, "id":10001, "oid":10001, "own":72, "qtt_requ":1, "qtt_prov":1, "qtt":1, "proba":1.0000000000e+00,"flowr":30183}]]}
+                  ord                  | qtt_requ | qtt_prov |  qtt  | err |                                                      json                                                       
+---------------------------------------+----------+----------+-------+-----+-----------------------------------------------------------------------------------------------------------------
+ (13,10001,72,10001,1,qlt22,1,qlt23,1) |    67432 |    30183 | 30183 |   0 | {"qtt_requ":67432,"qtt_prov":30183,"qtt":30183,"paths":[                                                       +
+                                       |          |          |       |     | [{"type":2, "id":8928, "oid":8928, "own":72, "qtt_requ":49263, "qtt_prov":87732, "qtt":87732, "flowr":53751},  +
+                                       |          |          |       |     | {"type":1, "id":515, "oid":515, "own":69, "qtt_requ":53751, "qtt_prov":67432, "qtt":67432, "flowr":67432},     +
+                                       |          |          |       |     | {"type":13, "id":10001, "oid":10001, "own":72, "qtt_requ":67432, "qtt_prov":30183, "qtt":30183, "flowr":30183}]+
+                                       |          |          |       |     | ]}
 (1 row)
 
-select * from fsubmitorder(1,'own82',NULL,'qlt22',67432,'qlt23',30183,30183);select * from fproducemvt();
+select * from fsubmitbarter(1,'own82',NULL,'qlt22',67432,'qlt23',30183,30183);select * from fproducemvt();
   id   | diag 
 -------+------
  10002 |    0
@@ -42,22 +44,24 @@ select * from fsubmitorder(1,'own82',NULL,'qlt22',67432,'qlt23',30183,30183);sel
  (1,10002,72,10002,67432,qlt22,30183,qlt23,30183) |    67432 |    30183 | 30183 |   0 | 
 (1 row)
 
-select * from fsubmitorder(6,'own82',NULL,'qlt22',1,'qlt23',1,1);select * from fproducemvt(); 
+select * from fsubmitquote(2,'own82','qlt22','qlt23');select * from fproducemvt(); 
   id   | diag 
 -------+------
  10003 |    0
 (1 row)
 
-                 ord                  | qtt_requ | qtt_prov |  qtt  | err |                                                                                              json                                                                                              
---------------------------------------+----------+----------+-------+-----+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
- (6,10003,72,10003,1,qlt22,1,qlt23,1) |    61017 |    45276 | 76596 |   0 | {"qtt_requ":61017,"qtt_prov":45276,"qtt":76596,"paths":[[{"type":2, "id":3288, "oid":3288, "own":34, "qtt_requ":45276, "qtt_prov":61017, "qtt":61017, "proba":1.0000000000e+00,"flowr":61017},+
-                                      |          |          |       |     | {"type":14, "id":10003, "oid":10003, "own":72, "qtt_requ":1, "qtt_prov":1, "qtt":1, "proba":1.0000000000e+00,"flowr":45276}],                                                                 +
-                                      |          |          |       |     | [{"type":2, "id":4604, "oid":4604, "own":1, "qtt_requ":74412, "qtt_prov":6118, "qtt":6118, "proba":1.0000000000e+00,"flowr":6118},                                                            +
-                                      |          |          |       |     | {"type":2, "id":490, "oid":490, "own":82, "qtt_requ":23425, "qtt_prov":28631, "qtt":28631, "proba":1.0000000000e+00,"flowr":17766},                                                           +
-                                      |          |          |       |     | {"type":6, "id":10003, "oid":10003, "own":72, "qtt_requ":61017, "qtt_prov":45276, "qtt":1, "proba":1.0000000000e+00,"flowr":31320}]]}
+                  ord                  | qtt_requ | qtt_prov |  qtt  | err |                                                       json                                                       
+---------------------------------------+----------+----------+-------+-----+------------------------------------------------------------------------------------------------------------------
+ (14,10003,72,10003,1,qlt22,1,qlt23,1) |    61017 |    45276 | 76596 |   0 | {"qtt_requ":61017,"qtt_prov":45276,"qtt":76596,"paths":[                                                        +
+                                       |          |          |       |     | [{"type":2, "id":3288, "oid":3288, "own":34, "qtt_requ":45276, "qtt_prov":61017, "qtt":61017, "flowr":61017},   +
+                                       |          |          |       |     | {"type":14, "id":10003, "oid":10003, "own":72, "qtt_requ":61017, "qtt_prov":45276, "qtt":45276, "flowr":45276}],+
+                                       |          |          |       |     | [{"type":2, "id":4604, "oid":4604, "own":1, "qtt_requ":74412, "qtt_prov":6118, "qtt":6118, "flowr":6118},       +
+                                       |          |          |       |     | {"type":2, "id":490, "oid":490, "own":82, "qtt_requ":23425, "qtt_prov":28631, "qtt":28631, "flowr":17766},      +
+                                       |          |          |       |     | {"type":6, "id":10003, "oid":10003, "own":72, "qtt_requ":61017, "qtt_prov":45276, "qtt":1, "flowr":31320}]      +
+                                       |          |          |       |     | ]}
 (1 row)
 
-select * from fsubmitorder(2,'own82',NULL,'qlt22',61017,'qlt23',45276,45276);select * from fproducemvt();
+select * from fsubmitbarter(2,'own82',NULL,'qlt22',61017,'qlt23',45276,45276);select * from fproducemvt();
   id   | diag 
 -------+------
  10004 |    0
@@ -69,15 +73,19 @@ select * from fsubmitorder(2,'own82',NULL,'qlt22',61017,'qlt23',45276,45276);sel
 (1 row)
 
 select id,type,json from tmvt where type >3;
- id | type |                                                                                              json                                                                                              
-----+------+------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-  9 |    5 | {"qtt_requ":67432,"qtt_prov":30183,"qtt":30183,"paths":[[{"type":2, "id":8928, "oid":8928, "own":72, "qtt_requ":49263, "qtt_prov":87732, "qtt":87732, "proba":1.0000000000e+00,"flowr":53751},+
-    |      | {"type":1, "id":515, "oid":515, "own":69, "qtt_requ":53751, "qtt_prov":67432, "qtt":67432, "proba":1.0000000000e+00,"flowr":67432},                                                           +
-    |      | {"type":13, "id":10001, "oid":10001, "own":72, "qtt_requ":1, "qtt_prov":1, "qtt":1, "proba":1.0000000000e+00,"flowr":30183}]]}
- 13 |    6 | {"qtt_requ":61017,"qtt_prov":45276,"qtt":76596,"paths":[[{"type":2, "id":3288, "oid":3288, "own":34, "qtt_requ":45276, "qtt_prov":61017, "qtt":61017, "proba":1.0000000000e+00,"flowr":61017},+
-    |      | {"type":14, "id":10003, "oid":10003, "own":72, "qtt_requ":1, "qtt_prov":1, "qtt":1, "proba":1.0000000000e+00,"flowr":45276}],                                                                 +
-    |      | [{"type":2, "id":4604, "oid":4604, "own":1, "qtt_requ":74412, "qtt_prov":6118, "qtt":6118, "proba":1.0000000000e+00,"flowr":6118},                                                            +
-    |      | {"type":2, "id":490, "oid":490, "own":82, "qtt_requ":23425, "qtt_prov":28631, "qtt":28631, "proba":1.0000000000e+00,"flowr":17766},                                                           +
-    |      | {"type":6, "id":10003, "oid":10003, "own":72, "qtt_requ":61017, "qtt_prov":45276, "qtt":1, "proba":1.0000000000e+00,"flowr":31320}]]}
+ id | type |                                                       json                                                       
+----+------+------------------------------------------------------------------------------------------------------------------
+  9 |   13 | {"qtt_requ":67432,"qtt_prov":30183,"qtt":30183,"paths":[                                                        +
+    |      | [{"type":2, "id":8928, "oid":8928, "own":72, "qtt_requ":49263, "qtt_prov":87732, "qtt":87732, "flowr":53751},   +
+    |      | {"type":1, "id":515, "oid":515, "own":69, "qtt_requ":53751, "qtt_prov":67432, "qtt":67432, "flowr":67432},      +
+    |      | {"type":13, "id":10001, "oid":10001, "own":72, "qtt_requ":67432, "qtt_prov":30183, "qtt":30183, "flowr":30183}] +
+    |      | ]}
+ 13 |   14 | {"qtt_requ":61017,"qtt_prov":45276,"qtt":76596,"paths":[                                                        +
+    |      | [{"type":2, "id":3288, "oid":3288, "own":34, "qtt_requ":45276, "qtt_prov":61017, "qtt":61017, "flowr":61017},   +
+    |      | {"type":14, "id":10003, "oid":10003, "own":72, "qtt_requ":61017, "qtt_prov":45276, "qtt":45276, "flowr":45276}],+
+    |      | [{"type":2, "id":4604, "oid":4604, "own":1, "qtt_requ":74412, "qtt_prov":6118, "qtt":6118, "flowr":6118},       +
+    |      | {"type":2, "id":490, "oid":490, "own":82, "qtt_requ":23425, "qtt_prov":28631, "qtt":28631, "flowr":17766},      +
+    |      | {"type":6, "id":10003, "oid":10003, "own":72, "qtt_requ":61017, "qtt_prov":45276, "qtt":1, "flowr":31320}]      +
+    |      | ]}
 (2 rows)
 
