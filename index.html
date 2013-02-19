@@ -77,7 +77,8 @@ of pure gold, for example, it is indifferent to me whether it be this pound or t
 <p>Each value has a pecular <em>quality</em> and <em>quantity</em>. The value is only measured by the quantity without any reference to a price or reference to a monetary standard. This measurement is used to perform competition between orders.</p>
 <p>openBarter uses <a href="http://www.postgresql.org/">postgreSQL</a>, the linux of databases. A special extension of this database allows fast execution of the primitives of the engine.</p>
 <h2>Versions</h2>
-<p>0.6.0 is beta. The number of tables has been reduced to 3. It includes a matching between orders based on the identity of quality required and offered. The next version 0.6.5 will include a geographic criteria in matching and other features already described in the documentation of version 0.6.0. Version 0.5.0 implements an engine where the matching is based on identity of qualities.</p>  
+<p>The latest version 0.7.0 is testing. The number of tables has been reduced to 4. It implements three new kind of orders (barter limit, barter best and quote).
+It is organized as a workflow where orders are submitted and movements ackowledged.</p>  
 <h2>Principles</h2>
 <p>The barter market accepts exchange orders of the form:</p>
 <div class="verseblock">
