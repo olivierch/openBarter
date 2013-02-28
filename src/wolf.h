@@ -55,17 +55,25 @@ do { \
 
 #define ORDER_NOQTTLIMIT 4 // ORDER_TYPE_MASK+1
 #define ORDER_IGNOREOMEGA 8
+#define ORDER_QUOTE 128
 
-#define ORDER_TYPE(o) ((o) & ORDER_TYPE_MASK)
-#define ORDER_IS_NOQTTLIMIT(o) ((o) & ORDER_NOQTTLIMIT)
-#define ORDER_IS_IGNOREOMEGA(o) ((o) & ORDER_IGNOREOMEGA)
+#define ORDER_TYPE(o) 	((o) & ORDER_TYPE_MASK)
+#define BIT_IS_SET(o,m)	(((o) & m) == m)
 
-#define ORDER_TYPE_IS_VALID(o) ((0 < (o)) && ((o) <= 15))
+#define ORDER_IS_QUOTE(o) 		BIT_IS_SET(o,ORDER_QUOTE)
+#define ORDER_IS_NOQTTLIMIT(o) 	(BIT_IS_SET(o,ORDER_QUOTE) && BIT_IS_SET(o,ORDER_NOQTTLIMIT))
+#define ORDER_IS_IGNOREOMEGA(o) (BIT_IS_SET(o,ORDER_QUOTE) && BIT_IS_SET(o,ORDER_IGNOREOMEGA))
 
-#define FLOW_IS_NOQTTLIMIT(f) ORDER_IS_NOQTTLIMIT(((f)->x[(f)->dim-1].type))
-#define FLOW_IS_IGNOREOMEGA(f) ORDER_IS_IGNOREOMEGA(((f)->x[(f)->dim-1].type))
+#define ORDER_TYPE_IS_VALID(o) ((0 < (o)) && ((o) <= 256))
+
+#define FLOW_TYPE(f) ((f)->x[(f)->dim-1].type)
+
+#define FLOW_IS_QUOTE(f) 		ORDER_IS_QUOTE(FLOW_TYPE(f))
+#define FLOW_IS_NOQTTLIMIT(f) 	ORDER_IS_NOQTTLIMIT(FLOW_TYPE(f))
+#define FLOW_IS_IGNOREOMEGA(f) 	ORDER_IS_IGNOREOMEGA(FLOW_TYPE(f))
 
 #define OB_PRECISION 1.E-12
+#define QTTFLOW_UNDEFINED -1
 
 // defines the status of the flow
 typedef enum Tstatusflow {
@@ -111,17 +119,20 @@ typedef struct Tflow {
 
 typedef struct TresChemin {
 	TypeFlow	type;
-	bool	lnNoQttLimit;
-	bool	lnIgnoreOmega;
+	//bool	lnNoQttLimit;
+	//bool	lnIgnoreOmega;
+	//bool	lnQuote;
 	Tstatusflow status;
 	short	nbOwn; 
 	short 	occOwn[FLOW_MAX_DIM];
 	short   ownIndex[FLOW_MAX_DIM]; 
-	double	gain,prodOmega;
+	// double	gain;
+	//double  prodOmega;
 	Tflow 	*flow;
 	double 	omegaCorrige[FLOW_MAX_DIM],fluxExact[FLOW_MAX_DIM],piom[FLOW_MAX_DIM],omega[FLOW_MAX_DIM]; 
 	int64	flowNodes[FLOW_MAX_DIM]; // result == Torder.flowr
 	int64	floor[FLOW_MAX_DIM];
+	// int64	qttAv[FLOW_MAX_DIM];
 } TresChemin;
 
 /******************************************************************************

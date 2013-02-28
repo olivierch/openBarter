@@ -205,11 +205,12 @@ create domain dquantity AS int8 check( VALUE>0);
 --------------------------------------------------------------------------------
 -- ORDER
 --------------------------------------------------------------------------------
-create domain dtypeorder AS int check((VALUE & 3)>0 AND VALUE<23);
--- bbc0a
--- bb 1 order limit
--- bb 2 order best
--- c set when best quote
+create domain dtypeorder AS int check(VALUE >0 AND VALUE < 256);
+-- xxcd000a
+-- xx 1 order limit
+-- xx 2 order best
+-- c set when ignoreOmega
+-- d set when qttLimit
 -- a set when quote
 
 create table torder ( 
@@ -285,7 +286,7 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 create table tmvt (
 	id serial UNIQUE not NULL,
-	type dtypeorder not NULL,
+	type int not NULL,
 	json text, -- can be NULL
 	nbc int not NULL, -- Number of mvts in the exchange
 	nbt int not NULL, -- Number of mvts in the transaction
@@ -341,7 +342,7 @@ create table tstack (
     usr text NOT NULL,
     own text NOT NULL,
     oid int, -- can be NULL
-    type dtypeorder NOT NULL,
+    type int NOT NULL,
     qua_requ text NOT NULL ,
     qtt_requ dquantity NOT NULL,
     qua_prov text ,
@@ -383,8 +384,8 @@ BEGIN
 		_r.diag := -3;
 		RETURN _r;
 	END IF;	
-	-- NOQTTLIMIT IGNOREOMEGA
-	_r := fsubmitorder((_type & 3) | 12,_own,NULL,_qua_requ,1,_qua_prov,1,1);
+	-- NOQTTLIMIT IGNOREOMEGA QUOTE 4+8+128
+	_r := fsubmitorder((_type & 3) | 140,_own,NULL,_qua_requ,1,_qua_prov,1,1);
 	
 	RETURN _r;
 END; 
@@ -405,7 +406,8 @@ BEGIN
 		_r.diag := -2;
 		RETURN _r;
 	END IF;	
-	_r := fsubmitorder((_type & 3) | 16,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt_prov);
+	-- QUOTE 128
+	_r := fsubmitorder((_type & 3) | 128,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt_prov);
 	
 	RETURN _r;
 END; 
@@ -641,7 +643,7 @@ BEGIN
 	
 	_o := ROW(_t.type,_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt)::yorder;
 	
-	IF(_t.type < 4) THEN -- the order is a barter
+	IF((_t.type & 128) =0) THEN -- the order is a barter
 		INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);
 	ELSE
 		_ro := fproducequote(_t,_o);	
@@ -670,7 +672,7 @@ BEGIN
 		_ro.qtt_requ := _ro.qtt_requ + _res[1];
 		_ro.qtt_prov := _ro.qtt_prov + _res[2];
 	
-		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax); 
+		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax); -- reset IGNOREOMEGA
 		DELETE FROM _tmp WHERE NOT yflow_is_draft(cycle);
 	END LOOP;
 	
@@ -678,7 +680,7 @@ BEGIN
 	AND	((_ro.qtt_prov::double precision)	/(_ro.qtt_requ::double precision)) > 
 		((_o.qtt_prov::double precision)	/(_o.qtt_requ::double precision))
 	) THEN
-		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
+		RAISE EXCEPTION 'pb: Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
 	_ro.qtt := _ro.qtt_prov;
 	-- set the number of movements in this transaction

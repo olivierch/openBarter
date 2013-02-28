@@ -72,6 +72,8 @@ char *yflow_pathToStr(Tflow *yflow);
 void		_PG_init(void);
 void		_PG_fini(void);
 
+static double getRankFlow(Tflow *f);
+
 /******************************************************************************
 begin and end functions called when flow.so is loaded
 ******************************************************************************/
@@ -494,6 +496,7 @@ Datum yflow_match(PG_FUNCTION_ARGS) {
 
 	PG_RETURN_BOOL(yorder_match(&prev,&next));
 }
+
 /******************************************************************************
 CREATE FUNCTION ywolf_maxg(yorder[] w0,yorder[] w1)
 RETURNS yorder[]
@@ -505,41 +508,24 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 {
 	Tflow	*f0 = PG_GETARG_TFLOW(0);
 	Tflow	*f1 = PG_GETARG_TFLOW(1);
-	short			dim0,dim1,i;
+	
 	double			_rank0,_rank1;
 	bool			_sup = false;
 	
-	dim0 = f0->dim;
-	// f0 is empty
-	if(dim0 == 0)
+	_rank0 = getRankFlow(f0);
+	if(_rank0 == 0.0)
 		goto _end;
 		
-	_rank0 = 1.0;
-	obMRange(i,dim0) {
-		Tfl *b = &f0->x[i];
-		if(b->flowr <=0 ) 
-			goto _end;	// wolf0 is not a draft
-		_rank0 *=  GET_OMEGA_P(b);				
-	}	
-
-	dim1 = f1->dim;
-	// wolf1 is empty
-	if(dim1 == 0)
-		goto _end;
-				
-	_rank1 = 1.0;
-	obMRange(i,dim1) {
-		Tfl *b = &f1->x[i];
-		if(b->flowr <=0) 
-			goto _end;	// f1 is not a draft
-		_rank1 *= GET_OMEGA_P(b);			
-	}	
+	_rank1 = getRankFlow(f1);
+	if(_rank1 == 0.0)
+		goto _end;	
 	
 	// comparing weight
 	if(_rank0 == _rank1) {
 		/* rank are geometric means of proba. Since 0 <=proba <=1
 		if it was a product,large cycles would be penalized.
 		*/
+		short	dim0 = f0->dim,dim1 = f1->dim,i;
 		_rank0 = 1.0;
 		obMRange(i,dim0) 
 			_rank0 *=  (double) f0->x[i].proba;				
@@ -548,10 +534,12 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 		_rank1 = 1.0;
 		obMRange(i,dim1) 
 			_rank1 *=  (double) f1->x[i].proba;
-		_rank1 = pow(_rank1,1.0/(double) dim1);					
+		_rank1 = pow(_rank1,1.0/(double) dim1);	
 		
-	}
-	_sup = _rank0 > _rank1;
+		_sup = _rank0 > _rank1;				
+		
+	} else 
+		_sup = _rank0 > _rank1;
 	
 	//elog(WARNING,"yflow_maxg: wolf0: %s",ywolf_allToStr(wolf0));
 	//elog(WARNING,"yflow_maxg: wolf1: %s",ywolf_allToStr(wolf1));
@@ -566,6 +554,40 @@ _end:
 		PG_RETURN_TFLOW(f1);
 	}	
 }
+/******************************************************************************
+
+******************************************************************************/
+static double getRankFlow(Tflow *f) {
+	short i,dim = f->dim;
+	double	_rank = 1.0;
+	
+	if(dim < 2) // f is empty
+		return 0.0;
+
+	if(FLOW_IS_QUOTE(f)) {
+	
+		obMRange(i,dim-1) {
+			Tfl *b = &f->x[i];
+			if(b->flowr <=0 ) 
+				return 0.0;	// flow is not a draft
+			_rank *=  GET_OMEGA_P(b);				
+		}
+		return _rank;
+			
+	} else {
+	
+		obMRange(i,dim) {
+			Tfl *b = &f->x[i];
+			if(b->flowr <=0 ) 
+				return 0.0;	// flow is not a draft
+			_rank *=  GET_OMEGA_P(b);				
+		}
+		return _rank;
+		
+	}
+		
+} 
+
 /******************************************************************************
 yflow = yflow_reduce(f yflow,fr yflow)
 if (f and fr are drafts) 
@@ -606,10 +628,14 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 						errmsg("yflow_reducequote: the flow is greater than available")));
 				}
-			}
+			} 
 		}		
 	}
+	/*
+	if(FLOW_IS_IGNOREOMEGA(r))
+		FLOW_TYPE(r) = FLOW_TYPE(r) & (~ORDER_IGNOREOMEGA);
 	
+	*/
 	{
 		Tfl *lastr  = &r->x[r->dim-1];
 		
@@ -622,7 +648,7 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 			// IGNOREOMEGA is reset
 		}
 	} 
-	
+
 	c = flowc_maximum(r);
 	pfree(c);
 	

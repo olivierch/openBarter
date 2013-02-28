@@ -21,7 +21,7 @@ BEGIN
 	_ro.json		:= '';
 	
 	_time_begin := clock_timestamp();
-	_o.type := (_t.type & 15);
+	_o.type := _t.type;
 	_cnt := fcreate_tmp(_o);
 	
 	LOOP
@@ -59,16 +59,17 @@ BEGIN
 	
 	for all updates, yflow_reduce is applied except for node with NOQTTLIMIT
 */
-		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax);
+		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax);  -- reset IGNOREOMEGA
 		_begin := false;	
 		DELETE FROM _tmp WHERE NOT yflow_is_draft(cycle);
 	END LOOP;
 
 	IF (	(_ro.qtt_requ != 0) AND ((_o.type & 3) = 1) -- ORDER_LIMIT
+	AND ((_t.type & 8) != 8) -- not IGNOREOMEGA
 	AND	((_ro.qtt_prov::double precision)	/(_ro.qtt_requ::double precision)) > 
 		((_o.qtt_prov::double precision)	/(_o.qtt_requ::double precision))
 	) THEN	
-		RAISE EXCEPTION 'Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
+		RAISE EXCEPTION 'pq: Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
 	_ro.json :='{"qtt_requ":' || _ro.qtt_requ || ',"qtt_prov":' || _ro.qtt_prov || ',"qtt":' || _ro.qtt  || ',"paths":[' || chr(10) || _ro.json || chr(10) ||']}';
 	
