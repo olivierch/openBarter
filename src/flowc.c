@@ -188,13 +188,19 @@ static void _flow_maximum_quote(Tflow *flow,Tflow *resFlow) {
 	
 	_qtt_requ = _floorInt64(chem->fluxExact[ _dim-2 ]);
 	_qtt_prov = _floorInt64(chem->fluxExact[ _dim-1 ])+1;
+	/* the ratio _qtt_prov/_qtt_requ is increased by rounding 
+	in order to be shure that prodOmega remains >=1  */
 	
 	if(_lnIgnoreOmega) {
 	
 		resFlow->x[ _dim-1 ].qtt_requ = _qtt_requ;
 		resFlow->x[ _dim-1 ].qtt_prov = _qtt_prov;
 		resFlow->x[ _dim-1 ].qtt = _qtt_prov;
-		//FLOW_TYPE(resFlow) = FLOW_TYPE(resFlow) & (~ORDER_IGNOREOMEGA);
+		
+		/* The flag ORDER_IGNOREOMEGA cannot be reset here since several instances 
+		of this node are store in _temp. The flag is reset in yflow_reduce() 
+		called by the Sql UPDATE instruction 
+		*/
 		
 	} else if(_lnNoQttLimit) 
 		resFlow->x[ _dim-1 ].qtt = _qtt_prov;
