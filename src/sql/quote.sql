@@ -1,6 +1,6 @@
 
 --------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION fproducequote(_t tstack,_o yorder) RETURNS yresorder AS $$
+CREATE OR REPLACE FUNCTION fproducequote(_MAXMVTPERTRANS int,_t tstack,_o yorder) RETURNS yresorder AS $$
 DECLARE
 	_ro		    yresorder%rowtype;
 	_time_begin	timestamp;
@@ -10,6 +10,7 @@ DECLARE
 	_res	    int8[];
 	_begin		boolean := true;
 	_mid		int;
+	_nbmvts		int;
 	
 BEGIN
 
@@ -23,6 +24,7 @@ BEGIN
 	_time_begin := clock_timestamp();
 	_o.type := _t.type;
 	_cnt := fcreate_tmp(_o);
+	_nbmvts := 0;
 	
 	LOOP
 		SELECT yflow_max(cycle) INTO _cyclemax FROM _tmp WHERE yflow_is_draft(cycle);
@@ -30,6 +32,12 @@ BEGIN
 		IF(NOT yflow_is_draft(_cyclemax)) THEN
 			EXIT; -- from LOOP
 		END IF;	
+		
+		_nbmvts := _nbmvts + yflow_dim(_cyclemax);
+		IF(_nbmvts > _MAXMVTPERTRANS) THEN
+			EXIT; 
+		END IF;	
+		
 		IF(NOT _begin) THEN
 			_ro.json := _ro.json || ',' || chr(10); -- ,\n
 		END IF;

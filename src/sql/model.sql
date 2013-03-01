@@ -26,6 +26,7 @@ create table tconst(
 INSERT INTO tconst (name,value) VALUES 
 	('MAXCYCLE',6), --must be less than yflow_get_maxdim()
 	('MAXPATHFETCHED',1024),
+	('MAXMVTPERTRANS',128),
 	-- it is the version X.Y.Z of the model, not that of the extension
 	('VERSION-X',0),
 	('VERSION-Y',7),
@@ -585,6 +586,8 @@ DECLARE
 	_qua_prov	text; --hstore
 	_qtt_prov	int8;
 	_oid		int;
+	_MAXMVTPERTRANS 	int := fgetconst('MAXMVTPERTRANS');
+	_nbmvts		int;
 BEGIN
 
 	lock table torder in share update exclusive mode;
@@ -646,7 +649,7 @@ BEGIN
 	IF((_t.type & 128) =0) THEN -- the order is a barter
 		INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);
 	ELSE
-		_ro := fproducequote(_t,_o);	
+		_ro := fproducequote(_MAXMVTPERTRANS,_t,_o);	
 		RETURN _ro;
 	END IF;
 	
@@ -657,15 +660,21 @@ BEGIN
 	_time_begin := clock_timestamp();
 	
 	_cnt := fcreate_tmp(_o);
+	_nbmvts := 0;
 
 	LOOP	
 		SELECT yflow_max(cycle) INTO _cyclemax FROM _tmp WHERE yflow_is_draft(cycle);	
 		IF(NOT yflow_is_draft(_cyclemax)) THEN
 			EXIT; -- from LOOP
 		END IF;
-		-- _ro.json := yflow_out(_cyclemax);
+
+		_nbmvts := _nbmvts + yflow_dim(_cyclemax);
+		IF(_nbmvts > _MAXMVTPERTRANS) THEN
+			EXIT; 
+		END IF;	
 
 		_resx := fexecute_flow(_cyclemax,_oid);
+	
 		_fmvtids := _fmvtids || _resx.mvts;
 		
 		_res := yflow_qtts(_cyclemax);
