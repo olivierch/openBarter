@@ -29,6 +29,8 @@ select * from fsubmitquote(1,'own82','qlt2',60000,'qlt23',45276);select * from f
 select json from tmvt order by id desc limit 1;
 select * from fsubmitbarter(1,'own82',NULL,'qlt2',60000,'qlt23',45276);select * from fproducemvt();
 select id,nbt,nbc,xid,own_src,own_dst,qtt,nat from tmvt order by id desc limit 12;
+select sum(qtt) from tmvt where own_src='own82' and nat='qlt23' and id>18;
+select sum(qtt) from tmvt where own_dst='own82' and nat='qlt2' and id>18;
 
 
 

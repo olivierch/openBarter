@@ -18,6 +18,8 @@ BEGIN
 	_ro.qtt_prov 	:= 0;
 	_ro.qtt_requ 	:= 0;
 	_ro.qtt			:= 0;
+	_ro.qtt_give	:= 0;
+	_ro.qtt_reci	:= 0;
 	_ro.err			:= 0;
 	_ro.json		:= '';
 	
@@ -60,6 +62,8 @@ BEGIN
 		ELSE
 			_ro.qtt		  := _ro.qtt + _res[2];			
 		END IF;
+		_ro.qtt_reci := _ro.qtt_reci + _res[1];
+		_ro.qtt_give := _ro.qtt_give + _res[2];
 					
 /* 	node having IGNOREOMEGA:
 		- omega is set to _ro.qtt_requ,_ro.qtt_prov
@@ -74,12 +78,12 @@ BEGIN
 
 	IF (	(_ro.qtt_requ != 0) AND ((_o.type & 3) = 1) -- ORDER_LIMIT
 	AND ((_t.type & 8) != 8) -- not IGNOREOMEGA
-	AND	((_ro.qtt_prov::double precision)	/(_ro.qtt_requ::double precision)) > 
-		((_o.qtt_prov::double precision)	/(_o.qtt_requ::double precision))
+	AND	((_ro.qtt_give::double precision)	/(_ro.qtt_reci::double precision)) > 
+		((_ro.qtt_prov::double precision)	/(_ro.qtt_requ::double precision))
 	) THEN	
 		RAISE EXCEPTION 'pq: Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
-	_ro.json :='{"qtt_requ":' || _ro.qtt_requ || ',"qtt_prov":' || _ro.qtt_prov || ',"qtt":' || _ro.qtt  || ',"paths":[' || chr(10) || _ro.json || chr(10) ||']}';
+	_ro.json :='{"qtt_requ":' || _ro.qtt_requ || ',"qtt_prov":' || _ro.qtt_prov || ',"qtt":' || _ro.qtt  || ',"qtt_reci":' || _ro.qtt_reci || ',"qtt_give":' || _ro.qtt_give || ',"paths":[' || chr(10) || _ro.json || chr(10) ||']}';
 	
 	INSERT INTO tmvt (	type,json,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
 						qtt,nat,ack,exhausted,refused,order_created,created

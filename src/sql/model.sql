@@ -557,6 +557,8 @@ CREATE TYPE yresorder AS (
     qtt_requ int8,
     qtt_prov int8,
     qtt int8,
+    qtt_reci int8,
+    qtt_give int8,
     err	int,
     json text
 );
@@ -595,6 +597,8 @@ BEGIN
 	_ro.qtt_requ	:= 0;
 	_ro.qtt_prov	:= 0;
 	_ro.qtt			:= 0;
+	_ro.qtt_reci	:= 0;
+	_ro.qtt_give	:= 0;
 	_ro.err			:= 0;
 	_ro.json		:= NULL;
 	
@@ -678,19 +682,21 @@ BEGIN
 		_fmvtids := _fmvtids || _resx.mvts;
 		
 		_res := yflow_qtts(_cyclemax);
-		_ro.qtt_requ := _ro.qtt_requ + _res[1];
-		_ro.qtt_prov := _ro.qtt_prov + _res[2];
+		_ro.qtt_reci := _ro.qtt_reci + _res[1];
+		_ro.qtt_give := _ro.qtt_give + _res[2];
 	
 		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax); -- reset IGNOREOMEGA
 		DELETE FROM _tmp WHERE NOT yflow_is_draft(cycle);
 	END LOOP;
 	
 	IF (	(_ro.qtt_requ != 0) AND ((_o.type & 3) = 1) -- ORDER_LIMIT
-	AND	((_ro.qtt_prov::double precision)	/(_ro.qtt_requ::double precision)) > 
+	AND	((_ro.qtt_give::double precision)	/(_ro.qtt_reci::double precision)) > 
 		((_o.qtt_prov::double precision)	/(_o.qtt_requ::double precision))
 	) THEN
 		RAISE EXCEPTION 'pb: Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
+	_ro.qtt_prov := _o.qtt_prov;
+	_ro.qtt_requ := _o.qtt_requ;
 	_ro.qtt := _ro.qtt_prov;
 	-- set the number of movements in this transaction
 	UPDATE tmvt SET nbt= array_length(_fmvtids,1) WHERE id = ANY (_fmvtids);
