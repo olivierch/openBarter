@@ -33,12 +33,7 @@ select * from fsubmitquote(1,'own82','qlt22','qlt23');select * from fproducemvt(
                                         |          |          |       |          |          |     | ]}
 (1 row)
 
-select json from tmvt where id=1;
- json 
-------
-(0 rows)
-
-select * from fsubmitbarter(1,'own82',NULL,'qlt22',67432,'qlt23',30183);select * from fproducemvt();
+select * from fsubmitbarter(1,'own82',NULL,'qlt22',67432,'qlt23',30183,30183);select * from fproducemvt();
   id   | diag 
 -------+------
  10002 |    0
@@ -65,22 +60,13 @@ select * from fsubmitquote(1,'own82','qlt22','qlt23');select * from fproducemvt(
 
                   ord                   | qtt_requ | qtt_prov |  qtt  | qtt_reci | qtt_give | err |                                                       json                                                       
 ----------------------------------------+----------+----------+-------+----------+----------+-----+------------------------------------------------------------------------------------------------------------------
- (141,10003,72,10003,1,qlt22,1,qlt23,1) |    61017 |    45276 | 45276 |    61017 |    45276 |   0 | {"qtt_requ":61017,"qtt_prov":45276,"qtt":45276,"qtt_reci":61017,"qtt_give":45276,"paths":[                      +
+ (141,10003,72,10003,1,qlt22,1,qlt23,1) |    61017 |    45277 | 45276 |    61017 |    45276 |   0 | {"qtt_requ":61017,"qtt_prov":45277,"qtt":45276,"qtt_reci":61017,"qtt_give":45276,"paths":[                      +
                                         |          |          |       |          |          |     | [{"type":2, "id":3288, "oid":3288, "own":34, "qtt_requ":45276, "qtt_prov":61017, "qtt":61017, "flowr":61017},   +
                                         |          |          |       |          |          |     | {"type":141, "id":10003, "oid":10003, "own":72, "qtt_requ":61017, "qtt_prov":45276, "qtt":45276, "flowr":45276}]+
                                         |          |          |       |          |          |     | ]}
 (1 row)
 
-select json from tmvt order by id desc limit 1;
-                                                       json                                                       
-------------------------------------------------------------------------------------------------------------------
- {"qtt_requ":61017,"qtt_prov":45276,"qtt":45276,"qtt_reci":61017,"qtt_give":45276,"paths":[                      +
- [{"type":2, "id":3288, "oid":3288, "own":34, "qtt_requ":45276, "qtt_prov":61017, "qtt":61017, "flowr":61017},   +
- {"type":141, "id":10003, "oid":10003, "own":72, "qtt_requ":61017, "qtt_prov":45276, "qtt":45276, "flowr":45276}]+
- ]}
-(1 row)
-
-select * from fsubmitquote(1,'own82','qlt22',61017,'qlt23',45276);select * from fproducemvt(); 
+select * from fsubmitquote(1,'own82','qlt22',61017,'qlt23',45277);select * from fproducemvt(); 
   id   | diag 
 -------+------
  10004 |    0
@@ -88,21 +74,14 @@ select * from fsubmitquote(1,'own82','qlt22',61017,'qlt23',45276);select * from 
 
                         ord                         | qtt_requ | qtt_prov |  qtt  | qtt_reci | qtt_give | err |                                                       json                                                       
 ----------------------------------------------------+----------+----------+-------+----------+----------+-----+------------------------------------------------------------------------------------------------------------------
- (129,10004,72,10004,61017,qlt22,45276,qlt23,45276) |    61017 |    45276 | 45276 |    61017 |    45276 |   0 | {"qtt_requ":61017,"qtt_prov":45276,"qtt":45276,"qtt_reci":61017,"qtt_give":45276,"paths":[                      +
+ (129,10004,72,10004,61017,qlt22,45277,qlt23,45277) |    61017 |    45277 | 45276 |    61017 |    45276 |   0 | {"qtt_requ":61017,"qtt_prov":45277,"qtt":45276,"qtt_reci":61017,"qtt_give":45276,"paths":[                      +
                                                     |          |          |       |          |          |     | [{"type":2, "id":3288, "oid":3288, "own":34, "qtt_requ":45276, "qtt_prov":61017, "qtt":61017, "flowr":61017},   +
-                                                    |          |          |       |          |          |     | {"type":129, "id":10004, "oid":10004, "own":72, "qtt_requ":61017, "qtt_prov":45276, "qtt":45276, "flowr":45276}]+
+                                                    |          |          |       |          |          |     | {"type":129, "id":10004, "oid":10004, "own":72, "qtt_requ":61017, "qtt_prov":45277, "qtt":45277, "flowr":45276}]+
                                                     |          |          |       |          |          |     | ]}
 (1 row)
 
-select json from tmvt order by id desc limit 1;
-                                                       json                                                       
-------------------------------------------------------------------------------------------------------------------
- {"qtt_requ":61017,"qtt_prov":45276,"qtt":45276,"qtt_reci":61017,"qtt_give":45276,"paths":[                      +
- [{"type":2, "id":3288, "oid":3288, "own":34, "qtt_requ":45276, "qtt_prov":61017, "qtt":61017, "flowr":61017},   +
- {"type":129, "id":10004, "oid":10004, "own":72, "qtt_requ":61017, "qtt_prov":45276, "qtt":45276, "flowr":45276}]+
- ]}
-(1 row)
-
+-- select * from fsubmitbarter(1,'own82',NULL,'qlt22',61017,'qlt23',45277,45276);select * from fproducemvt();
+-- select xid,own_src,own_dst,qtt,nat from tmvt order by id desc limit 2;
 select * from fsubmitquote(1,'own82','qlt22',60000,'qlt23',45276);select * from fproducemvt(); 
   id   | diag 
 -------+------
@@ -115,15 +94,6 @@ select * from fsubmitquote(1,'own82','qlt22',60000,'qlt23',45276);select * from 
                                                     |          |          |       |          |          |     | [{"type":2, "id":3288, "oid":3288, "own":34, "qtt_requ":45276, "qtt_prov":61017, "qtt":61017, "flowr":60506},   +
                                                     |          |          |       |          |          |     | {"type":129, "id":10005, "oid":10005, "own":72, "qtt_requ":60000, "qtt_prov":45276, "qtt":45276, "flowr":45276}]+
                                                     |          |          |       |          |          |     | ]}
-(1 row)
-
-select json from tmvt order by id desc limit 1;
-                                                       json                                                       
-------------------------------------------------------------------------------------------------------------------
- {"qtt_requ":60000,"qtt_prov":45276,"qtt":45276,"qtt_reci":60506,"qtt_give":45276,"paths":[                      +
- [{"type":2, "id":3288, "oid":3288, "own":34, "qtt_requ":45276, "qtt_prov":61017, "qtt":61017, "flowr":60506},   +
- {"type":129, "id":10005, "oid":10005, "own":72, "qtt_requ":60000, "qtt_prov":45276, "qtt":45276, "flowr":45276}]+
- ]}
 (1 row)
 
 select * from fsubmitbarter(1,'own82',NULL,'qlt22',60000,'qlt23',45276);select * from fproducemvt();
@@ -166,25 +136,6 @@ select * from fsubmitquote(1,'own82','qlt2',60000,'qlt23',45276);select * from f
                                                    |          |          |       |          |          |     | {"type":1, "id":321, "oid":321, "own":48, "qtt_requ":53964, "qtt_prov":73494, "qtt":73494, "flowr":20990},       +
                                                    |          |          |       |          |          |     | {"type":129, "id":10007, "oid":10007, "own":72, "qtt_requ":60000, "qtt_prov":45276, "qtt":13284, "flowr":13284}] +
                                                    |          |          |       |          |          |     | ]}
-(1 row)
-
-select json from tmvt order by id desc limit 1;
-                                                       json                                                        
--------------------------------------------------------------------------------------------------------------------
- {"qtt_requ":60000,"qtt_prov":45276,"qtt":45276,"qtt_reci":82755,"qtt_give":45276,"paths":[                       +
- [{"type":2, "id":4352, "oid":4352, "own":36, "qtt_requ":2313, "qtt_prov":43484, "qtt":43484, "flowr":43484},     +
- {"type":1, "id":5, "oid":5, "own":5, "qtt_requ":45499, "qtt_prov":45464, "qtt":45464, "flowr":17954},            +
- {"type":129, "id":10007, "oid":10007, "own":72, "qtt_requ":60000, "qtt_prov":45276, "qtt":45276, "flowr":5598}], +
- [{"type":2, "id":1046, "oid":1046, "own":78, "qtt_requ":2318, "qtt_prov":11725, "qtt":11725, "flowr":11725},     +
- {"type":1, "id":345, "oid":345, "own":79, "qtt_requ":43486, "qtt_prov":31371, "qtt":31371, "flowr":6035},        +
- {"type":129, "id":10007, "oid":10007, "own":72, "qtt_requ":60000, "qtt_prov":45276, "qtt":39678, "flowr":3249}], +
- [{"type":1, "id":2361, "oid":2361, "own":2, "qtt_requ":59716, "qtt_prov":98494, "qtt":98494, "flowr":30997},     +
- {"type":1, "id":337, "oid":337, "own":44, "qtt_requ":25168, "qtt_prov":37776, "qtt":37776, "flowr":37776},       +
- {"type":129, "id":10007, "oid":10007, "own":72, "qtt_requ":60000, "qtt_prov":45276, "qtt":36429, "flowr":23145}],+
- [{"type":1, "id":2361, "oid":2361, "own":2, "qtt_requ":59716, "qtt_prov":98494, "qtt":67497, "flowr":18376},     +
- {"type":1, "id":321, "oid":321, "own":48, "qtt_requ":53964, "qtt_prov":73494, "qtt":73494, "flowr":20990},       +
- {"type":129, "id":10007, "oid":10007, "own":72, "qtt_requ":60000, "qtt_prov":45276, "qtt":13284, "flowr":13284}] +
- ]}
 (1 row)
 
 select * from fsubmitbarter(1,'own82',NULL,'qlt2',60000,'qlt23',45276);select * from fproducemvt();

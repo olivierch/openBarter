@@ -45,22 +45,23 @@ BEGIN
 		END IF;
 		
 		_res := yflow_qtts(_cyclemax);
+		-- _res = [qtt_in,qtt_out,qtt_requ,qtt_prov,qtt]
 		
 		_ro.json := _ro.json || yflow_to_jsona(_cyclemax);
 		-- RAISE WARNING '_res % %',_res,yflow_to_jsona(_cyclemax);
 		
 		IF (_begin ) THEN
 			IF((_t.type & 8) = 8) THEN-- _begin AND IGNOREOMEGA
-				_ro.qtt_requ  := _res[1];
-				_ro.qtt_prov  := _res[2];
-				_ro.qtt		  := _res[2];
+				_ro.qtt_requ  := _res[3]; -- qtt_requ
+				_ro.qtt_prov  := _res[4]; -- qtt_prov
+				_ro.qtt		  := _res[2]; -- qtt_reci
 			ELSE
 				_ro.qtt_requ  := _o.qtt_requ;
 				_ro.qtt_prov  := _o.qtt_prov;
-				_ro.qtt		  := _res[2];
+				_ro.qtt		  := _res[2]; -- qtt_reci
 			END IF;
 		ELSE
-			_ro.qtt		  := _ro.qtt + _res[2];			
+			_ro.qtt		  := _ro.qtt + _res[2];	-- qtt_reci		
 		END IF;
 		_ro.qtt_reci := _ro.qtt_reci + _res[1];
 		_ro.qtt_give := _ro.qtt_give + _res[2];
