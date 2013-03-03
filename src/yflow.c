@@ -564,7 +564,7 @@ static double getRankFlow(Tflow *f) {
 	if(dim < 2) // f is empty
 		return 0.0;
 
-	if(FLOW_IS_QUOTE(f)) {
+	if(FLOW_IS_IGNOREOMEGA(f)) {
 	
 		obMRange(i,dim-1) {
 			Tfl *b = &f->x[i];
