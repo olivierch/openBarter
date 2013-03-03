@@ -631,19 +631,16 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 			} 
 		}		
 	}
-	/*
-	if(FLOW_IS_IGNOREOMEGA(r))
-		FLOW_TYPE(r) = FLOW_TYPE(r) & (~ORDER_IGNOREOMEGA);
-	
-	*/
+
 	{
-		Tfl *lastr  = &r->x[r->dim-1];
 		
+		Tfl *lastr  = &r->x[r->dim-1];
 		if(ORDER_IS_IGNOREOMEGA(lastr->type)) {
+			Tfl *lastf1 = &f1->x[f1->dim-1];
 			// omega is set
-			lastr->qtt_prov = f1->x[f1->dim-1].flowr;
-			lastr->qtt_requ = f1->x[f1->dim-2].flowr;
-			
+			lastr->qtt_prov = lastf1->qtt_prov;
+			lastr->qtt_requ = lastf1->qtt_requ;
+						
 			lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);
 			// IGNOREOMEGA is reset
 		}
@@ -750,7 +747,7 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 	char        _typalign;
 	int         _dims[1];
 	int         _lbs[1];
-	int64		_qtt_in =0,_qtt_out =0;
+	int64		_qtt_in =0,_qtt_out =0,_qtt_requ =0,_qtt_prov = 0,_qtt = 0;
 	short		_i;
 	bool		_isDraft = true;
 	
@@ -764,6 +761,9 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 		//elog(WARNING,"_qtt_in=%li _qtt_out=%li",f->x[f->dim-2].flowr,f->x[f->dim-1].flowr);
 		_qtt_in  = Int64GetDatum(f->x[f->dim-2].flowr);
 		_qtt_out = Int64GetDatum(f->x[f->dim-1].flowr);
+		_qtt_requ = Int64GetDatum(f->x[f->dim-1].qtt_requ);
+		_qtt_prov = Int64GetDatum(f->x[f->dim-1].qtt_prov);
+		_qtt = Int64GetDatum(f->x[f->dim-1].qtt);
 		//_in = DatumGetInt64(_qtt_in);
 		//_out = DatumGetInt64(_qtt_out);
 		//elog(WARNING,"_in=%li _out=%li",_in,_out);
@@ -772,14 +772,15 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 				 errmsg("yflow_qtts: the flow should be draft")));
 	}
-	_datum_out = palloc(sizeof(Datum) * 2);
-	_isnull = palloc(sizeof(bool) * 2);
-	_datum_out[0] = _qtt_in;
-	_isnull[0] = false;
-	_datum_out[1] = _qtt_out;
-	_isnull[1] = false;
+	_datum_out = palloc(sizeof(Datum) * 5);
+	_isnull = palloc(sizeof(bool) * 5);
+	_datum_out[0] = _qtt_in;	_isnull[0] = false;
+	_datum_out[1] = _qtt_out;	_isnull[1] = false;
+	_datum_out[2] = _qtt_requ;	_isnull[2] = false;
+	_datum_out[3] = _qtt_prov;	_isnull[3] = false;
+	_datum_out[4] = _qtt;		_isnull[4] = false;
 
-	_dims[0] = 2;
+	_dims[0] = 5;
 	_lbs[0] = 1;
 				 
 	/* get required info about the INT8 */
