@@ -26,7 +26,7 @@ select id,nbt,nbc,xid,own_src,own_dst,qtt,nat from tmvt order by id desc limit 1
 select sum(qtt) from tmvt where own_src='own82' and nat='qlt23' and id>18;
 select sum(qtt) from tmvt where own_dst='own82' and nat='qlt2' and id>18;
 
---select * from fsubmitquote(1,'own1','qlt1','qlt2');select * from fproducemvt();
+select * from fsubmitquote(1,'own1','qlt1','qlt2');select * from fproducemvt();
 --select * from fsubmitquote(1,'own1','qlt1',30822,'qlt2',9667,0);select * from fproducemvt();
 /*
 select * from fsubmitquote(1,'own82','qlt2',60000,'qlt23',45276);select * from fproducemvt();

@@ -29,7 +29,7 @@ select * from fsubmitquote(1,'own82','qlt22','qlt23');select * from fproducemvt(
  (141,10001,72,10001,1,qlt22,1,qlt23,1) |    67432 |    30183 | 30182 |    67430 |    30182 |   0 | {"qtt_requ":67432,"qtt_prov":30183,"qtt":30182,"qtt_reci":67430,"qtt_give":30182,"paths":[                      +
                                         |          |          |       |          |          |     | [{"type":2, "id":8928, "oid":8928, "own":72, "qtt_requ":49263, "qtt_prov":87732, "qtt":87732, "flowr":53750},   +
                                         |          |          |       |          |          |     | {"type":1, "id":515, "oid":515, "own":69, "qtt_requ":53751, "qtt_prov":67432, "qtt":67432, "flowr":67430},      +
-                                        |          |          |       |          |          |     | {"type":141, "id":10001, "oid":10001, "own":72, "qtt_requ":67430, "qtt_prov":30182, "qtt":30182, "flowr":30182}]+
+                                        |          |          |       |          |          |     | {"type":141, "id":10001, "oid":10001, "own":72, "qtt_requ":67432, "qtt_prov":30183, "qtt":30182, "flowr":30182}]+
                                         |          |          |       |          |          |     | ]}
 (1 row)
 
@@ -63,7 +63,7 @@ select * from fsubmitquote(1,'own82','qlt22','qlt10');select * from fproducemvt(
  (141,10003,72,10003,1,qlt22,1,qlt10,1) |    49252 |     2177 | 2176 |    49237 |     2176 |   0 | {"qtt_requ":49252,"qtt_prov":2177,"qtt":2176,"qtt_reci":49237,"qtt_give":2176,"paths":[                      +
                                         |          |          |      |          |          |     | [{"type":2, "id":7260, "oid":7260, "own":95, "qtt_requ":2176, "qtt_prov":78849, "qtt":78849, "flowr":78837}, +
                                         |          |          |      |          |          |     | {"type":2, "id":754, "oid":754, "own":61, "qtt_requ":81762, "qtt_prov":51072, "qtt":51072, "flowr":49237},   +
-                                        |          |          |      |          |          |     | {"type":141, "id":10003, "oid":10003, "own":72, "qtt_requ":49237, "qtt_prov":2176, "qtt":2176, "flowr":2176}]+
+                                        |          |          |      |          |          |     | {"type":141, "id":10003, "oid":10003, "own":72, "qtt_requ":49252, "qtt_prov":2177, "qtt":2176, "flowr":2176}]+
                                         |          |          |      |          |          |     | ]}
 (1 row)
 
@@ -165,7 +165,21 @@ select sum(qtt) from tmvt where own_dst='own82' and nat='qlt2' and id>18;
  82755
 (1 row)
 
---select * from fsubmitquote(1,'own1','qlt1','qlt2');select * from fproducemvt();
+select * from fsubmitquote(1,'own1','qlt1','qlt2');select * from fproducemvt();
+  id   | diag 
+-------+------
+ 10008 |    0
+(1 row)
+
+                 ord                  | qtt_requ | qtt_prov | qtt  | qtt_reci | qtt_give | err |                                                     json                                                      
+--------------------------------------+----------+----------+------+----------+----------+-----+---------------------------------------------------------------------------------------------------------------
+ (141,10008,93,10008,1,qlt1,1,qlt2,1) |    30822 |     9667 | 9666 |    30820 |     9666 |   0 | {"qtt_requ":30822,"qtt_prov":9667,"qtt":9666,"qtt_reci":30820,"qtt_give":9666,"paths":[                      +
+                                      |          |          |      |          |          |     | [{"type":2, "id":6026, "oid":6026, "own":78, "qtt_requ":84630, "qtt_prov":83977, "qtt":83977, "flowr":9592}, +
+                                      |          |          |      |          |          |     | {"type":1, "id":85, "oid":85, "own":29, "qtt_requ":9592, "qtt_prov":30822, "qtt":30822, "flowr":30820},      +
+                                      |          |          |      |          |          |     | {"type":141, "id":10008, "oid":10008, "own":93, "qtt_requ":30822, "qtt_prov":9667, "qtt":9666, "flowr":9666}]+
+                                      |          |          |      |          |          |     | ]}
+(1 row)
+
 --select * from fsubmitquote(1,'own1','qlt1',30822,'qlt2',9667,0);select * from fproducemvt();
 /*
 select * from fsubmitquote(1,'own82','qlt2',60000,'qlt23',45276);select * from fproducemvt();

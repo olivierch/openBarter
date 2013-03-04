@@ -277,7 +277,7 @@ Datum yflow_to_jsona(PG_FUNCTION_ARGS) {
 		appendStringInfo(&buf, "\"id\":%i, ", s->id);
 		appendStringInfo(&buf, "\"oid\":%i, ", s->oid);
 		appendStringInfo(&buf, "\"own\":%i, ", s->own);
-		
+		/*
 		if((i == dim-1) && (FLOW_IS_IGNOREOMEGA(yflow))) {
 			Tfl *sp = &yflow->x[i-1];
 			
@@ -289,6 +289,11 @@ Datum yflow_to_jsona(PG_FUNCTION_ARGS) {
 			appendStringInfo(&buf, "\"qtt_prov\":" INT64_FORMAT ", ", s->qtt_prov);
 			appendStringInfo(&buf, "\"qtt\":" INT64_FORMAT ", ", s->qtt);
 		}
+		*/
+		appendStringInfo(&buf, "\"qtt_requ\":" INT64_FORMAT ", ", s->qtt_requ);
+		appendStringInfo(&buf, "\"qtt_prov\":" INT64_FORMAT ", ", s->qtt_prov);
+		appendStringInfo(&buf, "\"qtt\":" INT64_FORMAT ", ", s->qtt);
+			
 		appendStringInfo(&buf,"\"flowr\":" INT64_FORMAT "}", s->flowr);
 	}
 	appendStringInfoChar(&buf, ']');
