@@ -44,7 +44,7 @@ select * from fsubmitquote(2,'own82','qlt22','qlt23');select * from fproducemvt(
                                         |          |          |       |          |          |     | ]}
 (1 row)
 
-select * from fsubmitquote(2,'own82','qlt22',67432,'qlt23',30183,0);select * from fproducemvt();
+select * from fsubmitquote(2,'own82','qlt22',67432,'qlt23',30183);select * from fproducemvt();
   id   | diag 
 -------+------
  10002 |    0

@@ -12,7 +12,7 @@ SELECT setval('tstack_id_seq',10000,true);
 SELECT setval('tmvt_id_seq',1,true);
 
 select * from fsubmitquote(2,'own82','qlt22','qlt23');select * from fproducemvt();
-select * from fsubmitquote(2,'own82','qlt22',67432,'qlt23',30183,0);select * from fproducemvt();
+select * from fsubmitquote(2,'own82','qlt22',67432,'qlt23',30183);select * from fproducemvt();
 select * from fsubmitquote(2,'own82','qlt22',67432,'qlt23',30183,91809);select * from fproducemvt();
 select * from fsubmitbarter(2,'own82',NULL,'qlt22',67432,'qlt23',30183,91809);select * from fproducemvt();
 select id,nbt,nbc,xid,own_src,own_dst,qtt,nat from tmvt where id >4;

@@ -180,7 +180,7 @@ select * from fsubmitquote(1,'own1','qlt1','qlt2');select * from fproducemvt();
                                       |          |          |      |          |          |     | ]}
 (1 row)
 
-select * from fsubmitquote(1,'own1','qlt1',30822,'qlt2',9667,0);select * from fproducemvt();
+select * from fsubmitquote(1,'own1','qlt1',30822,'qlt2',9667);select * from fproducemvt();
   id   | diag 
 -------+------
  10009 |    0

@@ -394,6 +394,29 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,text) TO role_co;
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION 
+	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
+	RETURNS yressubmit AS $$	
+DECLARE
+	_r			 yressubmit%rowtype;
+	_t			dtypeorder;
+BEGIN
+	IF(NOT (0 < _type AND _type <4)) THEN
+		_r.diag := -3;
+		RETURN _r;
+	END IF;	
+	IF((_qtt_requ <=0) OR (_qtt_prov <= 0)) THEN
+		_r.diag := -2;
+		RETURN _r;
+	END IF;
+	_t := (_type & 3) | 128 | 4; -- QUOTE 128	NOQTTLIMIT 4
+	_r := fsubmitorder(_t,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,0);
+	
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8) TO role_co;
+--------------------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION 
 	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
 	RETURNS yressubmit AS $$	
 DECLARE
@@ -404,14 +427,11 @@ BEGIN
 		_r.diag := -3;
 		RETURN _r;
 	END IF;	
-	IF((_qtt_requ <=0) OR (_qtt_prov <= 0) OR (_qtt < 0)) THEN
+	IF((_qtt_requ <=0) OR (_qtt_prov <= 0) OR (_qtt <= 0)) THEN
 		_r.diag := -2;
 		RETURN _r;
 	END IF;
 	_t := (_type & 3) | 128; -- QUOTE 128	
-	IF(_qtt = 0) THEN
-		_t := _t | 4; -- NOQTTLIMIT 4
-	END IF;
 	_r := fsubmitorder(_t,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt);
 	
 	RETURN _r;
