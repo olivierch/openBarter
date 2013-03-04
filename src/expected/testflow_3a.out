@@ -41,7 +41,7 @@ select * from fsubmitbarter(1,'own82',NULL,'qlt22',67432,'qlt23',30183,30182);se
 
                        ord                        | qtt_requ | qtt_prov |  qtt  | qtt_reci | qtt_give | err | json 
 --------------------------------------------------+----------+----------+-------+----------+----------+-----+------
- (1,10002,72,10002,67432,qlt22,30183,qlt23,30182) |    67432 |    30183 | 30183 |    67430 |    30182 |   0 | 
+ (1,10002,72,10002,67432,qlt22,30183,qlt23,30182) |    67432 |    30183 | 30182 |    67430 |    30182 |   0 | 
 (1 row)
 
 select xid,own_src,own_dst,qtt,nat from tmvt order by id desc limit 3;
@@ -90,7 +90,7 @@ select * from fsubmitbarter(1,'own82',NULL,'qlt22',49252,'qlt10',2177,2176);sele
 
                       ord                       | qtt_requ | qtt_prov | qtt  | qtt_reci | qtt_give | err | json 
 ------------------------------------------------+----------+----------+------+----------+----------+-----+------
- (1,10005,72,10005,49252,qlt22,2177,qlt10,2176) |    49252 |     2177 | 2177 |    49237 |     2176 |   0 | 
+ (1,10005,72,10005,49252,qlt22,2177,qlt10,2176) |    49252 |     2177 | 2176 |    49237 |     2176 |   0 | 
 (1 row)
 
 select xid,own_src,own_dst,qtt,nat from tmvt order by id desc limit 3;
@@ -180,11 +180,64 @@ select * from fsubmitquote(1,'own1','qlt1','qlt2');select * from fproducemvt();
                                       |          |          |      |          |          |     | ]}
 (1 row)
 
---select * from fsubmitquote(1,'own1','qlt1',30822,'qlt2',9667,0);select * from fproducemvt();
-/*
-select * from fsubmitquote(1,'own82','qlt2',60000,'qlt23',45276);select * from fproducemvt();
-select * from fsubmitbarter(1,'own82',NULL,'qlt2',60000,'qlt23',45276);select * from fproducemvt();
-select id,nbt,nbc,xid,own_src,own_dst,qtt,nat from tmvt order by id desc limit 12;
-select sum(qtt) from tmvt where own_src='own82' and nat='qlt23' and id>18;
-select sum(qtt) from tmvt where own_dst='own82' and nat='qlt2' and id>18;
-*/
+select * from fsubmitquote(1,'own1','qlt1',30822,'qlt2',9667,0);select * from fproducemvt();
+  id   | diag 
+-------+------
+ 10009 |    0
+(1 row)
+
+                     ord                     | qtt_requ | qtt_prov | qtt  | qtt_reci | qtt_give | err |                                                     json                                                      
+---------------------------------------------+----------+----------+------+----------+----------+-----+---------------------------------------------------------------------------------------------------------------
+ (133,10009,93,10009,30822,qlt1,9667,qlt2,0) |    30822 |     9667 | 7563 |    30819 |     7563 |   0 | {"qtt_requ":30822,"qtt_prov":9667,"qtt":7563,"qtt_reci":30819,"qtt_give":7563,"paths":[                      +
+                                             |          |          |      |          |          |     | [{"type":1, "id":5071, "oid":5071, "own":13, "qtt_requ":10428, "qtt_prov":21601, "qtt":21601, "flowr":12258},+
+                                             |          |          |      |          |          |     | {"type":1, "id":85, "oid":85, "own":29, "qtt_requ":9592, "qtt_prov":30822, "qtt":30822, "flowr":30819},      +
+                                             |          |          |      |          |          |     | {"type":133, "id":10009, "oid":10009, "own":93, "qtt_requ":30822, "qtt_prov":9667, "qtt":7563, "flowr":7563}]+
+                                             |          |          |      |          |          |     | ]}
+(1 row)
+
+select * from fsubmitquote(1,'own1','qlt1',30822,'qlt2',9667,7563);select * from fproducemvt();
+  id   | diag 
+-------+------
+ 10010 |    0
+(1 row)
+
+                      ord                       | qtt_requ | qtt_prov | qtt  | qtt_reci | qtt_give | err |                                                     json                                                      
+------------------------------------------------+----------+----------+------+----------+----------+-----+---------------------------------------------------------------------------------------------------------------
+ (129,10010,93,10010,30822,qlt1,9667,qlt2,7563) |    30822 |     9667 | 7563 |    30819 |     7563 |   0 | {"qtt_requ":30822,"qtt_prov":9667,"qtt":7563,"qtt_reci":30819,"qtt_give":7563,"paths":[                      +
+                                                |          |          |      |          |          |     | [{"type":1, "id":5071, "oid":5071, "own":13, "qtt_requ":10428, "qtt_prov":21601, "qtt":21601, "flowr":12258},+
+                                                |          |          |      |          |          |     | {"type":1, "id":85, "oid":85, "own":29, "qtt_requ":9592, "qtt_prov":30822, "qtt":30822, "flowr":30819},      +
+                                                |          |          |      |          |          |     | {"type":129, "id":10010, "oid":10010, "own":93, "qtt_requ":30822, "qtt_prov":9667, "qtt":7563, "flowr":7563}]+
+                                                |          |          |      |          |          |     | ]}
+(1 row)
+
+select * from fsubmitbarter(1,'own1',NULL,'qlt1',30822,'qlt2',9667,7563);select * from fproducemvt();
+  id   | diag 
+-------+------
+ 10011 |    0
+(1 row)
+
+                     ord                      | qtt_requ | qtt_prov | qtt  | qtt_reci | qtt_give | err | json 
+----------------------------------------------+----------+----------+------+----------+----------+-----+------
+ (1,10011,93,10011,30822,qlt1,9667,qlt2,7563) |    30822 |     9667 | 7563 |    30819 |     7563 |   0 | 
+(1 row)
+
+select id,nbt,nbc,xid,own_src,own_dst,qtt,nat from tmvt d where id>33;
+ id | nbt | nbc |  xid  | own_src | own_dst |  qtt  |  nat  
+----+-----+-----+-------+---------+---------+-------+-------
+ 34 |   3 |   3 | 10011 | own1    | own15   |  7563 | qlt2
+ 35 |   3 |   3 |  5071 | own15   | own58   | 12258 | qlt95
+ 36 |   3 |   3 |    85 | own58   | own1    | 30819 | qlt1
+(3 rows)
+
+select sum(qtt) from tmvt where own_src='own1' and nat='qlt2' and id>33;
+ sum  
+------
+ 7563
+(1 row)
+
+select sum(qtt) from tmvt where own_dst='own1' and nat='qlt1' and id>33;
+  sum  
+-------
+ 30819
+(1 row)
+

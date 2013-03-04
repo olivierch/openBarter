@@ -64,10 +64,11 @@ BEGIN
 			_ro.qtt_requ := _res[3]; -- qtt_requ
 			_ro.qtt_prov := _res[4]; -- qtt_prov
 		END IF;
+		
 		_ro.qtt_reci := _ro.qtt_reci + _res[1];
 		_ro.qtt_give := _ro.qtt_give + _res[2];
 		
-		IF(_o.type & 4 = 1) THEN -- NOLIMITQTT
+		IF(_o.type & 4 = 4) THEN -- NOLIMITQTT
 			_ro.qtt	:= _ro.qtt + _res[5]; -- qtt
 		ELSE
 			IF(_begin) THEN

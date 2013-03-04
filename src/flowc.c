@@ -76,11 +76,10 @@ TresChemin *flowc_maximum(Tflow *flow) {
 	}
 
 	if(FLOW_IS_QUOTE(flow)) {
-		//Tflow *_fl;
 		TresChemin *chem;
 	
-		//_fl = flowm_copy(flow);
-		_flow_maximum_quote(flow);
+		if(FLOW_IS_NOQTTLIMIT(flow) || FLOW_IS_IGNOREOMEGA(flow))
+			_flow_maximum_quote(flow);
 		//elog(WARNING,"qtt_requ %li qtt_prov %li qtt %li",flow->x[ flow->dim-1 ].qtt_requ,flow->x[ flow->dim-1 ].qtt_prov,flow->x[ flow->dim-1 ].qtt);
 		chem = _flow_maximum_barter(flow);
 		return chem;

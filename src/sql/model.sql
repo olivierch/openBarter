@@ -701,7 +701,7 @@ BEGIN
 	END IF;
 	_ro.qtt_prov := _o.qtt_prov;
 	_ro.qtt_requ := _o.qtt_requ;
-	_ro.qtt := _ro.qtt_prov;
+	_ro.qtt := _o.qtt;
 	-- set the number of movements in this transaction
 	UPDATE tmvt SET nbt= array_length(_fmvtids,1) WHERE id = ANY (_fmvtids);
 	
