@@ -19,7 +19,7 @@ static void _calGains(TresChemin *chem,double Omega);
 static short _flowMaximum(Tflow *flow,double *piom,double *fluxExact);
 static Tstatusflow _rounding(short iExhausted, TresChemin *chem);
 static TresChemin *_flow_maximum_barter(Tflow *flow);
-static void _flow_maximum_quote(Tflow *flow,Tflow *resflow);
+static void _flow_maximum_quote(Tflow *flow); // ,Tflow *resflow);
 static int64 _floorInt64(double d);
 
 /******************************************************************************
@@ -76,11 +76,12 @@ TresChemin *flowc_maximum(Tflow *flow) {
 	}
 
 	if(FLOW_IS_QUOTE(flow)) {
-		Tflow *_fl;
+		//Tflow *_fl;
 		TresChemin *chem;
 	
-		_fl = flowm_copy(flow);
-		_flow_maximum_quote(_fl,flow);
+		//_fl = flowm_copy(flow);
+		_flow_maximum_quote(flow);
+		//elog(WARNING,"qtt_requ %li qtt_prov %li qtt %li",flow->x[ flow->dim-1 ].qtt_requ,flow->x[ flow->dim-1 ].qtt_prov,flow->x[ flow->dim-1 ].qtt);
 		chem = _flow_maximum_barter(flow);
 		return chem;
 		
@@ -131,9 +132,9 @@ static TresChemin *_flow_maximum_barter(Tflow *flow) {
 	/* the floating point vector is rounded 
 	to the nearest vector of positive integers */
 	chem->status = _rounding(_iExhausted, chem);
-	if(chem->status == draft)
+	if(chem->status == draft) {
 		goto _end;
-		
+	}
 _dropflow:
 	{
 		short _k;
@@ -152,7 +153,7 @@ _end:
  * 	true		true	quote1(qlt_requ,qlt_prov)
  *  false		true	quote2(qlt_requ,qtt_requ,qlt_prov,qtt_prov) 
  *****************************************************************************/
-static void _flow_maximum_quote(Tflow *flow,Tflow *resFlow) {
+static void _flow_maximum_quote(Tflow *flow) { //,Tflow *resFlow) {
 	short _dim = flow->dim;
 	short _i,_ldim; 
 	double _Omega;
@@ -163,7 +164,7 @@ static void _flow_maximum_quote(Tflow *flow,Tflow *resFlow) {
 	
 	if(_lnIgnoreOmega) {
 		_lnNoQttLimit = true;
-		FLOW_TYPE(resFlow) = FLOW_TYPE(resFlow) | ORDER_NOQTTLIMIT;
+		//FLOW_TYPE(resFlow) = FLOW_TYPE(resFlow) | ORDER_NOQTTLIMIT;
 	}
 
 	_ldim = _lnNoQttLimit ? ( _dim-1 ):_dim;
@@ -187,15 +188,15 @@ static void _flow_maximum_quote(Tflow *flow,Tflow *resFlow) {
 	(void) _flowMaximum(flow,chem->piom,chem->fluxExact);
 	
 	_qtt_requ = _floorInt64(chem->fluxExact[ _dim-2 ]);
-	_qtt_prov = _floorInt64(chem->fluxExact[ _dim-1 ])+1;
+	_qtt_prov = _floorInt64(chem->fluxExact[ _dim-1 ]);
 	/* the ratio _qtt_prov/_qtt_requ is increased by rounding 
 	in order to be shure that prodOmega remains >=1  */
 	
 	if(_lnIgnoreOmega) {
 	
-		resFlow->x[ _dim-1 ].qtt_requ = _qtt_requ;
-		resFlow->x[ _dim-1 ].qtt_prov = _qtt_prov;
-		resFlow->x[ _dim-1 ].qtt = _qtt_prov;
+		flow->x[ _dim-1 ].qtt_requ = _qtt_requ;
+		flow->x[ _dim-1 ].qtt_prov = _qtt_prov+1;
+		flow->x[ _dim-1 ].qtt = _qtt_prov;
 		
 		/* The flag ORDER_IGNOREOMEGA cannot be reset here since several instances 
 		of this node are store in _temp. The flag is reset in yflow_reduce() 
@@ -203,7 +204,7 @@ static void _flow_maximum_quote(Tflow *flow,Tflow *resFlow) {
 		*/
 		
 	} else if(_lnNoQttLimit) 
-		resFlow->x[ _dim-1 ].qtt = _qtt_prov;
+		flow->x[ _dim-1 ].qtt = _qtt_prov;
 	
 	pfree(chem);
 	

@@ -620,6 +620,7 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 			Tfl *or  = &r->x[j];
 			
 			if( (!ORDER_IS_NOQTTLIMIT(or->type)) && (or->oid == f1->x[i].oid)) {
+				// elog(WARNING,"ici %i QUOTE:%c NOQTTLIMIT:%c",or->type,BIT_IS_SET(or->type,ORDER_QUOTE)?'T':'F',BIT_IS_SET(or->type,ORDER_NOQTTLIMIT)?'T':'F');
 				if(or->qtt >= f1->x[i].flowr) {
 					or->qtt -= f1->x[i].flowr;
 					// elog(WARNING,"order %i stock %i reduced by %li to %li",r->x[j].id,r->x[j].oid,f1->x[i].flowr,r->x[j].qtt);
