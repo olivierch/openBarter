@@ -5,7 +5,7 @@ truncate tmvt;
 truncate towner;
 SELECT setval('tstack_id_seq',1,false);
 
-copy torder from '/home/olivier/ob92/src/sql/torder_test_10000.sql';
+copy torder(usr,ord,created,updated) from '/home/olivier/ob92/src/sql/torder_test_10000.sql';
 copy towner from '/home/olivier/ob92/src/sql/towner_test_10000.sql';
 truncate tstack;
 SELECT setval('tstack_id_seq',10000,true);

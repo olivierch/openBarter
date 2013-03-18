@@ -218,7 +218,8 @@ create table torder (
 	usr text,
     ord yorder,
     created timestamp not NULL,
-    updated timestamp
+    updated timestamp,
+    duration interval
 );
 
 SELECT _grant_read('torder');
@@ -349,6 +350,7 @@ create table tstack (
     qua_prov text ,
     qtt_prov dquantity ,
     qtt int8 ,
+    duration interval,
     created timestamp not NULL,   
     PRIMARY KEY (id)
 );
@@ -386,7 +388,7 @@ BEGIN
 		RETURN _r;
 	END IF;	
 	-- NOQTTLIMIT IGNOREOMEGA QUOTE 4+8+128
-	_r := fsubmitorder((_type & 3) | 140,_own,NULL,_qua_requ,1,_qua_prov,1,1);
+	_r := fsubmitorder((_type & 3) | 140,_own,NULL,_qua_requ,1,_qua_prov,1,1,NULL);
 	
 	RETURN _r;
 END; 
@@ -409,7 +411,7 @@ BEGIN
 		RETURN _r;
 	END IF;
 	_t := (_type & 3) | 128 | 4; -- QUOTE 128	NOQTTLIMIT 4
-	_r := fsubmitorder(_t,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,0);
+	_r := fsubmitorder(_t,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,0,NULL);
 	
 	RETURN _r;
 END; 
@@ -432,7 +434,7 @@ BEGIN
 		RETURN _r;
 	END IF;
 	_t := (_type & 3) | 128; -- QUOTE 128	
-	_r := fsubmitorder(_t,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt);
+	_r := fsubmitorder(_t,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,NULL);
 	
 	RETURN _r;
 END; 
@@ -467,7 +469,7 @@ BEGIN
 			RETURN _r;
 		END IF;
 	END IF;
-	_r := fsubmitorder(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt);
+	_r := fsubmitorder(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,'24 hour'::interval);
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
@@ -486,7 +488,7 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fsubmitbarter(dtypeorder,text,int,text,int8,text,int8) TO role_co;
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION 
-	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
+	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8,_duration interval)
 	RETURNS yressubmit AS $$	
 DECLARE
 	_t			 tstack%rowtype;
@@ -501,8 +503,8 @@ BEGIN
 		RETURN _r;
 	END IF;
 	
-	INSERT INTO tstack(usr,own,oid,type,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,created)
-	VALUES (current_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,statement_timestamp()) RETURNING * into _t;
+	INSERT INTO tstack(usr,own,oid,type,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,duration,created)
+	VALUES (current_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,_duration,statement_timestamp()) RETURNING * into _t;
 	_r.id := _t.id;
 	RETURN _r;
 END; 
@@ -547,7 +549,8 @@ was specified  on Z in the search_backward WHERE condition */
 					SELECT X.ord,yflow_grow(X.ord,Y.debut,Y.path),
 						Y.fin,Y.depth+1,yflow_contains_oid((X.ord).oid,Y.path)
 					FROM torder X,search_backward Y
-					WHERE (X.ord).qua_prov=(Y.debut).qua_requ 
+					WHERE (X.ord).qua_prov=(Y.debut).qua_requ
+						AND ((X.duration IS NULL) OR ((X.created + X.duration) > clock_timestamp())) 
 						AND yflow_match(X.ord,Y.debut) 
 						AND Y.depth < _MAXCYCLE 
 						AND NOT cycle 
@@ -578,6 +581,7 @@ CREATE TYPE yresexec AS (
 --------------------------------------------------------------------------------
 CREATE TYPE yresorder AS (
     ord yorder,
+    ordp yorder,
     qtt_requ int8,
     qtt_prov int8,
     qtt int8,
@@ -587,12 +591,76 @@ CREATE TYPE yresorder AS (
     json text
 );
 --------------------------------------------------------------------------------
+CREATE FUNCTION fcheckorder(_wid int,_t	tstack) RETURNS yresorder AS $$
+DECLARE
+	_ro		    yresorder%rowtype;
+	_op			yorder%rowtype;
+	_mid		int;
+BEGIN
+	_ro.ord 		:= NULL;
+	_ro.ordp		:= NULL;
+	_ro.qtt_requ	:= 0;
+	_ro.qtt_prov	:= 0;
+	_ro.qtt			:= 0;
+	_ro.qtt_reci	:= 0;
+	_ro.qtt_give	:= 0;
+	_ro.err			:= 0;
+	_ro.json		:= NULL;
+	
+
+	IF (_t.oid IS NOT NULL) THEN
+		SELECT (ord).type,(ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
+			INTO _op.type,_op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder WHERE (ord).id= _t.oid;
+
+		IF (NOT FOUND) THEN
+			-- the parent order was not found in the book
+			_ro.json:= '{"error":"the parent order must exist"}';
+			_ro.err := -1; 
+		ELSE 
+			_ro.ordp := _op;
+		END IF;
+		
+		IF (_op.own != _wid) THEN 
+			_ro.json:= '{"error":"the parent must have the same owner"}';
+			_ro.err := -2; END IF;
+		IF (_op.oid != _op.id) THEN 
+			_ro.json:= '{"error":"the parent must not have parent"}';
+			_ro.err := -3; END IF;
+		
+	END IF;
+	IF((_ro.err = 0) AND (_t.duration IS NOT NULL)) THEN
+		IF((_t.created + _t.duration) < clock_timestamp()) THEN
+			_ro.json:= '{"error":"the order is too old"}';
+			_ro.err := -4; 
+		END IF;
+	END IF;
+
+	IF (_ro.err != 0) THEN
+		IF(_t.oid IS NULL) THEN _t.oid := _t.id; END IF;
+		INSERT INTO tmvt (	type,json,			nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
+							qtt,nat,			ack,exhausted,	refused,order_created,created
+						 ) 
+			VALUES       (	_t.type,_ro.json,	1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,
+							_t.qtt,_t.qua_prov,	false,true,		_ro.err,_t.created,statement_timestamp()
+						 )
+			RETURNING id INTO _mid;
+		UPDATE tmvt SET grp = _mid WHERE id = _mid;
+		_ro.ord := _op;
+		RETURN _ro; 
+	END IF;
+		
+	RETURN _ro;
+
+END; 
+$$ LANGUAGE PLPGSQL;
+
+--------------------------------------------------------------------------------
 CREATE FUNCTION fproducemvt() RETURNS yresorder AS $$
 DECLARE
 	_wid		int;
 	_o			yorder;
 	_or			yorder;
-	_op			yorder; --torder%rowtype;
+	_ordp		yorder; --torder%rowtype;
 	_t			tstack%rowtype;
 	_ro		    yresorder%rowtype;
 	_fmvtids	int[];
@@ -607,7 +675,7 @@ DECLARE
 	_resx		yresexec%rowtype;
 	_time_begin	timestamp;
 	_qtt		int8;
-	_mid		int;
+	
 	_cnt		int;
 	_qua_prov	text; --hstore
 	_qtt_prov	int8;
@@ -617,14 +685,7 @@ DECLARE
 BEGIN
 
 	lock table torder in share update exclusive mode;
-	_ro.ord 		:= NULL;
-	_ro.qtt_requ	:= 0;
-	_ro.qtt_prov	:= 0;
-	_ro.qtt			:= 0;
-	_ro.qtt_reci	:= 0;
-	_ro.qtt_give	:= 0;
-	_ro.err			:= 0;
-	_ro.json		:= NULL;
+
 	
 	SELECT id INTO _tid FROM tstack ORDER BY id ASC LIMIT 1;
 	IF(NOT FOUND) THEN
@@ -635,47 +696,25 @@ BEGIN
 	
 	
 	_wid := fgetowner(_t.own);
-
+	
+	_ro := fcheckorder(_wid,_t);
+	
+	IF(_ro.err != 0) THEN RETURN _ro; END IF; 
+	
 	IF (_t.oid IS NULL) THEN
 		_t.oid 	:= _t.id;		
 		_qtt  	:= _t.qtt;
-	ELSE 
-		SELECT (ord).type,(ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
-			INTO _op.type,_op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder WHERE (ord).id= _t.oid;
-
-		
-		IF (NOT FOUND) THEN -- the parent must exist
-			_ro.json:= '{"error":"the parent order must exist"}';
-			_ro.err := -1; END IF;
-		IF (_op.own != _wid) THEN 
-			_ro.json:= '{"error":"the parent must have the same owner"}';
-			_ro.err := -2; END IF;
-		IF (_op.oid != _op.id) THEN 
-			_ro.json:= '{"error":"the parent must not have parent"}';
-			_ro.err := -3; END IF;
-			
-		IF (_ro.err = 0) THEN
-			_qtt	:= _op.qtt;
-			_t.qtt_prov := _op.qtt_prov;
-			_t.qua_prov := _op.qua_prov;
-		ELSE 
-			INSERT INTO tmvt (	type,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
-								qtt,nat,ack,exhausted,refused,order_created,created
-							 ) 
-				VALUES       (	_t.type,1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,
-								_t.qtt,_t.qua_prov,false,true,_ro.err,_t.created,statement_timestamp()
-							 )
-				RETURNING id INTO _mid;
-			UPDATE tmvt SET grp = _mid WHERE id = _mid;
-			_ro.ord := _op;
-			RETURN _ro; -- the referenced order was not found in the book
-		END IF;
+	ELSE
+		_ordp 	:= _ro.ordp;
+		_qtt	:= _ordp.qtt;
+		_t.qtt_prov := _ordp.qtt_prov;
+		_t.qua_prov := _ordp.qua_prov;
 	END IF;
-	
+
 	_o := ROW(_t.type,_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt)::yorder;
 	
 	IF((_t.type & 128) =0) THEN -- the order is a barter
-		INSERT INTO torder(usr,ord,created,updated) VALUES (_t.usr,_o,_t.created,NULL);
+		INSERT INTO torder(usr,ord,created,updated,duration) VALUES (_t.usr,_o,_t.created,NULL,_t.duration);
 	ELSE
 		_ro := fproducequote(_MAXMVTPERTRANS,_t,_o);	
 		RETURN _ro;
@@ -911,6 +950,35 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fackmvt() TO role_co;
+
+
+--------------------------------------------------------------------------------
+CREATE FUNCTION fcleanoutdatedorder() RETURNS int AS $$
+DECLARE
+	_cnt	int := 0;
+	_o  torder%rowtype;
+	_yo		yorder%rowtype;
+	_mid	int;
+	_json	text;
+BEGIN
+	FOR _o IN SELECT * FROM torder WHERE (_o.created + _o.duration) <= clock_timestamp() LOOP
+		_json:= '{"error":"the order is too old"}';
+		_yo := _o.ord;
+		INSERT INTO tmvt (	type,json,			nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
+							qtt,nat,			ack,exhausted,	refused,order_created,created
+						 ) 
+			VALUES       (	_yo.type,_json,	1,  1,NULL,_yo.id,_o.usr,_yo.oid,_yo.own,_yo.own,
+							_yo.qtt,_yo.qua_prov,	false,true,		-4,_o.created,statement_timestamp()
+						 )
+			RETURNING id INTO _mid;
+		UPDATE tmvt SET grp = _mid WHERE id = _mid;
+		DELETE FROM torder o WHERE (o.ord).id = _yo.id; 	
+	END LOOP;
+	RETURN _cnt;
+
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fcleanoutdatedorder() TO role_bo;
 
 \i sql/quote.sql
 \i sql/stat.sql

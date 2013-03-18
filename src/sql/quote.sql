@@ -15,6 +15,7 @@ DECLARE
 BEGIN
 
 	_ro.ord 		:= _o;
+	_ro.ordp		:= NULL;
 	_ro.qtt_prov 	:= 0;
 	_ro.qtt_requ 	:= 0;
 	_ro.qtt			:= 0;
