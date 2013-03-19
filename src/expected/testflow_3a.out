@@ -33,7 +33,7 @@ select * from fsubmitquote(1,'own82','qlt22','qlt23');select * from fproducemvt(
                                         |            |          |          |       |          |          |     | ]}
 (1 row)
 
-select * from fsubmitbarter(1,'own82',NULL,'qlt22',67432,'qlt23',30183,30182);select * from fproducemvt();
+select * from fsubmitbarter(1,'own82',NULL,'qlt22',67432,'qlt23',30183,30182,'1 hour'::interval);select * from fproducemvt();
   id   | diag 
 -------+------
  10002 |    0
@@ -82,7 +82,7 @@ select * from fsubmitquote(1,'own82','qlt22',49252,'qlt10',2177,2176);select * f
                                                   |            |          |          |      |          |          |     | ]}
 (1 row)
 
-select * from fsubmitbarter(1,'own82',NULL,'qlt22',49252,'qlt10',2177,2176);select * from fproducemvt(); 
+select * from fsubmitbarter(1,'own82',NULL,'qlt22',49252,'qlt10',2177,2176,'1 hour'::interval);select * from fproducemvt(); 
   id   | diag 
 -------+------
  10005 |    0
@@ -125,7 +125,7 @@ select * from fsubmitquote(1,'own82','qlt2',60000,'qlt23',45276,45276);select * 
                                                    |            |          |          |       |          |          |     | ]}
 (1 row)
 
-select * from fsubmitbarter(1,'own82',NULL,'qlt2',60000,'qlt23',45276,45276);select * from fproducemvt();
+select * from fsubmitbarter(1,'own82',NULL,'qlt2',60000,'qlt23',45276,45276,'1 hour'::interval);select * from fproducemvt();
   id   | diag 
 -------+------
  10007 |    0
@@ -210,7 +210,7 @@ select * from fsubmitquote(1,'own1','qlt1',30822,'qlt2',9667,7563);select * from
                                                 |            |          |          |      |          |          |     | ]}
 (1 row)
 
-select * from fsubmitbarter(1,'own1',NULL,'qlt1',30822,'qlt2',9667,7563);select * from fproducemvt();
+select * from fsubmitbarter(1,'own1',NULL,'qlt1',30822,'qlt2',9667,7563,'1 hour'::interval);select * from fproducemvt();
   id   | diag 
 -------+------
  10011 |    0

@@ -84,7 +84,7 @@ select * from fsubmitquote(2,'own82','qlt22',67432,'qlt23',30183,91809);select *
                                                     |            |          |          |       |          |          |     | ]}
 (1 row)
 
-select * from fsubmitbarter(2,'own82',NULL,'qlt22',67432,'qlt23',30183,91809);select * from fproducemvt();
+select * from fsubmitbarter(2,'own82',NULL,'qlt22',67432,'qlt23',30183,91809,'1 hour'::interval);select * from fproducemvt();
   id   | diag 
 -------+------
  10004 |    0

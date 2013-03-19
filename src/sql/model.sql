@@ -441,7 +441,7 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8,int8) TO role_co;
 --------------------------------------------------------------------------------
--- order submission  
+-- barter submission  
 /*
 returns (id,0) or (0,diag) with diag:
 	-1 _qua_prov = _qua_requ
@@ -449,7 +449,7 @@ returns (id,0) or (0,diag) with diag:
 */
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	fsubmitbarter(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
+	fsubmitbarter(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8,_interval interval)
 	RETURNS yressubmit AS $$
 DECLARE
 	_r			yressubmit%rowtype;	
@@ -469,23 +469,25 @@ BEGIN
 			RETURN _r;
 		END IF;
 	END IF;
-	_r := fsubmitorder(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,'24 hour'::interval);
+	_r := fsubmitorder(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,_interval);
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitbarter(dtypeorder,text,int,text,int8,text,int8,int8) TO role_co;
+GRANT EXECUTE ON FUNCTION  fsubmitbarter(dtypeorder,text,int,text,int8,text,int8,int8,interval) TO role_co;
+--------------------------------------------------------------------------------
+-- same as previous without _qtt
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	fsubmitbarter(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
+	fsubmitbarter(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_interval interval)
 	RETURNS yressubmit AS $$
 DECLARE
 	_r			yressubmit%rowtype;	
 BEGIN
-	_r := fsubmitbarter(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt_prov);
+	_r := fsubmitbarter(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt_prov,_interval);
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitbarter(dtypeorder,text,int,text,int8,text,int8) TO role_co;
+GRANT EXECUTE ON FUNCTION  fsubmitbarter(dtypeorder,text,int,text,int8,text,int8,interval) TO role_co;
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION 
 	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8,_duration interval)
