@@ -193,7 +193,7 @@ $$ LANGUAGE PLPGSQL;
 CREATE FUNCTION _grant_read(_table text) RETURNS void AS $$
 
 BEGIN 
-	EXECUTE 'GRANT SELECT ON TABLE ' || _table || ' TO role_co,role_bo';
+	EXECUTE 'GRANT SELECT ON ' || _table || ' TO role_co,role_bo';
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -257,6 +257,7 @@ select (o.ord).id as id,w.name as own,(o.ord).oid as oid,
 		(o.ord).qtt_prov as qtt_prov,(o.ord).qua_prov as qua_prov,
 		(o.ord).qtt as qtt, o.created as created, o.updated as updated
 from torder o left join towner w on ((o.ord).own=w.id) where o.usr=current_user;
+SELECT _grant_read('vorder');
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -326,6 +327,9 @@ comment on column tmvt.own_src is 'owner provider';
 comment on column tmvt.own_dst is 'owner receiver';
 comment on column tmvt.qtt is 'quantity of the value moved';
 comment on column tmvt.nat is 'quality of the value moved';
+
+CREATE VIEW vmvt AS select id,nbc,grp,own_src,own_dst,qtt,nat from tmvt;
+SELECT _grant_read('vmvt');
 
 alter sequence tmvt_id_seq owned by tmvt.id;
 create index tmvt_grp_idx on tmvt(grp);
