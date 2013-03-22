@@ -394,7 +394,7 @@ CREATE FUNCTION
 DECLARE
 	_r			yressubmit%rowtype;	
 BEGIN
-
+	_r.diag := 0;
 	IF(_qua_prov = _qua_requ) THEN
 		_r.diag := -1;
 		RETURN _r;
@@ -416,7 +416,7 @@ BEGIN
 			RETURN _r;
 		END IF;
 	END IF;
-	_r := fsubmitorder(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,_interval);
+	_r.id := fsubmitorder(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,_interval);
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
@@ -438,20 +438,14 @@ GRANT EXECUTE ON FUNCTION  fsubmitbarter(dtypeorder,text,int,text,int8,text,int8
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION 
 	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8,_duration interval)
-	RETURNS yressubmit AS $$	
+	RETURNS int AS $$	
 DECLARE
-	_t			 tstack%rowtype;
-	_r			 yressubmit%rowtype;
-	_o			 int;
 	_tid		 int;
 BEGIN
-	_r.id := 0;
-	_r.diag := 0;
-	
+
 	INSERT INTO tstack(usr,own,oid,type,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,duration,created)
-	VALUES (current_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,_duration,statement_timestamp()) RETURNING * into _t;
-	_r.id := _t.id;
-	RETURN _r;
+	VALUES (current_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,_duration,statement_timestamp()) RETURNING id into _tid;
+	RETURN _tid;
 END; 
 $$ LANGUAGE PLPGSQL;
 

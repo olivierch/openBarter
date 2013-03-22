@@ -47,7 +47,7 @@ BEGIN
 		RETURN _r;
 	END IF;	
 	-- NOQTTLIMIT 4 IGNOREOMEGA 8 QUOTE 128
-	_r := fsubmitorder((_type & 3) | 4 | 8 | 128,_own,NULL,_qua_requ,1,_qua_prov,1,1,NULL);
+	_r.id := fsubmitorder((_type & 3) | 4 | 8 | 128,_own,NULL,_qua_requ,1,_qua_prov,1,1,NULL);
 	
 	RETURN _r;
 END; 
@@ -68,7 +68,7 @@ BEGIN
 		RETURN _r;
 	END IF;
 	--  NOQTTLIMIT 4 QUOTE 128
-	_r := fsubmitorder((_type & 3) | 4 | 128,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,0,NULL);
+	_r.id := fsubmitorder((_type & 3) | 4 | 128,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,0,NULL);
 	
 	RETURN _r;
 END; 
@@ -89,7 +89,7 @@ BEGIN
 		RETURN _r;
 	END IF;
 	-- QUOTE 128	
-	_r := fsubmitorder((_type & 3) | 128,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,NULL);
+	_r.id := fsubmitorder((_type & 3) | 128,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,NULL);
 	
 	RETURN _r;
 END; 
@@ -123,8 +123,7 @@ BEGIN
 	_ro.err			:= 0;
 	_ro.json		:= '';
 	
-	-- _time_begin := clock_timestamp();
-	_o.type := _t.type;
+	-- _o.type == _t.type
 	_cnt := fcreate_tmp(_o);
 	_nbmvts := 0;
 	
@@ -193,7 +192,7 @@ BEGIN
 	INSERT INTO tmvt (	type,json,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
 						qtt,nat,ack,exhausted,refused,order_created,created
 					 ) 
-		VALUES       (	_t.type,_ro.json,1,  1,NULL,_o.id,_t.usr,_o.oid,_t.own,_t.own,
+		VALUES       (	_o.type,_ro.json,1,  1,NULL,_o.id,_t.usr,_o.oid,_t.own,_t.own,
 						_ro.qtt,_t.qua_prov,false,false,_ro.err,_t.created,statement_timestamp()
 					 )
 		RETURNING id INTO _mid;
