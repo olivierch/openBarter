@@ -18,12 +18,27 @@ static void _calOwns(TresChemin *chem);
 static void _calGains(TresChemin *chem,double Omega);
 static short _flowMaximum(Tflow *flow,double *piom,double *fluxExact);
 static Tstatusflow _rounding(short iExhausted, TresChemin *chem);
-static TresChemin *_flow_maximum_barter(Tflow *flow);
-static void _flow_maximum_quote(Tflow *flow); // ,Tflow *resflow);
-static int64 _floorInt64(double d);
+static void _flow_maximum_barter(TresChemin *chem);
+static void _flow_maximum_quote(TresChemin *chem);
 
 /******************************************************************************
- * gives the maximum flow of wolf
+ * int64 r = floor(d) and error if rounding < 0
+ *****************************************************************************/
+#define _FLOOR_INT64(d,r) \
+do { \
+	double __d = floor(d); \
+	r = (int64) __d; \
+	\
+	if(r < 0) r = 0; \
+	if(((double)(r)) != __d) { \
+		ereport(ERROR, \
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED), \
+			 errmsg("in _FLOOR_INT64, %f cannot be rounded",(d))));\
+	} \
+} while(0)
+
+/******************************************************************************
+ * gives the maximum flow of flow
  * return chem->flowNodes[.] and chem->status
  * flowNodes is copied to wolf->x[.].flowr
  *****************************************************************************/
@@ -31,11 +46,12 @@ TresChemin *flowc_maximum(Tflow *flow) {
 	short _dim = flow->dim;
 	short _i;
 	
+	TresChemin *chem = (TresChemin *) palloc(sizeof(TresChemin));
+	chem->status = empty;
+	chem->type = CYCLE_BEST;
+	chem->flow = flow;	
+	
 	if(_dim == 0) {
-		TresChemin *chem = (TresChemin *) palloc(sizeof(TresChemin));
-		chem->status = empty;
-		chem->type = CYCLE_BEST;
-		chem->flow = flow;
 		return chem;
 	}
 
@@ -68,46 +84,33 @@ TresChemin *flowc_maximum(Tflow *flow) {
 	#endif
 			 
 	if(_dim == 1) {
-		TresChemin *chem = (TresChemin *) palloc(sizeof(TresChemin));
 		chem->status = noloop;
-		chem->type = CYCLE_BEST;
-		chem->flow = flow;
 		return chem;
 	}
+	
+	chem->type = _calType(flow); // CYCLE_LIMIT or CYCLE_BEST 		
+	_calOwns(chem);
+	
+	if(FLOW_IS_QUOTE(flow) && FLOW_IS_NOQTTLIMIT(flow))
+			/* qtt is set
+			qtt_prov,qtt_requ are set when FLOW_IS_IGNOREOMEGA
+			*/
+			_flow_maximum_quote(chem);
 
-	if(FLOW_IS_QUOTE(flow)) {
-		TresChemin *chem;
-	
-		if(FLOW_IS_NOQTTLIMIT(flow) || FLOW_IS_IGNOREOMEGA(flow))
-			_flow_maximum_quote(flow);
-		//elog(WARNING,"qtt_requ %li qtt_prov %li qtt %li",flow->x[ flow->dim-1 ].qtt_requ,flow->x[ flow->dim-1 ].qtt_prov,flow->x[ flow->dim-1 ].qtt);
-		chem = _flow_maximum_barter(flow);
-		return chem;
-		
-	} else {
-	
-		return _flow_maximum_barter(flow);
-		
-	}
+	_flow_maximum_barter(chem);
+	return chem;
 }
 /******************************************************************************
  * gives the maximum flow of wolf
  * return chem->flowNodes[.] and chem->status
  * flowNodes is copied to wolf->x[.].flowr
  *****************************************************************************/
-static TresChemin *_flow_maximum_barter(Tflow *flow) {
+static void _flow_maximum_barter(TresChemin *chem) {
+	Tflow *flow = chem->flow;
 	short _dim = flow->dim;
 	short _iExhausted;
 	double _Omega;
-	TresChemin *chem;
-
-	chem = (TresChemin *) palloc(sizeof(TresChemin));
-
-	chem->type = CYCLE_BEST;
-	chem->flow = flow;
-				
-	chem->type = _calType(flow); // CYCLE_LIMIT or CYCLE_BEST 
-	
+					
 	_Omega  = _calOmega(chem,false); // _lnIgnoreOmega == false
 	
 	if( (chem->type == CYCLE_LIMIT) && (_Omega < 1.0 )) {
@@ -117,8 +120,7 @@ static TresChemin *_flow_maximum_barter(Tflow *flow) {
 		#endif
 		goto _dropflow;
 	}
-		
-	_calOwns(chem);
+
 
 	// omegas are bartered so that the product(omegaCorrige[i]) for i in [0,_dim-1]) == 1 
 	_calGains(chem,_Omega); // computes omegaCorrige[i]
@@ -132,8 +134,9 @@ static TresChemin *_flow_maximum_barter(Tflow *flow) {
 	to the nearest vector of positive integers */
 	chem->status = _rounding(_iExhausted, chem);
 	if(chem->status == draft) {
-		goto _end;
+		return;
 	}
+	
 _dropflow:
 	{
 		short _k;
@@ -142,88 +145,56 @@ _dropflow:
 		obMRange (_k,_dim)
 			flow->x[_k].flowr = QTTFLOW_UNDEFINED;
 	}
-		
-_end:
-	// elog(WARNING,"chem: %s",wolfc_cheminToStr(chem));
-	return chem;
+	return;
 }
+
 /******************************************************************************
- * ignOmega noLimQtt
- * 	true		true	quote1(qlt_requ,qlt_prov)
- *  false		true	quote2(qlt_requ,qtt_requ,qlt_prov,qtt_prov) 
+ * ignoreOmega
+ * 	true		quote1(qlt_requ,qlt_prov)
+ *  false		quote2(qlt_requ,qtt_requ,qlt_prov,qtt_prov) 
  *****************************************************************************/
-static void _flow_maximum_quote(Tflow *flow) { //,Tflow *resFlow) {
+static void _flow_maximum_quote(TresChemin *chem) { 
+	Tflow *flow = chem->flow;
 	short _dim = flow->dim;
-	short _i,_ldim; 
+	short _i;  
 	double _Omega;
-	TresChemin *chem;
-	bool _lnNoQttLimit = FLOW_IS_NOQTTLIMIT(flow);
 	bool _lnIgnoreOmega = FLOW_IS_IGNOREOMEGA(flow); 
 	int64	_qtt_prov,_qtt_requ;
-	
-	if(_lnIgnoreOmega) {
-		_lnNoQttLimit = true;
-		//FLOW_TYPE(resFlow) = FLOW_TYPE(resFlow) | ORDER_NOQTTLIMIT;
-	}
-
-	_ldim = _lnNoQttLimit ? ( _dim-1 ):_dim;
-	
-	obMRange(_i,_ldim) 
+ 
+	obMRange(_i,_dim - 1) 
 		if(flow->x[_i].qtt == 0) {
 			// resflow unchanged
 			return;
 		}
-		
-	chem = (TresChemin *) palloc(sizeof(TresChemin));
-	chem->flow = flow;	
+	flow->x[_dim-1].qtt = QTTFLOW_UNDEFINED;
 	
-	_Omega  = _calOmega(chem,_lnIgnoreOmega); // 1.0 when _lnIgnoreOmega
-	_calOwns(chem);
+	_Omega = _calOmega(chem,_lnIgnoreOmega); 
+	// _Omega ==1.0 when _lnIgnoreOmega
 	_calGains(chem,_Omega); 
 
-	if(_lnNoQttLimit)
-		flow->x[_dim-1].qtt = QTTFLOW_UNDEFINED;
-	
 	(void) _flowMaximum(flow,chem->piom,chem->fluxExact);
 	
-	_qtt_requ = _floorInt64(chem->fluxExact[ _dim-2 ]);
-	_qtt_prov = _floorInt64(chem->fluxExact[ _dim-1 ]);
-	/* the ratio _qtt_prov/_qtt_requ is increased by rounding 
-	in order to be shure that prodOmega remains >=1  */
+	_FLOOR_INT64(chem->fluxExact[ _dim-2 ],_qtt_requ);
+	_FLOOR_INT64(chem->fluxExact[ _dim-1 ],_qtt_prov);
 	
 	if(_lnIgnoreOmega) {
-	
+		/* the ratio _qtt_prov/_qtt_requ is increased 
+		in order to be shure that prodOmega remains >=1 
+		even with previous rounding */
 		flow->x[ _dim-1 ].qtt_requ = _qtt_requ;
 		flow->x[ _dim-1 ].qtt_prov = _qtt_prov+1;
-		flow->x[ _dim-1 ].qtt = _qtt_prov;
 		
 		/* The flag ORDER_IGNOREOMEGA cannot be reset here since several instances 
 		of this node are store in _temp. The flag is reset in yflow_reduce() 
 		called by the Sql UPDATE instruction 
 		*/
 		
-	} else if(_lnNoQttLimit) 
-		flow->x[ _dim-1 ].qtt = _qtt_prov;
-	
-	pfree(chem);
+	}  
+	flow->x[ _dim-1 ].qtt = _qtt_prov;
 	
 	return;
 }
-/******************************************************************************
- * 
- *****************************************************************************/
-static int64 _floorInt64(double d) {
-	double _d = floor(d);
-	int64  _r = (int64) _d;
-	
-	if(_r < 0) _r = 0;
-	if(((double)(_r)) != _d) {
-		ereport(ERROR,
-			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-			 errmsg("in _floorInt64, d = %f cannot be rounded",d)));
-	}
-	return _r;	
-}
+
 /******************************************************************************
  * A chemin is CYCLE_BEST if all orders are ORDER_BEST
  *****************************************************************************/
@@ -277,7 +248,9 @@ static double _calOmega(TresChemin *chem, bool lnIgnoreOmega) {
 }
 
 /******************************************************************************
- * 
+ * sets nbOwn,	the number of partners
+ 	occOwn[.],	the number of orders of the partner
+ 	ownIndex[.], the index of the partner
  *****************************************************************************/
 static void _calOwns(TresChemin *chem) {
 	
@@ -462,30 +435,6 @@ static short _flowMaximum(Tflow *flow,double *piom,double *fluxExact) {
 	return _iExhausted;
 }
 
-/******************************************************************************
-reduce the number of iteration of _rounding
-the matrix of bits is at most _NMATBITS long 
-******************************************************************************/
-#define _NMATBITS (8)
-#define _get_MIN(a,b) ((a<b)?a:b)
-#define _bitSetInMatrix(mat,i) (mat &( 1 << (i & (_NMATBITS -1))))
-/*******************************************************************************
-floor,flow and mat are vectors of dimension _dim
-floor and flow contains integers, and mat bits.
-	in: dim,mat,floor
-	out:flow
-for each i, if the bit i of mat is 0, flow[i] := floor[i]
-			else flow[i] := floor[i]+1
-*******************************************************************************/ 
-#define _obtain_vertex(dim,mat,floor,flow) \
-do { \
-	short __j; \
-	for(__j=0;__j<dim;__j++) { \
-		flow[__j] = floor[__j]; \
-		if (_bitSetInMatrix(mat,__j)) \
-			flow[__j] += 1; \
-	} \
-} while(0)
 /*******************************************************************************
  Computes a distance between two vectors vecExact and vecArrondi. 
  It is the angle alpha made by these vectors.
@@ -514,6 +463,30 @@ static double _idistance(short lon,
 	}
 	return (_s / sqrt(_na));
 }
+
+/******************************************************************************
+reduce the number of iteration of _rounding
+the matrix of bits is at most _NMATBITS long 
+******************************************************************************/
+#define _NMATBITS (1<<3)
+#define _bitSetInMatrix(mat,i) (mat &( 1 << (i & (_NMATBITS -1))))
+/*******************************************************************************
+floor,flow and mat are vectors of dimension _dim
+floor and flow contains integers, and mat bits.
+	in: dim,mat,floor
+	out:flow
+for each i, if the bit i of mat is 0, flow[i] := floor[i]
+			else flow[i] := floor[i]+1
+*******************************************************************************/ 
+#define _obtain_vertex(dim,mat,floor,flow) \
+do { \
+	short __j; \
+	for(__j=0;__j<dim;__j++) { \
+		flow[__j] = floor[__j]; \
+		if (_bitSetInMatrix(mat,__j)) \
+			flow[__j] += 1; \
+	} \
+} while(0)
 /*******************************************************************************
  flow rounding
 
@@ -547,17 +520,9 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 	// computes floor[] from fluxExact[]
 	/***********************************************************************/
 	obMRange(_i,_dim) {
-	
-		double _d = floor(fluxExact[_i]);
-		int64 _f = (int64) _d;
+		int64 _f;
 		
-		// sanity check on rounding
-		if(_f < 0) _f = 0; 
-		if(((double)(_f)) != _d) {
-			ereport(ERROR,
-				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-				 errmsg("in _rounding, fluxExact[%i] = %f cannot be rounded",_i,fluxExact[_i])));
-		}
+		_FLOOR_INT64(fluxExact[_i],_f);
 		
 		if(_i == iExhausted) {
 			_floor[_i] = flow->x[_i].qtt; // will not change
@@ -571,8 +536,8 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 		}
 	}
 
-	//_matmax = 1 << _dim; // one bit for each node 
-	_matmax = 1 << _get_MIN(_dim,_NMATBITS);
+	//_matmax = 1 << min(_dim,NMATBITS); // one bit for each node 
+	_matmax = 1 <<  ((_dim < _NMATBITS) ? _dim : _NMATBITS);
 	
 	// sanity check
 	if(_matmax < 1) {
@@ -586,9 +551,10 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 	_found = false;
 	_ret = undefined;
 	
-	// at most _NMATBIT^2 iterations
+	// at most _NMATBITS^2 iterations
 	for (_matcour = 0; _matcour < _matmax; _matcour++) {
-	
+		
+		// a vertex where the value at index iExhausted changes is rejected
 		if(_bitSetInMatrix(_matcour,iExhausted)) 
 			goto _continue;
 		 
@@ -628,6 +594,7 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 				if (ORDER_TYPE(flow->x[_k].type) == ORDER_LIMIT) {
 					double _omprime  = ((double) _flowNodes[_k]) / ((double) _flowNodes[_kp]);
 					
+					// a vertex where the limit of some order is not observed is rejected
 					if( !( _omprime <= omega[_k] ) ) {
 						#ifdef WHY_REJECTED
 							elog(WARNING,"_rounding[%X] 4: NOT _omprime <= omega[%i] %.10e<=%.10e %s with ORDER_LIMIT",
@@ -641,10 +608,8 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 			}
 		}
 		
-
 		// choose the best
 		/***************************************************************/
-
 		_distcour = _idistance(_dim, fluxExact, _flowNodes);
 		// elog(WARNING,"flowc_maximum: matcour=%x _newdist=%f fluxExact=%s flowNodes=%s",_matcour,_distcour,_vecDoubleStr(_dim,fluxExact),_vecIntStr(_dim,_flowNodes));
 

@@ -381,70 +381,6 @@ CREATE TYPE yressubmit AS (
 );
 
 --------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION 
-	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qua_prov text)
-	RETURNS yressubmit AS $$	
-DECLARE
-	_r			 yressubmit%rowtype;
-BEGIN
-	IF(NOT (0 < _type AND _type <4)) THEN
-		_r.diag := -3;
-		RETURN _r;
-	END IF;	
-	-- NOQTTLIMIT IGNOREOMEGA QUOTE 4+8+128
-	_r := fsubmitorder((_type & 3) | 140,_own,NULL,_qua_requ,1,_qua_prov,1,1,NULL);
-	
-	RETURN _r;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,text) TO role_co;
---------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION 
-	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
-	RETURNS yressubmit AS $$	
-DECLARE
-	_r			 yressubmit%rowtype;
-	_t			dtypeorder;
-BEGIN
-	IF(NOT (0 < _type AND _type <4)) THEN
-		_r.diag := -3;
-		RETURN _r;
-	END IF;	
-	IF((_qtt_requ <=0) OR (_qtt_prov <= 0)) THEN
-		_r.diag := -2;
-		RETURN _r;
-	END IF;
-	_t := (_type & 3) | 128 | 4; -- QUOTE 128	NOQTTLIMIT 4
-	_r := fsubmitorder(_t,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,0,NULL);
-	
-	RETURN _r;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8) TO role_co;
---------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION 
-	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
-	RETURNS yressubmit AS $$	
-DECLARE
-	_r			 yressubmit%rowtype;
-	_t			dtypeorder;
-BEGIN
-	IF(NOT (0 < _type AND _type <4)) THEN
-		_r.diag := -3;
-		RETURN _r;
-	END IF;	
-	IF((_qtt_requ <=0) OR (_qtt_prov <= 0) OR (_qtt <= 0)) THEN
-		_r.diag := -2;
-		RETURN _r;
-	END IF;
-	_t := (_type & 3) | 128; -- QUOTE 128	
-	_r := fsubmitorder(_t,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,NULL);
-	
-	RETURN _r;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8,int8) TO role_co;
---------------------------------------------------------------------------------
 -- barter submission  
 /*
 returns (id,0) or (0,diag) with diag:
@@ -458,10 +394,17 @@ CREATE FUNCTION
 DECLARE
 	_r			yressubmit%rowtype;	
 BEGIN
+
+	IF(_qua_prov = _qua_requ) THEN
+		_r.diag := -1;
+		RETURN _r;
+	END IF;
+	
 	IF(NOT (0 < _type AND _type <4)) THEN
 		_r.diag := -3;
 		RETURN _r;
 	END IF;
+	
 	IF( _oid IS NULL) THEN
 		IF((_qtt_requ <=0) OR (_qtt_prov <= 0) OR (_qua_prov IS NULL) OR (_qtt IS NULL)) THEN
 			_r.diag := -2;
@@ -504,10 +447,6 @@ DECLARE
 BEGIN
 	_r.id := 0;
 	_r.diag := 0;
-	IF(_qua_prov = _qua_requ) THEN
-		_r.diag := -1;
-		RETURN _r;
-	END IF;
 	
 	INSERT INTO tstack(usr,own,oid,type,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,duration,created)
 	VALUES (current_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,_duration,statement_timestamp()) RETURNING * into _t;
