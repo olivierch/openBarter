@@ -530,11 +530,12 @@ CREATE TYPE yresorder AS (
     json text
 );
 --------------------------------------------------------------------------------
-CREATE FUNCTION fcheckorder(_wid int,_t	tstack) RETURNS yresorder AS $$
+CREATE FUNCTION fcheckorder(_t	tstack) RETURNS yresorder AS $$
 DECLARE
 	_ro		    yresorder%rowtype;
 	_op			yorder;
 	_mid		int;
+	_wid		int;
 BEGIN
 	_ro.ord 		:= NULL;
 	_ro.ordp		:= NULL;
@@ -545,6 +546,9 @@ BEGIN
 	_ro.qtt_give	:= 0;
 	_ro.err			:= 0;
 	_ro.json		:= NULL;
+	
+	
+	_wid := fgetowner(_t.own);
 	
 
 	IF (_t.oid IS NOT NULL) THEN
@@ -606,10 +610,7 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 CREATE FUNCTION fproducemvt() RETURNS yresorder AS $$
 DECLARE
-	_wid		int;
-	_o			yorder;
-	_or			yorder;
-	_ordp		yorder; --torder%rowtype;
+
 	_t			tstack%rowtype;
 	_ro		    yresorder%rowtype;
 	_fmvtids	int[];
@@ -627,7 +628,7 @@ DECLARE
 	_cnt		int;
 	_qua_prov	text;
 	_qtt_prov	int8;
-	_oid		int;
+
 	_MAXMVTPERTRANS 	int := fgetconst('MAXMVTPERTRANS');
 	_nbmvts		int;
 BEGIN
@@ -642,26 +643,21 @@ BEGIN
 
 	DELETE FROM tstack WHERE id=_tid RETURNING * INTO STRICT _t;
 	
-	
-	_wid := fgetowner(_t.own);
-	
-	_ro := fcheckorder(_wid,_t);
-	
-	IF(_ro.err != 0) THEN RETURN _ro; END IF; 
-
-
-	IF((_t.type & 128) = 128) THEN
-		_ro := fproducequote(_MAXMVTPERTRANS,_t,_ro.ord);	
+	IF((_t.type & 128) = 128) THEN -- quote
+		_ro := fproducequote(_MAXMVTPERTRANS,_t);	
 		RETURN _ro;
-	ELSIF((_t.type & 64) = 64) THEN
-		_ro := fproduceprequote(_MAXMVTPERTRANS,_t,_ro.ord);	
+	ELSIF((_t.type & 64) = 64) THEN -- prequote
+		_ro := fproduceprequote(_MAXMVTPERTRANS,_t);	
 		RETURN _ro;
 	END IF;
+	
 	 -- the order is a barter
-	_o := _ro.ord;
-	INSERT INTO torder(usr,ord,created,updated,duration) VALUES (_t.usr,_o,_t.created,NULL,_t.duration);
+	_ro := fcheckorder(_t);
+	
+	IF(_ro.err != 0) THEN RETURN _ro; END IF;
+	
+	INSERT INTO torder(usr,ord,created,updated,duration) VALUES (_t.usr,_ro.ord,_t.created,NULL,_t.duration);
 
-	 
 	_fmvtids := ARRAY[]::int[];
 	
 	_time_begin := clock_timestamp();
@@ -680,7 +676,7 @@ BEGIN
 			EXIT; 
 		END IF;	
 
-		_resx := fexecute_flow(_cyclemax,_oid);
+		_resx := fexecute_flow(_cyclemax);
 	
 		_fmvtids := _fmvtids || _resx.mvts;
 		
@@ -692,15 +688,15 @@ BEGIN
 		DELETE FROM _tmp WHERE NOT yflow_is_draft(cycle);
 	END LOOP;
 	
-	IF (	(_ro.qtt_requ != 0) AND ((_o.type & 3) = 1) -- ORDER_LIMIT
+	IF (	(_ro.qtt_requ != 0) AND ((_t.type & 3) = 1) -- ORDER_LIMIT
 	AND	((_ro.qtt_give::double precision)	/(_ro.qtt_reci::double precision)) > 
-		((_o.qtt_prov::double precision)	/(_o.qtt_requ::double precision))
+		((_t.qtt_prov::double precision)	/(_t.qtt_requ::double precision))
 	) THEN
 		RAISE EXCEPTION 'pb: Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
-	_ro.qtt_prov := _o.qtt_prov;
-	_ro.qtt_requ := _o.qtt_requ;
-	_ro.qtt := _o.qtt;
+	_ro.qtt_prov := (_ro.ord).qtt_prov;
+	_ro.qtt_requ := (_ro.ord).qtt_requ;
+	_ro.qtt := (_ro.ord).qtt;
 	-- set the number of movements in this transaction
 	UPDATE tmvt SET nbt= array_length(_fmvtids,1) WHERE id = ANY (_fmvtids);
 	
@@ -743,7 +739,7 @@ from a flow representing a draft, for each order:
 */
 --------------------------------------------------------------------------------
 
-CREATE FUNCTION fexecute_flow(_flw yflow,_oid int) RETURNS  yresexec AS $$
+CREATE FUNCTION fexecute_flow(_flw yflow) RETURNS  yresexec AS $$
 DECLARE
 	_i			int;
 	_next_i		int;
