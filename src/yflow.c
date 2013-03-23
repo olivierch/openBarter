@@ -608,6 +608,7 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 {
 	Tflow	*f0 = PG_GETARG_TFLOW(0);
 	Tflow	*f1 = PG_GETARG_TFLOW(1);
+	bool	resetIgnoreOmega = PG_GETARG_BOOL(2);
 	Tflow	*r;
 	short 	i,j;
 	TresChemin *c;
@@ -624,17 +625,19 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 		obMRange(j,r->dim) { 
 			Tfl *or  = &r->x[j];
 			
-			if( (!ORDER_IS_NOQTTLIMIT(or->type)) && (or->oid == f1->x[i].oid)) {
-				// elog(WARNING,"ici %i QUOTE:%c NOQTTLIMIT:%c",or->type,BIT_IS_SET(or->type,ORDER_QUOTE)?'T':'F',BIT_IS_SET(or->type,ORDER_NOQTTLIMIT)?'T':'F');
-				if(or->qtt >= f1->x[i].flowr) {
-					or->qtt -= f1->x[i].flowr;
-					// elog(WARNING,"order %i stock %i reduced by %li to %li",r->x[j].id,r->x[j].oid,f1->x[i].flowr,r->x[j].qtt);
-				} else {
-			    		ereport(ERROR,
-						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-						errmsg("yflow_reducequote: the flow is greater than available")));
-				}
-			} 
+			if(or->oid != f1->x[i].oid) 
+				continue;
+			if(ORDER_IS_NOQTTLIMIT(or->type))
+				continue;
+
+			if(or->qtt >= f1->x[i].flowr) {
+				or->qtt -= f1->x[i].flowr;
+			} else {
+		    		ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					errmsg("yflow_reducequote: the flow is greater than available")));
+			}
+
 		}		
 	}
 
@@ -646,8 +649,8 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 			// omega is set
 			lastr->qtt_prov = lastf1->qtt_prov;
 			lastr->qtt_requ = lastf1->qtt_requ;
-						
-			lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);
+			if(resetIgnoreOmega)			
+				lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);
 			// IGNOREOMEGA is reset
 		}
 	} 

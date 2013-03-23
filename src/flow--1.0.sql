@@ -95,7 +95,7 @@ stype = yflow,
 initcond = '[]'
 );
 
-CREATE FUNCTION yflow_reduce(yflow,yflow)
+CREATE FUNCTION yflow_reduce(yflow,yflow,boolean)
 RETURNS yflow
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;

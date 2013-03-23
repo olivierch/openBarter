@@ -256,7 +256,7 @@ select (o.ord).id as id,w.name as own,(o.ord).oid as oid,
 		(o.ord).qtt_requ as qtt_requ,(o.ord).qua_requ as qua_requ,
 		(o.ord).qtt_prov as qtt_prov,(o.ord).qua_prov as qua_prov,
 		(o.ord).qtt as qtt, o.created as created, o.updated as updated
-from torder o left join towner w on ((o.ord).own=w.id) where o.usr=current_user;
+from torder o left join towner w on ((o.ord).own=w.id) where o.usr=session_user;
 SELECT _grant_read('vorder');
 --------------------------------------------------------------------------------
 
@@ -444,7 +444,7 @@ DECLARE
 BEGIN
 
 	INSERT INTO tstack(usr,own,oid,type,qua_requ,qtt_requ,qua_prov,qtt_prov,qtt,duration,created)
-	VALUES (current_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,_duration,statement_timestamp()) RETURNING id into _tid;
+	VALUES (session_user,_own,_oid,_type,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,_duration,statement_timestamp()) RETURNING id into _tid;
 	RETURN _tid;
 END; 
 $$ LANGUAGE PLPGSQL;
@@ -652,12 +652,15 @@ BEGIN
 
 	_o := ROW(_t.type,_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt)::yorder;
 	
-	IF((_t.type & 128) =0) THEN -- the order is a barter
-		INSERT INTO torder(usr,ord,created,updated,duration) VALUES (_t.usr,_o,_t.created,NULL,_t.duration);
-	ELSE
+	IF((_t.type & 128) =128) THEN
 		_ro := fproducequote(_MAXMVTPERTRANS,_t,_o);	
 		RETURN _ro;
+	ELSIF((_t.type & 64) =64) THEN
+		_ro := fproduceprequote(_MAXMVTPERTRANS,_t,_o);	
+		RETURN _ro;
 	END IF;
+	 -- the order is a barter
+	INSERT INTO torder(usr,ord,created,updated,duration) VALUES (_t.usr,_o,_t.created,NULL,_t.duration);
 	
 	_ro.ord      	:= _o;
 	 
@@ -687,7 +690,7 @@ BEGIN
 		_ro.qtt_reci := _ro.qtt_reci + _res[1];
 		_ro.qtt_give := _ro.qtt_give + _res[2];
 	
-		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax); -- reset IGNOREOMEGA
+		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax,false);
 		DELETE FROM _tmp WHERE NOT yflow_is_draft(cycle);
 	END LOOP;
 	
@@ -875,7 +878,7 @@ DECLARE
 	_cnt	int;
 	_m  tmvt%rowtype;
 BEGIN
-	SELECT * INTO _m FROM tmvt WHERE usr=current_user AND ack=false ORDER BY id ASC LIMIT 1;
+	SELECT * INTO _m FROM tmvt WHERE usr=session_user AND ack=false ORDER BY id ASC LIMIT 1;
 	IF(NOT FOUND) THEN
 		RETURN 0;
 	END IF;
