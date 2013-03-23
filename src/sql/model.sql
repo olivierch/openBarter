@@ -690,7 +690,7 @@ BEGIN
 	
 	IF (	(_ro.qtt_requ != 0) AND ((_t.type & 3) = 1) -- ORDER_LIMIT
 	AND	((_ro.qtt_give::double precision)	/(_ro.qtt_reci::double precision)) > 
-		((_t.qtt_prov::double precision)	/(_t.qtt_requ::double precision))
+		(((_ro.ord).qtt_prov::double precision)	/((_ro.ord).qtt_requ::double precision))
 	) THEN
 		RAISE EXCEPTION 'pb: Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
