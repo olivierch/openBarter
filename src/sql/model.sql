@@ -533,7 +533,7 @@ CREATE TYPE yresorder AS (
 CREATE FUNCTION fcheckorder(_wid int,_t	tstack) RETURNS yresorder AS $$
 DECLARE
 	_ro		    yresorder%rowtype;
-	_op			yorder%rowtype;
+	_op			yorder;
 	_mid		int;
 BEGIN
 	_ro.ord 		:= NULL;
@@ -555,8 +555,6 @@ BEGIN
 			-- the parent order was not found in the book
 			_ro.json:= '{"error":"the parent order must exist"}';
 			_ro.err := -1; 
-		ELSE 
-			_ro.ordp := _op;
 		END IF;
 		
 		IF (_op.own != _wid) THEN 
@@ -567,6 +565,7 @@ BEGIN
 			_ro.err := -3; END IF;
 		
 	END IF;
+	
 	IF((_ro.err = 0) AND (_t.duration IS NOT NULL)) THEN
 		IF((_t.created + _t.duration) < clock_timestamp()) THEN
 			_ro.json:= '{"error":"the order is too old"}';
@@ -587,6 +586,17 @@ BEGIN
 		_ro.ord := _op;
 		RETURN _ro; 
 	END IF;
+	
+	IF (_t.oid IS NULL) THEN
+		_t.oid 	:= _t.id;		
+	ELSE
+		_t.qtt	:= _op.qtt;
+		_t.qtt_prov := _op.qtt_prov;
+		_t.qua_prov := _op.qua_prov;
+		_ro.ordp := _op;
+	END IF;
+
+	_ro.ord := ROW(_t.type,_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_t.qtt)::yorder;
 		
 	RETURN _ro;
 
@@ -613,10 +623,9 @@ DECLARE
 	_tid		int;
 	_resx		yresexec%rowtype;
 	_time_begin	timestamp;
-	_qtt		int8;
 	
 	_cnt		int;
-	_qua_prov	text; --hstore
+	_qua_prov	text;
 	_qtt_prov	int8;
 	_oid		int;
 	_MAXMVTPERTRANS 	int := fgetconst('MAXMVTPERTRANS');
@@ -639,36 +648,25 @@ BEGIN
 	_ro := fcheckorder(_wid,_t);
 	
 	IF(_ro.err != 0) THEN RETURN _ro; END IF; 
-	
-	IF (_t.oid IS NULL) THEN
-		_t.oid 	:= _t.id;		
-		_qtt  	:= _t.qtt;
-	ELSE
-		_ordp 	:= _ro.ordp;
-		_qtt	:= _ordp.qtt;
-		_t.qtt_prov := _ordp.qtt_prov;
-		_t.qua_prov := _ordp.qua_prov;
-	END IF;
 
-	_o := ROW(_t.type,_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_qtt)::yorder;
-	
-	IF((_t.type & 128) =128) THEN
-		_ro := fproducequote(_MAXMVTPERTRANS,_t,_o);	
+
+	IF((_t.type & 128) = 128) THEN
+		_ro := fproducequote(_MAXMVTPERTRANS,_t,_ro.ord);	
 		RETURN _ro;
-	ELSIF((_t.type & 64) =64) THEN
-		_ro := fproduceprequote(_MAXMVTPERTRANS,_t,_o);	
+	ELSIF((_t.type & 64) = 64) THEN
+		_ro := fproduceprequote(_MAXMVTPERTRANS,_t,_ro.ord);	
 		RETURN _ro;
 	END IF;
 	 -- the order is a barter
+	_o := _ro.ord;
 	INSERT INTO torder(usr,ord,created,updated,duration) VALUES (_t.usr,_o,_t.created,NULL,_t.duration);
-	
-	_ro.ord      	:= _o;
+
 	 
 	_fmvtids := ARRAY[]::int[];
 	
 	_time_begin := clock_timestamp();
 	
-	_cnt := fcreate_tmp(_o);
+	_cnt := fcreate_tmp(_ro.ord);
 	_nbmvts := 0;
 
 	LOOP	

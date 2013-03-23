@@ -612,6 +612,7 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 	Tflow	*r;
 	short 	i,j;
 	TresChemin *c;
+	Tfl *lastr;
 			 
 	r = flowm_copy(f0);
 	
@@ -627,33 +628,33 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 			
 			if(or->oid != f1->x[i].oid) 
 				continue;
+			// for all orders common to the flows
 			if(ORDER_IS_NOQTTLIMIT(or->type))
 				continue;
-
-			if(or->qtt >= f1->x[i].flowr) {
-				or->qtt -= f1->x[i].flowr;
-			} else {
-		    		ereport(ERROR,
+			// quantity is limited
+			
+			if(or->qtt < f1->x[i].flowr) 
+		    	ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					errmsg("yflow_reducequote: the flow is greater than available")));
-			}
+					errmsg("yflow_reduce: the flow is greater than available")));
+
+			or->qtt -= f1->x[i].flowr;
 
 		}		
 	}
 
-	{
+	lastr  = &r->x[r->dim-1];
+	if(ORDER_IS_IGNOREOMEGA(lastr->type)) {
+		Tfl *lastf1 = &f1->x[f1->dim-1];
+		// omega is set
+		lastr->qtt_prov = lastf1->qtt_prov;
+		lastr->qtt_requ = lastf1->qtt_requ;
 		
-		Tfl *lastr  = &r->x[r->dim-1];
-		if(ORDER_IS_IGNOREOMEGA(lastr->type)) {
-			Tfl *lastf1 = &f1->x[f1->dim-1];
-			// omega is set
-			lastr->qtt_prov = lastf1->qtt_prov;
-			lastr->qtt_requ = lastf1->qtt_requ;
-			if(resetIgnoreOmega)			
-				lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);
+		if(resetIgnoreOmega)			
+			lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);
 			// IGNOREOMEGA is reset
-		}
-	} 
+	}
+
 
 	c = flowc_maximum(r);
 	pfree(c);

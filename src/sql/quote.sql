@@ -130,22 +130,20 @@ DECLARE
 	_firstloop		boolean := true;
 	_mid		int;
 	_nbmvts		int;
+	_wid		int;
 	
 BEGIN
 
-	_ro.ord 		:= _o;
-	_ro.ordp		:= NULL;
-	_ro.qtt_prov 	:= 0;
-	_ro.qtt_requ 	:= 0;
-	_ro.qtt			:= 0;
-	_ro.qtt_give	:= 0;
-	_ro.qtt_reci	:= 0;
-	_ro.err			:= 0;
-	_ro.json		:= '';
+	_wid := fgetowner(_t.own);
 	
-	-- _o.type == _t.type
+	_ro := fcheckorder(_wid,_t);
+	
+	IF(_ro.err != 0) THEN RETURN _ro; END IF;
+
+	_o := _ro.ord;
 	_cnt := fcreate_tmp(_o);
 	_nbmvts := 0;
+	_ro.json := '';
 	
 	LOOP
 		SELECT yflow_max(cycle) INTO _cyclemax FROM _tmp WHERE yflow_is_draft(cycle);
