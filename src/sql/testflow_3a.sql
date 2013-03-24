@@ -14,7 +14,6 @@ select * from fsubmitquote(1,'own82','qlt22','qlt23');select * from fproducemvt(
 select * from fsubmitbarter(1,'own82',NULL,'qlt22',67432,'qlt23',30183,30182,'1 hour'::interval);select * from fproducemvt();
 select xid,own_src,own_dst,qtt,nat from tmvt order by id desc limit 3;
 
-
 select * from fsubmitquote(1,'own82','qlt22','qlt10');select * from fproducemvt();
 select * from fsubmitquote(1,'own82','qlt22',49252,'qlt10',2177,2176);select * from fproducemvt();
 select * from fsubmitbarter(1,'own82',NULL,'qlt22',49252,'qlt10',2177,2176,'1 hour'::interval);select * from fproducemvt(); 
@@ -34,6 +33,8 @@ select id,nbt,nbc,xid,own_src,own_dst,qtt,nat from tmvt d where id>33;
 select sum(qtt) from tmvt where own_src='own1' and nat='qlt2' and id>33;
 select sum(qtt) from tmvt where own_dst='own1' and nat='qlt1' and id>33;
 
+-- select * from fsubmitprequote('own82','qlt25','qlt10');select * from fproducemvt();
+select * from fsubmitquote(1,'own82','qlt25','qlt10');select * from fproducemvt();
 
 
 

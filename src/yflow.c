@@ -608,10 +608,11 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 {
 	Tflow	*f0 = PG_GETARG_TFLOW(0);
 	Tflow	*f1 = PG_GETARG_TFLOW(1);
-	bool	setOmega = PG_GETARG_BOOL(2);
+	bool	freezeOmega = PG_GETARG_BOOL(2);
 	Tflow	*r;
 	short 	i,j;
 	TresChemin *c;
+	Tfl *lastr;
 			 
 	r = flowm_copy(f0);
 	
@@ -643,14 +644,16 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 		}		
 	}
 
-	if(setOmega) {
+	lastr  = &r->x[r->dim-1];
+	if(ORDER_IS_IGNOREOMEGA(lastr->type)) {
 		Tfl *lastf1 = &f1->x[f1->dim-1];
-		Tfl *lastr  = &r->x[r->dim-1];
+
 		// omega is set
 		lastr->qtt_prov = lastf1->qtt_prov;
 		lastr->qtt_requ = lastf1->qtt_requ;
 		// IGNOREOMEGA is reset	
-		lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);	
+		if(freezeOmega)
+			lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);	
 	}
 
 

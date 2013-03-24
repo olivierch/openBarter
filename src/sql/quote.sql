@@ -36,22 +36,22 @@ $$ LANGUAGE PLPGSQL;
 -- prequote
 --------------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION 
-	fsubmitprequote(_type dtypeorder,_own text,_qua_requ text,_qua_prov text)
+	fsubmitprequote(_own text,_qua_requ text,_qua_prov text)
 	RETURNS yressubmit AS $$	
 DECLARE
 	_r			 yressubmit%rowtype;
 BEGIN
-	_r := fcheckquote(_type,_own,_qua_requ,NULL,_qua_prov,NULL,NULL);
+	_r := fcheckquote(2,_own,_qua_requ,NULL,_qua_prov,NULL,NULL);
 	IF(_r.diag != 0) THEN
 		RETURN _r;
 	END IF;	
-	-- NOQTTLIMIT 4 IGNOREOMEGA 8 PREQUOTE 64
-	_r.id := fsubmitorder((_type & 3) | 4 | 8 | 64,_own,NULL,_qua_requ,1,_qua_prov,1,1,NULL);
+	-- ORDER_BEST 2 NOQTTLIMIT 4 IGNOREOMEGA 8 PREQUOTE 64
+	_r.id := fsubmitorder(2 | 4 | 8 | 64,_own,NULL,_qua_requ,1,_qua_prov,1,1,NULL);
 	
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitprequote(dtypeorder,text,text,text) TO role_co;
+GRANT EXECUTE ON FUNCTION  fsubmitprequote(text,text,text) TO role_co;
 
 --------------------------------------------------------------------------------
 -- quote first form
@@ -127,7 +127,7 @@ DECLARE
 	_cycle		yflow;
 	_res	    int8[];
 	_firstloop		boolean := true;
-	_setOmega boolean;
+	_freezeOmega boolean;
 	_mid		int;
 	_nbmvts		int;
 	_wid		int;
@@ -189,8 +189,8 @@ BEGIN
 	
 	for all updates, yflow_reduce is applied except for node with NOQTTLIMIT
 */
-		_setOmega := _firstloop AND ((_t.type & (8|128)) = (8|128));
-		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax,_setOmega);
+		_freezeOmega := _firstloop AND ((_t.type & (8|128)) = (8|128));
+		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax,_freezeOmega);
 		_firstloop := false;
 			
 		DELETE FROM _tmp WHERE NOT yflow_is_draft(cycle);

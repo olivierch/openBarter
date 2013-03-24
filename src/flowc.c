@@ -91,7 +91,7 @@ TresChemin *flowc_maximum(Tflow *flow) {
 	chem->type = _calType(flow); // CYCLE_LIMIT or CYCLE_BEST 		
 	_calOwns(chem);
 	
-	if(FLOW_IS_QUOTE(flow) && FLOW_IS_NOQTTLIMIT(flow))
+	if(FLOW_IS_IGNOREOMEGA(flow) || FLOW_IS_NOQTTLIMIT(flow))
 			/* qtt is set
 			qtt_prov,qtt_requ are set when FLOW_IS_IGNOREOMEGA
 			*/
@@ -189,8 +189,10 @@ static void _flow_maximum_quote(TresChemin *chem) {
 		called by the Sql UPDATE instruction 
 		*/
 		
-	}  
+	}
 	flow->x[ _dim-1 ].qtt = _qtt_prov;
+	if(flow->x[_dim-1].id == 10012 && false)
+		elog(WARNING,"_flow_maximum_quote: chem=%s",flowc_cheminToStr(chem));
 	
 	return;
 }
@@ -230,7 +232,8 @@ static double _calOmega(TresChemin *chem, bool lnIgnoreOmega) {
 			if(b->qtt_prov == 0 || b->qtt_requ == 0 || b->proba == 0.0) {
 				ereport(ERROR,
 					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
-					 errmsg("_calOmega: qtt_prov or qtt_requ or proba is zero for Tfl[%i]",_n)));
+					 errmsg("_calOmega: qtt_prov=%li or qtt_requ=%li or proba=%f is zero for Tfl[%i]",
+					 	b->qtt_prov,b->qtt_requ,b->proba,_n)));
 			}		 
 			omega[_n] = GET_OMEGA_P(b);
 			_prodOmega *= omega[_n];
