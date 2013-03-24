@@ -93,7 +93,6 @@ TresChemin *flowc_maximum(Tflow *flow) {
 	chem->type = _calType(flow); // CYCLE_LIMIT or CYCLE_BEST 		
 	_calOwns(chem);
 	
-	_defined = true;
 	if(FLOW_IS_IGNOREOMEGA(flow) || FLOW_IS_NOQTTLIMIT(flow)) {
 			/* qtt is set
 			qtt_prov,qtt_requ are set when FLOW_IS_IGNOREOMEGA
@@ -101,7 +100,8 @@ TresChemin *flowc_maximum(Tflow *flow) {
 			//elog(WARNING,"before quote: chem %s",flowc_cheminToStr(chem));
 			_defined = _flow_maximum_quote(chem);
 			
-	}
+	} else _defined = true;
+	
 	_flow_maximum_barter(_defined,chem);
 	return chem;
 }
