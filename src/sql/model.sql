@@ -643,11 +643,8 @@ BEGIN
 
 	DELETE FROM tstack WHERE id=_tid RETURNING * INTO STRICT _t;
 	
-	IF((_t.type & 128) = 128) THEN -- quote
+	IF((_t.type & (128|64)) != 0) THEN -- quote or prequote
 		_ro := fproducequote(_MAXMVTPERTRANS,_t);	
-		RETURN _ro;
-	ELSIF((_t.type & 64) = 64) THEN -- prequote
-		_ro := fproduceprequote(_MAXMVTPERTRANS,_t);	
 		RETURN _ro;
 	END IF;
 	

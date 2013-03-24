@@ -594,25 +594,24 @@ static double getRankFlow(Tflow *f) {
 } 
 
 /******************************************************************************
-yflow = yflow_reduce(f yflow,fr yflow)
-if (f and fr are drafts) 
-	when f->x[i].id == fr->x[j].id 
-		if f->x[i].qtt >= fr->flowr[j]
-			f->x[i].qtt -= fr->flowr[j]
+yflow = yflow_reduce(r yflow,f1 yflow)
+if (r and f1 are drafts) 
+	when r->x[i].id == f1->x[j].id 
+		if r->x[i].qtt >= f1->x[j].flowr
+			r->x[i].qtt -= f1->x[j].flowr
 		else 
 			error
-if (f or fr is not in (empty,draft))
+if (r or f1 is not in (empty,draft))
 	error
 ******************************************************************************/
 Datum yflow_reduce(PG_FUNCTION_ARGS)
 {
 	Tflow	*f0 = PG_GETARG_TFLOW(0);
 	Tflow	*f1 = PG_GETARG_TFLOW(1);
-	bool	resetIgnoreOmega = PG_GETARG_BOOL(2);
+	bool	setOmega = PG_GETARG_BOOL(2);
 	Tflow	*r;
 	short 	i,j;
 	TresChemin *c;
-	Tfl *lastr;
 			 
 	r = flowm_copy(f0);
 	
@@ -622,6 +621,7 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 						(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
 						errmsg("yflow_reduce: the last nodes are not the same")));
 	
+	// r->x[.].qtt -= f1->x[.].flowr
 	obMRange(i,f1->dim) {
 		obMRange(j,r->dim) { 
 			Tfl *or  = &r->x[j];
@@ -643,16 +643,14 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 		}		
 	}
 
-	lastr  = &r->x[r->dim-1];
-	if(ORDER_IS_IGNOREOMEGA(lastr->type)) {
+	if(setOmega) {
 		Tfl *lastf1 = &f1->x[f1->dim-1];
+		Tfl *lastr  = &r->x[r->dim-1];
 		// omega is set
 		lastr->qtt_prov = lastf1->qtt_prov;
 		lastr->qtt_requ = lastf1->qtt_requ;
-		
-		if(resetIgnoreOmega)			
-			lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);
-			// IGNOREOMEGA is reset
+		// IGNOREOMEGA is reset	
+		lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);	
 	}
 
 

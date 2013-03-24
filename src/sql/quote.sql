@@ -122,19 +122,18 @@ GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8,int8
 CREATE OR REPLACE FUNCTION fproducequote(_MAXMVTPERTRANS int,_t tstack) RETURNS yresorder AS $$
 DECLARE
 	_ro		    yresorder%rowtype;
-	_time_begin	timestamp;
 	_cnt		int;
 	_cyclemax 	yflow;
 	_cycle		yflow;
 	_res	    int8[];
 	_firstloop		boolean := true;
+	_setOmega boolean;
 	_mid		int;
 	_nbmvts		int;
 	_wid		int;
 	
 BEGIN
 
-	
 	_ro := fcheckorder(_t);
 	
 	IF(_ro.err != 0) THEN RETURN _ro; END IF;
@@ -162,39 +161,45 @@ BEGIN
 		_res := yflow_qtts(_cyclemax);
 		-- _res = [qtt_in,qtt_out,qtt_requ,qtt_prov,qtt]
 		
-		_ro.json := _ro.json || yflow_to_jsona(_cyclemax);
-
-		IF(_firstloop) THEN
-			_ro.qtt_requ := _res[3]; -- qtt_requ
-			_ro.qtt_prov := _res[4]; -- qtt_prov
-		END IF;
-		
 		_ro.qtt_reci := _ro.qtt_reci + _res[1];
 		_ro.qtt_give := _ro.qtt_give + _res[2];
-		
-		IF(_t.type & 4 = 4) THEN -- NOLIMITQTT
-			_ro.qtt	:= _ro.qtt + _res[5]; -- qtt
-		ELSE
+				
+		_ro.json := _ro.json || yflow_to_jsona(_cyclemax);
+
+		-- for a QUOTE, set _ro.qtt_requ,_ro.qtt_prov,_ro.qtt
+		IF((_t.type & 128) = 128) THEN
 			IF(_firstloop) THEN
-				_ro.qtt		 := _res[5]; -- qtt
+				_ro.qtt_requ := _res[3]; -- qtt_requ
+				_ro.qtt_prov := _res[4]; -- qtt_prov
+			END IF;
+		
+			IF((_t.type & 4) = 4) THEN -- NOLIMITQTT
+				_ro.qtt	:= _ro.qtt + _res[5]; -- qtt
+			ELSE
+				IF(_firstloop) THEN
+					_ro.qtt		 := _res[5]; -- qtt
+				END IF;
 			END IF;
 		END IF;
+		-- for a PREQUOTE they remain 0
 				
-/* 	node having IGNOREOMEGA:
+/* 	if _setOmega, for all remaining orders:
 		- omega is set to _ro.qtt_requ,_ro.qtt_prov
 		- IGNOREOMEGA is reset
 	
 	for all updates, yflow_reduce is applied except for node with NOQTTLIMIT
 */
-		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax,true);  -- reset IGNOREOMEGA
-		
-		_firstloop := false;	
+		_setOmega := _firstloop AND ((_t.type & (8|128)) = (8|128));
+		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax,_setOmega);
+		_firstloop := false;
+			
 		DELETE FROM _tmp WHERE NOT yflow_is_draft(cycle);
 		
 	END LOOP;
 
 	IF (	(_ro.qtt_requ != 0) 
 		AND ((_t.type & 3) = 1) -- ORDER_LIMIT
+		AND ((_t.type & (128)) = (128)) -- QUOTE
 		AND	((_ro.qtt_give::double precision)	/(_ro.qtt_reci::double precision)) > 
 			((_ro.qtt_prov::double precision)	/(_ro.qtt_requ::double precision))
 	) THEN	
@@ -223,6 +228,7 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 -- prequote execution at the output of the stack
 --------------------------------------------------------------------------------
+-- TODO
 CREATE OR REPLACE FUNCTION fproduceprequote(_MAXMVTPERTRANS int,_t tstack) RETURNS yresorder AS $$
 DECLARE
 	_ro		    yresorder%rowtype;
