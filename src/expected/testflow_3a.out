@@ -241,3 +241,19 @@ select sum(qtt) from tmvt where own_dst='own1' and nat='qlt1' and id>33;
  30819
 (1 row)
 
+-- select * from fsubmitprequote('own82','qlt25','qlt10');select * from fproducemvt();
+select * from fsubmitquote(1,'own82','qlt25','qlt10');select * from fproducemvt();
+  id   | diag 
+-------+------
+ 10012 |    0
+(1 row)
+
+                  ord                   |    ordp    | qtt_requ | qtt_prov | qtt  | qtt_reci | qtt_give | err |                                                     json                                                      
+----------------------------------------+------------+----------+----------+------+----------+----------+-----+---------------------------------------------------------------------------------------------------------------
+ (141,10012,72,10012,1,qlt25,1,qlt10,1) | (,,,,,,,,) |    82800 |     3020 | 3019 |    82778 |     3019 |   0 | {"qtt_requ":82800,"qtt_prov":3020,"qtt":3019,"qtt_reci":82778,"qtt_give":3019,"paths":[                      +
+                                        |            |          |          |      |          |          |     | [{"type":2, "id":9178, "oid":9178, "own":48, "qtt_requ":13928, "qtt_prov":62970, "qtt":62970, "flowr":13648},+
+                                        |            |          |          |      |          |          |     | {"type":1, "id":245, "oid":245, "own":27, "qtt_requ":13651, "qtt_prov":82800, "qtt":82800, "flowr":82778},   +
+                                        |            |          |          |      |          |          |     | {"type":141, "id":10012, "oid":10012, "own":72, "qtt_requ":82800, "qtt_prov":3020, "qtt":3019, "flowr":3019}]+
+                                        |            |          |          |      |          |          |     | ]}
+(1 row)
+
