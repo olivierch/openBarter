@@ -18,8 +18,8 @@ static void _calOwns(TresChemin *chem);
 static void _calGains(TresChemin *chem,double Omega);
 static short _flowMaximum(Tflow *flow,double *piom,double *fluxExact);
 static Tstatusflow _rounding(short iExhausted, TresChemin *chem);
-static void _flow_maximum_barter(TresChemin *chem);
-static void _flow_maximum_quote(TresChemin *chem);
+static void _flow_maximum_barter(bool defined,TresChemin *chem);
+static bool _flow_maximum_quote(TresChemin *chem);
 
 /******************************************************************************
  * int64 r = floor(d) and error if rounding < 0
@@ -45,6 +45,7 @@ do { \
 TresChemin *flowc_maximum(Tflow *flow) {
 	short _dim = flow->dim;
 	short _i;
+	bool _defined;
 	
 	TresChemin *chem = (TresChemin *) palloc(sizeof(TresChemin));
 	chem->status = empty;
@@ -87,17 +88,21 @@ TresChemin *flowc_maximum(Tflow *flow) {
 		chem->status = noloop;
 		return chem;
 	}
+	chem->status = undefined;
 	
 	chem->type = _calType(flow); // CYCLE_LIMIT or CYCLE_BEST 		
 	_calOwns(chem);
 	
-	if(FLOW_IS_IGNOREOMEGA(flow) || FLOW_IS_NOQTTLIMIT(flow))
+	_defined = true;
+	if(FLOW_IS_IGNOREOMEGA(flow) || FLOW_IS_NOQTTLIMIT(flow)) {
 			/* qtt is set
 			qtt_prov,qtt_requ are set when FLOW_IS_IGNOREOMEGA
 			*/
-			_flow_maximum_quote(chem);
-
-	_flow_maximum_barter(chem);
+			//elog(WARNING,"before quote: chem %s",flowc_cheminToStr(chem));
+			_defined = _flow_maximum_quote(chem);
+			
+	}
+	_flow_maximum_barter(_defined,chem);
 	return chem;
 }
 /******************************************************************************
@@ -105,11 +110,13 @@ TresChemin *flowc_maximum(Tflow *flow) {
  * return chem->flowNodes[.] and chem->status
  * flowNodes is copied to wolf->x[.].flowr
  *****************************************************************************/
-static void _flow_maximum_barter(TresChemin *chem) {
+static void _flow_maximum_barter(bool defined,TresChemin *chem) {
 	Tflow *flow = chem->flow;
 	short _dim = flow->dim;
 	short _iExhausted;
 	double _Omega;
+	
+	if(!defined) goto _dropflow;
 					
 	_Omega  = _calOmega(chem,false); // _lnIgnoreOmega == false
 	
@@ -153,7 +160,7 @@ _dropflow:
  * 	true		quote1(qlt_requ,qlt_prov)
  *  false		quote2(qlt_requ,qtt_requ,qlt_prov,qtt_prov) 
  *****************************************************************************/
-static void _flow_maximum_quote(TresChemin *chem) { 
+static bool _flow_maximum_quote(TresChemin *chem) { 
 	Tflow *flow = chem->flow;
 	short _dim = flow->dim;
 	short _i;  
@@ -164,7 +171,7 @@ static void _flow_maximum_quote(TresChemin *chem) {
 	obMRange(_i,_dim - 1) 
 		if(flow->x[_i].qtt == 0) {
 			// resflow unchanged
-			return;
+			return false;
 		}
 	flow->x[_dim-1].qtt = QTTFLOW_UNDEFINED;
 	
@@ -173,9 +180,13 @@ static void _flow_maximum_quote(TresChemin *chem) {
 	_calGains(chem,_Omega); 
 
 	(void) _flowMaximum(flow,chem->piom,chem->fluxExact);
+	//elog(WARNING,"after _flowMaximum: chem %s",flowc_cheminToStr(chem));
 	
 	_FLOOR_INT64(chem->fluxExact[ _dim-2 ],_qtt_requ);
 	_FLOOR_INT64(chem->fluxExact[ _dim-1 ],_qtt_prov);
+	// elog(WARNING,"after _flowMaximum: qtt_requ:%f -> %li,qtt_prov:%f->%li",chem->fluxExact[ _dim-2 ],_qtt_requ,chem->fluxExact[ _dim-1 ],_qtt_prov);
+	if((_qtt_requ == 0 || _qtt_prov == 0)) 
+		return false;
 	
 	if(_lnIgnoreOmega) {
 		/* the ratio _qtt_prov/_qtt_requ is increased 
@@ -191,10 +202,8 @@ static void _flow_maximum_quote(TresChemin *chem) {
 		
 	}
 	flow->x[ _dim-1 ].qtt = _qtt_prov;
-	if(flow->x[_dim-1].id == 10012 && false)
-		elog(WARNING,"_flow_maximum_quote: chem=%s",flowc_cheminToStr(chem));
 	
-	return;
+	return true;
 }
 
 /******************************************************************************
@@ -419,7 +428,7 @@ static short _flowMaximum(Tflow *flow,double *piom,double *fluxExact) {
 	
 	obMRange(_is,_dim) { // loop on nodes
 		int64 qtt = flow->x[_is].qtt;
-		
+		//elog(WARNING,"qtt[%i]=%li",_is,qtt);
 		if( qtt == QTTFLOW_UNDEFINED ) 
 			continue;
 			

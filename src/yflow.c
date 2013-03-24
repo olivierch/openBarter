@@ -655,9 +655,16 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 		if(freezeOmega)
 			lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);	
 	}
-
+	/*
+	if(lastr->id == 10013)
+		elog(WARNING,"yflow_reduce: r=%s",yflow_ndboxToStr(r,true));
+	*/
 
 	c = flowc_maximum(r);
+	/*
+	if(lastr->id == 10013)
+		elog(WARNING,"yflow_reduce: OK");
+	*/
 	pfree(c);
 	
 	PG_FREE_IF_COPY(f0, 0);

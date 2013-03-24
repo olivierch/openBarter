@@ -33,8 +33,9 @@ select id,nbt,nbc,xid,own_src,own_dst,qtt,nat from tmvt d where id>33;
 select sum(qtt) from tmvt where own_src='own1' and nat='qlt2' and id>33;
 select sum(qtt) from tmvt where own_dst='own1' and nat='qlt1' and id>33;
 
--- select * from fsubmitprequote('own82','qlt25','qlt10');select * from fproducemvt();
+-- 
 select * from fsubmitquote(1,'own82','qlt25','qlt10');select * from fproducemvt();
+select * from fsubmitprequote('own82','qlt25','qlt10');select * from fproducemvt();
 
 
 

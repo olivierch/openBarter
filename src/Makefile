@@ -6,7 +6,7 @@ OBJS = flowm.o yflow.o yflowparse.o yorder.o flowc.o
 EXTENSION = flow
 DATA = flow--1.0.sql flow--unpackaged--1.0.sql
 
-REGRESS = testflow_1  testflow_2 testflow_2a testflow_3 testflow_3a testflow_3b testflow_4
+REGRESS = testflow_1 testflow_2 testflow_2a testflow_3 testflow_3a testflow_3b testflow_4
 
 EXTRA_CLEAN = yflowparse.c yflowscan.c
 
