@@ -7,6 +7,7 @@
 /src/.deps/
 /results/
 /tmp_check/
+/simu/liquid/data/
 */.*
 *~
 */*~
