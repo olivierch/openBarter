@@ -822,7 +822,7 @@ BEGIN
 		END IF;
 			
 
-		SELECT * INTO _or FROM torder WHERE (ord).oid = _o.oid LIMIT 1;
+		SELECT * INTO _or FROM torder WHERE (ord).id = _o.id LIMIT 1;
 
 		SELECT name INTO STRICT _ownnext 	FROM towner WHERE id=_idownnext;
 		SELECT name INTO STRICT _own 		FROM towner WHERE id=_o.own;
