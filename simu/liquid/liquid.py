@@ -58,12 +58,13 @@ def simu(options):
         gen.generate()
         return
     if(options.test):
-        gen.test(100)
+        gen.perftests()
 	return
 
 from optparse import OptionParser
 def main():
-	usage = "usage: %prog [options]"
+	usage = """usage: %prog [options]
+	            to change config, modify the import in gen.py"""
 	parser = OptionParser(usage)
 
 	parser.add_option("-g", "--generate",action="store_true", dest="generate",help="generate files",default=False)

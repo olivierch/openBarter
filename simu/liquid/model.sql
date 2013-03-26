@@ -307,8 +307,8 @@ create table tmvt (
 	refused int default 0,
 	order_created timestamp not NULL,
 	created	timestamp not NULL,
-	om_exp double precision,
-	om_rea double precision 
+	omega_expected double precision,
+	omega_done double precision 
 	CHECK ((
 		(nbc = 1 AND own_src = own_dst)
 		OR 	(nbc !=1) -- ( AND own_src != own_dst)
@@ -646,7 +646,7 @@ BEGIN
 	DELETE FROM tstack WHERE id=_tid RETURNING * INTO STRICT _t;
 	
 	IF((_t.type & (128|64)) != 0) THEN -- quote or prequote
-		_ro := fproducequote(_t,true);	
+		_ro := fproducequote(_MAXMVTPERTRANS,_t);	
 		RETURN _ro;
 	END IF;
 	
@@ -742,7 +742,6 @@ CREATE FUNCTION fexecute_flow(_flw yflow) RETURNS  yresexec AS $$
 DECLARE
 	_i			int;
 	_next_i		int;
-	_prev_i     int;
 	_nbcommit	int;
 	
 	_first_mvt  int;
@@ -764,8 +763,8 @@ DECLARE
 	_idownnext	int;
 	_or			torder%rowtype;
 	_mat		int8[][];
-	_om_exp     double precision;
-	_om_rea     double precision;
+	_omega_expected double precision;
+	_omega_done     double precision;
 BEGIN
 	_nbcommit := yflow_dim(_flw);
 	
@@ -786,7 +785,6 @@ BEGIN
 	_mat := yflow_to_matrix(_flw);
 	
 	_i := _nbcommit;
-	_prev_i := _i - 1;
 	FOR _next_i IN 1 .. _nbcommit LOOP
 		------------------------------------------------------------------------
 		_o.id   := _mat[_i][1];
@@ -826,21 +824,23 @@ BEGIN
 		IF(_cnt = 0) THEN
 			RAISE EXCEPTION 'no orders with the stock % exist',_o.oid  USING ERRCODE='YU002';
 		END IF;
+			
 
+		SELECT * INTO _or FROM torder WHERE (ord).oid = _o.oid LIMIT 1;
 
-		SELECT * INTO _or FROM torder WHERE (ord).id = _o.id LIMIT 1;
-		_om_exp	:= (((_or.ord).qtt_prov)::double precision) / (((_or.ord).qtt_requ)::double precision);
-		_om_rea := ((_flowr)::double precision) / ((_mat[_prev_i][7])::double precision);
-		
 		SELECT name INTO STRICT _ownnext 	FROM towner WHERE id=_idownnext;
 		SELECT name INTO STRICT _own 		FROM towner WHERE id=_o.own;
 		
+		SELECT * INTO _o FROM torder WHERE (ord).oid = _o.oid LIMIT 1;
+		_omega_expected := 
+		_omega_done := (_flowr::double precision) / 
+		
 		INSERT INTO tmvt (type,json,nbc,nbt,grp,
 						xid,usr,xoid,own_src,own_dst,qtt,nat,
-						ack,exhausted,refused,order_created,created,om_exp,om_rea) 
+						ack,exhausted,refused,order_created,created,omega_expected,omega_done) 
 			VALUES((_or.ord).type,NULL,_nbcommit,1,_first_mvt,
 						_o.id,_or.usr,_o.oid,_own,_ownnext,_flowr,(_or.ord).qua_prov,
-						false,_mvtexhausted,0,_or.created,statement_timestamp(),_om_exp,_om_rea)
+						false,_mvtexhausted,0,_or.created,statement_timestamp(),_omega_expected,_omega_done)
 			RETURNING id INTO _mvt_id;
 			
 		IF(_first_mvt IS NULL) THEN
@@ -858,7 +858,6 @@ BEGIN
 			END IF;
 		END IF;
 
-        _prev_i := _i;
 		_i := _next_i;
 		------------------------------------------------------------------------
 	END LOOP;

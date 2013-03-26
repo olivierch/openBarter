@@ -8,6 +8,8 @@
 /results/
 /tmp_check/
 /simu/liquid/data/
+/simu/liquid/test/
+/simu/liquid/test1/
 */.*
 *~
 */*~

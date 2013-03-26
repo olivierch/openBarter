@@ -2,7 +2,7 @@
 # -*- coding: utf8 -*-
 import cliquid
 import os
-import cliquid_basic as conf
+#import cliquid_basic as conf
 import random
 import distrib
 """
@@ -11,7 +11,7 @@ pour modifier la conf, modifier l'import
 
 """
 
-def generate():
+def generate(conf):
 
     # towner
     fn = os.path.join(cliquid.PATH_DATA,'towner.sql')
@@ -27,7 +27,8 @@ def generate():
             j = i+1
             w = random.randint(1,conf.MAX_OWNER)
             qlt_prov,qlt_requ = conf.coupleQlt(conf.distribQlt)
-            qtt_requ = random.randint(1000,1000*cliquid.QTT_PROV)
+            r = random.random()+0.5
+            qtt_requ = int(cliquid.QTT_PROV * r) # proba(QTT_PROV/qtt_requ < 1) = 0.5
             line = "%s\t(1,%i,%i,%i,%i,qlt%i,%i,qlt%i,%i)\t2013-02-10 16:24:01.651649\t\N\n" 
             f.write(line % (cliquid.DB_USER,j,w,j,qtt_requ,qlt_requ,cliquid.QTT_PROV,qlt_prov,cliquid.QTT_PROV))   
 
@@ -38,11 +39,14 @@ def generate():
             j = i+1+cliquid.MAX_TORDER
             w = random.randint(1,conf.MAX_OWNER)
             qlt_prov,qlt_requ = conf.coupleQlt(conf.distribQlt)
-            qtt_requ = random.randint(1000,1000*cliquid.QTT_PROV)
+            r = random.random()+0.5
+            qtt_requ = int(cliquid.QTT_PROV * r) # proba(QTT_PROV/qtt_requ < 1) = 0.5
             line = "%i\t%s\town%i\t\N\t1\tqlt%i\t%i\tqlt%i\t%i\t%i\t100 year\t2013-03-24 22:50:08.300833\n" 
-            f.write(line % (j,cliquid.DB_USER,w,qlt_requ,qtt_requ,qlt_prov,cliquid.QTT_PROV,cliquid.QTT_PROV))            
+            f.write(line % (j,cliquid.DB_USER,w,qlt_requ,qtt_requ,qlt_prov,cliquid.QTT_PROV,cliquid.QTT_PROV)) 
+            
+    print "conf \'%s\' generated" % (conf.CONF_NAME,)           
         
-def test(size):
+def test(cexec,conf,size):
     """
     truncate towner;
     copy towner from '/home/olivier/ob92/simu/liquid/data/towner.sql';
@@ -68,9 +72,9 @@ def test(size):
     with util.DbConn(cliquid) as dbcon:
 		with util.DbCursor(dbcon) as cur:
 		
-		    cur.execute("UPDATE tconst SET value=%s WHERE name=%s",[conf.MAXCYCLE,"MAXCYCLE"])
-		    cur.execute("UPDATE tconst SET value=%s WHERE name=%s",[conf.MAXPATHFETCHED,"MAXPATHFETCHED"])
-		    cur.execute("UPDATE tconst SET value=%s WHERE name=%s",[conf.MAXMVTPERTRANS,"MAXMVTPERTRANS"])
+		    cur.execute("UPDATE tconst SET value=%s WHERE name=%s",[cexec.MAXCYCLE,"MAXCYCLE"])
+		    cur.execute("UPDATE tconst SET value=%s WHERE name=%s",[cexec.MAXPATHFETCHED,"MAXPATHFETCHED"])
+		    cur.execute("UPDATE tconst SET value=%s WHERE name=%s",[cexec.MAXMVTPERTRANS,"MAXMVTPERTRANS"])
 		    
 		    cur.execute("truncate towner",[])
 		    fn = os.path.join(cliquid.PATH_DATA,'towner.sql')
@@ -78,12 +82,11 @@ def test(size):
 		    
 		    cur.execute("truncate torder",[])
 		    cur.execute("copy torder(usr,ord,created,updated) from %s",[gn])
-		    # cur.execute("SELECT setval('torder_id_seq',%s,false)",[_size+1])
 		    
 		    cur.execute("truncate tstack",[])
 		    fn = os.path.join(cliquid.PATH_DATA,'tstack_'+conf.CONF_NAME+'.sql')
 		    cur.execute("copy tstack from %s",[fn])
-		    cur.execute("SELECT setval('tstack_id_seq',%s,false)",[_size+cliquid.MAX_TSTACK+1])
+		    cur.execute("SELECT setval('tstack_id_seq',%s,false)",[cliquid.MAX_TORDER+cliquid.MAX_TSTACK+1])
 		    
 		    cur.execute("truncate tmvt",[])
 		    cur.execute("SELECT setval('tmvt_id_seq',1,false)",[])
@@ -100,14 +103,41 @@ def test(size):
 		    else:
 		        vol = vec[0]
 		    liqu = float(vol)/float(cliquid.MAX_TSTACK * cliquid.QTT_PROV)
-		    print duree,liqu
-            
-    return  duree,liqu
+		    		    
+		    cur.execute("SELECT avg(s.nbc) FROM (SELECT max(nbc) as nbc,grp FROM tmvt group by grp) s",[])
+		    vec = cur.next()
+		    if(vec[0] is None): 
+		        nbcm = 0
+		    else:
+		        nbcm = vec[0]
+		        
+		    cur.execute("SELECT avg(om_exp/om_rea) FROM tmvt ",[])
+		    vec = cur.next()
+		    if(vec[0] is None): 
+		        gain = 0
+		    else:
+		        gain = vec[0]
+		        
+		    #print duree,liqu,nbcm
+    
+    print "test \'%s_%s\' performed with size=%i" % (conf.CONF_NAME,cexec.NAME,_size)        
+    return  duree,liqu,nbcm,gain
     
 def perftests():
-    fn = os.path.join(cliquid.PATH_DATA,'result_'+conf.CONF_NAME+'.txt')
-    with open(fn,'w') as f:
-        for i in range(conf.LIQ_ITER):
-            duree,liqu = test((i+1) * conf.LIQ_PAS)
-            f.write("%f;%f;" % (duree,liqu))
+    
+    cexecs = [cliquid.Exec1()] #,cliquid.Exec2(),cliquid.Exec3(),cliquid.Exec4()]  
+    confs= [cliquid.Basic1000large()] #,cliquid.Basic1000()] #,cliquid.Money100()]
+    for conf in confs:
+        fn = os.path.join(cliquid.PATH_DATA,'tstack_'+conf.CONF_NAME+'.sql')
+        if(not os.path.exists(fn) or True):
+            generate(conf)
+        for cexec in cexecs:
+            fn = os.path.join(cliquid.PATH_DATA,'result_'+conf.CONF_NAME+'_'+cexec.NAME+'.txt')
+            
+            with open(fn,'w') as f:
+                for i in range(conf.LIQ_ITER):
+                    size = (i+1) * conf.LIQ_PAS
+                    duree,liqu,nbcm,gain = test(cexec,conf,size)
+                    f.write("%i;%f;%f;%f;%f;\n" % (size,duree,liqu,nbcm,gain))
+
             
