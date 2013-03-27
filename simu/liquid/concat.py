@@ -15,32 +15,46 @@ visplot_tmp ="""
       google.load("visualization", "1", {packages:["corechart"]});
       google.setOnLoadCallback(drawChart);
       function drawChart() {
-        var data = google.visualization.arrayToDataTable(%s);
-
-        var options = {
-          title: '%s',
-          hAxis: {title: '%s'},
-          legend: {position: 'out'},
-          vAxes:[{title:'%s'}]
-        };
-
-        var chart = new google.visualization.LineChart(document.getElementById('chart_div'));
-        chart.draw(data, options);
+        %s
       }
     </script>
   </head>
   <body>
-    <div id="chart_div" style="width: 900px; height: 500px;"></div>
+<table>
+<tr>
+<td><div id="chart_delay" style="width: 450px; height: 250px;"></div></td>
+<td><div id="chart_fluidity" style="width: 450px; height: 250px;"></div></td>
+</tr>
+<tr>
+<td><div id="chart_nbcycle" style="width: 450px; height: 250px;"></div></td>
+<td><div id="chart_gain" style="width: 450px; height: 250px;"></div></td>
+</tr>
+</table>
   </body>
 </html>
 """
-PATH_DATA = "/home/olivier/Bureau/ob92/simu/liquid/test"
-#PATH_DATA = cliquid.PATH_DATA
-def makeHtml(title,arr,unite):
-    fn = os.path.join(PATH_DATA,'result_'+title+'.html')
-    with open(fn,'w') as f:
-        f.write(visplot_tmp % (arr,title,'Volume of the order book',unite))
+visplot_graph ="""
+        var data = google.visualization.arrayToDataTable(%s);
 
+        var options = {
+          title: '%s',
+          hAxis: {title: 'Volume of the order book'},
+          legend: {position: 'out'},
+          vAxes:[{title:'%s'}]
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('chart_%s'));
+        chart.draw(data, options);
+"""
+#PATH_DATA = "/home/olivier/Bureau/ob92/simu/liquid/test"
+PATH_DATA = cliquid.PATH_DATA
+def makeHtml(content):
+    fn = os.path.join(PATH_DATA,'result.html')
+    with open(fn,'w') as f:
+        f.write(visplot_tmp % (content,))
+
+def makeGraph(title,arr,unite):
+    return (visplot_graph % (arr,title,unite,title))
 
         
 def makeVis(prefix):
@@ -52,7 +66,9 @@ def makeVis(prefix):
                 continue
             if(fil.startswith(prefix)):
                 fils.append(os.path.join(root,fil))
-    for clef,valeurs in {'delay':(1,'seconds'),'liquidity':(2,'%'),'nbcycle':(3,'nbcycle'),'gain':(4,'%')}.iteritems():
+                
+    content = []
+    for clef,valeurs in {'delay':(1,'seconds'),'fluidity':(2,'%'),'nbcycle':(3,'nbcycle'),'gain':(4,'%')}.iteritems():
         indice,unite = valeurs
         resus = {}          
         for fil in fils:
@@ -82,7 +98,8 @@ def makeVis(prefix):
                 lin = mat[i]
                 lin.append(float(resus[k][i][1]))
                 mat[i] = lin   
-        makeHtml(clef,titles+mat,unite)
+        content.append(makeGraph(clef,titles+mat,unite))
+    makeHtml('\n'.join(content))
             
 
 if __name__ == "__main__":

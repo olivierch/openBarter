@@ -1,0 +1,76 @@
+
+<html>
+  <head>
+    <script type="text/javascript" src="https://www.google.com/jsapi"></script>
+    <script type="text/javascript">
+      google.load("visualization", "1", {packages:["corechart"]});
+      google.setOnLoadCallback(drawChart);
+      function drawChart() {
+        
+        var data = google.visualization.arrayToDataTable([['delay', 'UNI1000_Y6P1024M128'], ['3000', 0.017188], ['6000', 0.015809], ['9000', 0.015567], ['12000', 0.015787], ['15000', 0.016999], ['18000', 0.016564], ['21000', 0.015759], ['24000', 0.015491], ['27000', 0.01576], ['30000', 0.016163], ['33000', 0.016139], ['36000', 0.016871], ['39000', 0.016246], ['42000', 0.016898], ['45000', 0.016707], ['48000', 0.016158], ['51000', 0.016499], ['54000', 0.016614], ['57000', 0.017001], ['60000', 0.017176], ['63000', 0.016947], ['66000', 0.017126], ['69000', 0.016974], ['72000', 0.016927], ['75000', 0.016907], ['78000', 0.015577], ['81000', 0.01608], ['84000', 0.015791], ['87000', 0.015112], ['90000', 0.015138]]);
+
+        var options = {
+          title: 'delay',
+          hAxis: {title:'Volume of the order book' },
+          legend: {position: 'out'},
+          vAxes:[{title:'seconds'}]
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('chart_delay'));
+        chart.draw(data, options);
+
+
+        var data = google.visualization.arrayToDataTable([['liquidity', 'UNI1000_Y6P1024M128'], ['3000', 2.25617], ['6000', 2.697266], ['9000', 2.724538], ['12000', 2.723908], ['15000', 2.732083], ['18000', 2.717117], ['21000', 2.689285], ['24000', 2.658553], ['27000', 2.633068], ['30000', 2.579671], ['33000', 2.549333], ['36000', 2.491823], ['39000', 2.475506], ['42000', 2.494832], ['45000', 2.4608], ['48000', 2.421699], ['51000', 2.397927], ['54000', 2.387859], ['57000', 2.377524], ['60000', 2.374899], ['63000', 2.355539], ['66000', 2.329235], ['69000', 2.326673], ['72000', 2.325328], ['75000', 2.310918], ['78000', 2.285924], ['81000', 2.268568], ['84000', 2.285754], ['87000', 2.334001], ['90000', 2.304005]]);
+
+        var options = {
+          title: 'fluidity',
+          hAxis: {title: 'Volume of the order book'},
+          legend: {position: 'out'},
+          vAxes:[{title:'%'}]
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('chart_liquidity'));
+        chart.draw(data, options);
+
+
+        var data = google.visualization.arrayToDataTable([['gain', 'UNI1000_Y6P1024M128'], ['3000', 1.177371], ['6000', 1.21358], ['9000', 1.218434], ['12000', 1.220095], ['15000', 1.221711], ['18000', 1.222895], ['21000', 1.227106], ['24000', 1.229314], ['27000', 1.233484], ['30000', 1.239604], ['33000', 1.240241], ['36000', 1.250541], ['39000', 1.252167], ['42000', 1.256909], ['45000', 1.258954], ['48000', 1.262898], ['51000', 1.269803], ['54000', 1.274256], ['57000', 1.278031], ['60000', 1.280274], ['63000', 1.283783], ['66000', 1.288993], ['69000', 1.289557], ['72000', 1.291654], ['75000', 1.295092], ['78000', 1.299287], ['81000', 1.301154], ['84000', 1.308515], ['87000', 1.309951], ['90000', 1.31485]]);
+
+        var options = {
+          title: 'gain',
+          hAxis: {title:'Volume of the order book' },
+          legend: {position: 'out'},
+          vAxes:[{title:'%'}]
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('chart_gain'));
+        chart.draw(data, options);
+
+
+        var data = google.visualization.arrayToDataTable([['nbcycle', 'UNI1000_Y6P1024M128'], ['3000', 3.147707], ['6000', 2.928199], ['9000', 2.880799], ['12000', 2.83], ['15000', 2.795799], ['18000', 2.762405], ['21000', 2.729666], ['24000', 2.689977], ['27000', 2.646243], ['30000', 2.607226], ['33000', 2.559531], ['36000', 2.514252], ['39000', 2.484099], ['42000', 2.467246], ['45000', 2.427829], ['48000', 2.388468], ['51000', 2.361481], ['54000', 2.324106], ['57000', 2.304948], ['60000', 2.282125], ['63000', 2.259852], ['66000', 2.243135], ['69000', 2.225585], ['72000', 2.212826], ['75000', 2.190692], ['78000', 2.164205], ['81000', 2.146023], ['84000', 2.171476], ['87000', 2.210555], ['90000', 2.192719]]);
+
+        var options = {
+          title: 'nbcycle',
+          hAxis: {title: 'Volume of the order book'},
+          legend: {position: 'out'},
+          vAxes:[{title:'nbcycle'}]
+        };
+
+        var chart = new google.visualization.LineChart(document.getElementById('chart_nbcycle'));
+        chart.draw(data, options);
+
+      }
+    </script>
+  </head>
+  <body>
+<table>
+<tr>
+<td><div id="chart_delay" style="width: 450px; height: 250px;"></div></td>
+<td><div id="chart_liquidity" style="width: 450px; height: 250px;"></div></td>
+</tr>
+<tr>
+<td><div id="chart_nbcycle" style="width: 450px; height: 250px;"></div></td>
+<td><div id="chart_gain" style="width: 450px; height: 250px;"></div></td>
+</tr>
+</table>
+  </body>
+</html>

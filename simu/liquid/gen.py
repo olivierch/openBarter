@@ -124,9 +124,9 @@ def test(cexec,conf,size):
     return  duree,liqu,nbcm,gain
     
 def perftests():
-    
+    import concat
     cexecs = [cliquid.Exec1()] #,cliquid.Exec2(),cliquid.Exec3(),cliquid.Exec4()]  
-    confs= [cliquid.Basic1000large()] #,cliquid.Basic1000()] #,cliquid.Money100()]
+    confs= [cliquid.Basic100000()] #cliquid.Basic100(),cliquid.Money100()] #,cliquid.Basic1000()] #,cliquid.Money100(),cliquid.Basic1000large()]
     for conf in confs:
         fn = os.path.join(cliquid.PATH_DATA,'tstack_'+conf.CONF_NAME+'.sql')
         if(not os.path.exists(fn) or True):
@@ -139,5 +139,7 @@ def perftests():
                     size = (i+1) * conf.LIQ_PAS
                     duree,liqu,nbcm,gain = test(cexec,conf,size)
                     f.write("%i;%f;%f;%f;%f;\n" % (size,duree,liqu,nbcm,gain))
+                    
+    concat.makeVis('result_')
 
             
