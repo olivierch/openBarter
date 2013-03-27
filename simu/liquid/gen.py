@@ -130,8 +130,8 @@ def test(cexec,conf,size):
     
 def perftests():
     import concat
-    cexecs = [cliquid.Exec1()] #,cliquid.Exec2(),cliquid.Exec3(),cliquid.Exec4()]  
-    confs= [cliquid.Basic10000()] #cliquid.Basic100(),cliquid.Money100()] #,cliquid.Basic1000()] #,cliquid.Money100(),cliquid.Basic1000large()]
+    cexecs = [cliquid.Exec3()] #,cliquid.Exec2(),cliquid.Exec3(),cliquid.Exec4()]  
+    confs= [cliquid.Basic100(),cliquid.Basic1000(),cliquid.Basic10000()] #cliquid.Basic100(),cliquid.Money100()] #,cliquid.Basic1000()] #,cliquid.Money100(),cliquid.Basic1000large()]
     for conf in confs:
         fn = os.path.join(cliquid.PATH_DATA,'tstack_'+conf.CONF_NAME+'.sql')
         if(not os.path.exists(fn) or True):

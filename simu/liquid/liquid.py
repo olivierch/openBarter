@@ -51,7 +51,6 @@ logging.basicConfig(level=logging.DEBUG,
 
 """
 import cliquid
-import cliquid_basic as config
 import gen
 def simu(options):
     if(options.generate):
