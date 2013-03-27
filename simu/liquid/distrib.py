@@ -29,7 +29,15 @@ def couple_money(f,maxi):
 def uniformQlt(maxi):
     return random.randint(1,maxi)
     
-
+def betaQlt(maxi):
+    r = random.betavariate(2.0,5.0)
+    # r in [0,1] proba max pour 0.2
+    s = int(r*maxi)+1
+    if(s<0):
+        return 0
+    if(s>maxi):
+        return maxi
+    return s
     
 
     

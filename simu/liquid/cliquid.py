@@ -84,7 +84,7 @@ class Basic100:
         """
         fonction de distribution des qualités
         """
-        self.distribQlt = distrib.uniformQlt
+        self.distribQlt = distrib.betaQlt
         self.coupleQlt = distrib.couple
 
         # etendue des tests
@@ -102,7 +102,7 @@ class Basic1000:
         """
         fonction de distribution des qualités
         """
-        self.distribQlt = distrib.uniformQlt
+        self.distribQlt = distrib.betaQlt
         self.coupleQlt = distrib.couple
 
         # etendue des tests
@@ -120,7 +120,7 @@ class Basic10000:
         """
         fonction de distribution des qualités
         """
-        self.distribQlt = distrib.uniformQlt
+        self.distribQlt = distrib.betaQlt
         self.coupleQlt = distrib.couple
 
         # etendue des tests
