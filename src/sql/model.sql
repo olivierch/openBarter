@@ -30,7 +30,7 @@ INSERT INTO tconst (name,value) VALUES
 	-- it is the version X.Y.Z of the model, not that of the extension
 	('VERSION-X',0),
 	('VERSION-Y',7),
-	('VERSION-Z',0);
+	('VERSION-Z',1);
 
 
 --------------------------------------------------------------------------------
