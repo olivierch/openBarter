@@ -324,7 +324,7 @@
 </table>
 <p>These measurements leads the following comments:</p>
 <ul>
-<li>For a given volume of the order book, the fluidity of the market is 30% better with uni100 than with the money scenario.</li>
+<li>For a given level of fluidity, the volume of the order book 30% smaller with uni100 than with the money scenario.</li>
 <li>A higher delay with uni100 means the computation is more expensive.</li>
 <li>The high gain of money is due to higher competition, and high nbcycle of uni100 is due to higher cooperation.</li>
 <li>The number of cycles greater than 2 of the money scenario means that some cycles produced can have more than 2 partners. There are cycles where four partners A,B,C,D exchange qualities Q1,Q2,€ where A provides Q1 to B, B provides € to C, C provides Q2 to D and D provides € to A. This cycle should be better for partners than two separate bilateral cycles or the single exchange possibility.</li>
@@ -382,7 +382,7 @@ A diversity of qualities 100 was used to show the sensibility of these limits.</
 <p>This experiment could be also performed by changing the maximum number of partners per cycle.</p>
 
 <h3>diversity of qualities with uniform distributions</h3>
-<p>Different diversity of qualities are considered (100,1000 and 10000) with uniform distributions.</p>
+<p>Different diversity of qualities are considered (100,1000 and 10000) noted (1e2,1e3,1e4) with uniform distributions.</p>
 <p>Results was obtained with Y=64, P=1024*10 and a set of 100 orders to show the percolation threasold when the volume of the book increases.</p>
 <table>
 <tr>
@@ -403,7 +403,7 @@ A diversity of qualities 100 was used to show the sensibility of these limits.</
 </ul>
 
 <h3>diversity of qualities with non uniform distributions</h3>
-<p>Different diversity of qualities are considered (100,1000 and 10000) with a beta distribution (alpha=2.0,beta=5.0) in order to simulate the fact that few qualities are used far more frequently that others. A beta distribution(2.0,5.0) has a mean=0.29 and a variance=0.03.</p>
+<p>Different diversity of qualities are considered (100,1000 and 10000) noted (1e2,1e3,1e4) with a beta distribution (alpha=2.0,beta=5.0) in order to simulate the fact that few qualities are used far more frequently that others. A beta distribution(2.0,5.0) has a mean=0.29 and a variance=0.03.</p>
 <p>Results was obtained with Y=64, P=1024*10 and a set of 100 orders.</p>
 <table>
 <tr>
@@ -415,9 +415,10 @@ A diversity of qualities 100 was used to show the sensibility of these limits.</
 <td><div id="chart5_gain" style="width: 450px; height: 250px;"></div></td>
 </tr>
 </table>
-<p>These measurements leads the following comment:</p>
+<p>These measurements leads the following comments:</p>
 <ul>
-<li>Percolation threasolds remain even with non uniform distribution appearing for lower volumes of the order book.</li>
+<li>Percolation threasolds remain even with non uniform distribution</li>
+<li>The threasold appears for lower volumes of the order book.</li>
 </ul>
 
 <p> <a href="./index.html">Go back to the main page</a>.</p>
