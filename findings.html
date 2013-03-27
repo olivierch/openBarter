@@ -256,19 +256,28 @@ They were obtained to observe variations of foor indicators for different size o
 
 
 <h3>money and barter compared</h3>
-<p>A first scenario called money considers that all orders provide or receive a single quality as would do a regular order book with buy and sell orders. The other quality has a diversity of 100. The second scenario is that of barter orders where the diversity of quality is 100.<p>
+
+<p>For a scenario <i>money</i> we consider a special quality used by all orders, as on a regular order book where a sell order asks for Money and a buy order offers Money. The quality that is not Money is chosen randomly with a uniform distribution between 99 other qualities.</p>
+<p>A second scenario <i>uni100</i> is that of barter orders where the diversity of quality is 100 with a uniform distribution.<p>
+</p>
 <table>
 <tr>
 <td><div id="chart1_delay" style="width: 450px; height: 250px;"></div></td>
 <td><div id="chart1_liquidity" style="width: 450px; height: 250px;"></div></td>
 </tr>
 <tr>
-<td><div id="chart1_nbcycle" style="width: 450px; height: 250px;"></div></td>
+<td><div id="chart1_nbcycle" style="width: 450px; height: 250px;"></div>
+</td>
 <td><div id="chart1_gain" style="width: 450px; height: 250px;"></div></td>
 </tr>
 </table>
-
-
+<p>These measurements leads the following comments:</p>
+<ul>
+<li>For a given volume of the order book, the fluidity is 30% better with uni100 than with the money scenario.</li>
+<li>The delay is higher with uni100 means the computation is more expensive.</li>
+<li>The high gain of money is due to higher competition, and high nbcycle of uni100 is due to higher cooperation.</li>
+<li>The number of cycles greater than 2 of the money scenario means that some cycles produced can have more than 2 partners. There are cycles where four partners A,B,C,D exchange qualities Q1,Q2,Money where A provides Q1 to B, B provides Money to C, C provides Q2 to D and D provides Money to A. This cycle should be better for partners than two separate bilateral cycles or the single exchange possibility.</li>
+</ul>
 
 <h3>big order book</h3>
 <table>
