@@ -54,6 +54,25 @@ class Exec4:
         self.MAXPATHFETCHED=1024
         self.MAXMVTPERTRANS=256
                        
+class Basic10:
+    def __init__(self):
+
+        self.CONF_NAME='1e1uni'
+
+        self.MAX_OWNER=min(100,MAX_TOWNER) # maximum number of owners
+        self.MAX_QLT=10  # maximum number  of qualities
+
+        """
+        fonction de distribution des qualités
+        """
+        self.distribQlt = distrib.uniformQlt
+        self.coupleQlt = distrib.couple
+
+        # etendue des tests
+        self.LIQ_PAS = 300
+        self.LIQ_ITER = min(30,MAX_TORDER/self.LIQ_PAS)
+
+                
 class Basic100:
     def __init__(self):
 
@@ -69,10 +88,9 @@ class Basic100:
         self.coupleQlt = distrib.couple
 
         # etendue des tests
-        self.LIQ_PAS = 30
+        self.LIQ_PAS = 300
         self.LIQ_ITER = min(30,MAX_TORDER/self.LIQ_PAS)
-
-                
+        
 class Basic1000:
     def __init__(self):
 
@@ -88,53 +106,17 @@ class Basic1000:
         self.coupleQlt = distrib.couple
 
         # etendue des tests
-        self.LIQ_PAS = 30
+        self.LIQ_PAS = 300
         self.LIQ_ITER = min(30,MAX_TORDER/self.LIQ_PAS)
-        
-class Basic10000:
-    def __init__(self):
-
-        self.CONF_NAME='1e4uni'
-
-        self.MAX_OWNER=min(100,MAX_TOWNER) # maximum number of owners
-        self.MAX_QLT=10000  # maximum number  of qualities
-
-        """
-        fonction de distribution des qualités
-        """
-        self.distribQlt = distrib.uniformQlt
-        self.coupleQlt = distrib.couple
-
-        # etendue des tests
-        self.LIQ_PAS = 30
-        self.LIQ_ITER = min(30,MAX_TORDER/self.LIQ_PAS)
-
-        
-class Basic100000:
-    def __init__(self):
-
-        self.CONF_NAME='1e5uni'
-
-        self.MAX_OWNER=min(100,MAX_TOWNER) # maximum number of owners
-        self.MAX_QLT=100000  # maximum number  of qualities
-
-        """
-        fonction de distribution des qualités
-        """
-        self.distribQlt = distrib.uniformQlt
-        self.coupleQlt = distrib.couple
-
-        # etendue des tests
-        self.LIQ_PAS = 30
-        self.LIQ_ITER = min(30,MAX_TORDER/self.LIQ_PAS)        
+       
                 
-class Basic1000large:
+class Basic100large:
     def __init__(self):
 
-        self.CONF_NAME='UNI1000'
+        self.CONF_NAME='UNI100'
 
         self.MAX_OWNER=min(100,MAX_TOWNER) # maximum number of owners
-        self.MAX_QLT=1000  # maximum number  of qualities
+        self.MAX_QLT=100  # maximum number  of qualities
 
         """
         fonction de distribution des qualités

@@ -26,7 +26,7 @@ def generate(conf):
         for i in range(cliquid.MAX_TORDER):
             j = i+1
             w = random.randint(1,conf.MAX_OWNER)
-            qlt_prov,qlt_requ = conf.coupleQlt(conf.distribQlt)
+            qlt_prov,qlt_requ = conf.coupleQlt(conf.distribQlt,conf.MAX_QLT)
             r = random.random()+0.5
             qtt_requ = int(cliquid.QTT_PROV * r) # proba(QTT_PROV/qtt_requ < 1) = 0.5
             line = "%s\t(1,%i,%i,%i,%i,qlt%i,%i,qlt%i,%i)\t2013-02-10 16:24:01.651649\t\N\n" 
@@ -38,7 +38,7 @@ def generate(conf):
         for i in range(cliquid.MAX_TSTACK):    
             j = i+1+cliquid.MAX_TORDER
             w = random.randint(1,conf.MAX_OWNER)
-            qlt_prov,qlt_requ = conf.coupleQlt(conf.distribQlt)
+            qlt_prov,qlt_requ = conf.coupleQlt(conf.distribQlt,conf.MAX_QLT)
             r = random.random()+0.5
             qtt_requ = int(cliquid.QTT_PROV * r) # proba(QTT_PROV/qtt_requ < 1) = 0.5
             line = "%i\t%s\town%i\t\N\t1\tqlt%i\t%i\tqlt%i\t%i\t%i\t100 year\t2013-03-24 22:50:08.300833\n" 
@@ -92,8 +92,13 @@ def test(cexec,conf,size):
 		    cur.execute("SELECT setval('tmvt_id_seq',1,false)",[])
 		    
 		    begin = util.now()
-		    cur.execute("SELECT * from femptystack()",[])
+		    _cnt = 1
+		    while(_cnt>=1):
+		        cur.execute("SELECT * from femptystack()",[])
+		        vec = cur.next()
+		        _cnt = vec[0]
 		    duree = util.getDelai(begin)
+		    
 		    duree = duree/cliquid.MAX_TSTACK
 		    
 		    cur.execute("SELECT sum(qtt) FROM tmvt",[])
@@ -126,7 +131,7 @@ def test(cexec,conf,size):
 def perftests():
     import concat
     cexecs = [cliquid.Exec1()] #,cliquid.Exec2(),cliquid.Exec3(),cliquid.Exec4()]  
-    confs= [cliquid.Basic100000()] #cliquid.Basic100(),cliquid.Money100()] #,cliquid.Basic1000()] #,cliquid.Money100(),cliquid.Basic1000large()]
+    confs= [cliquid.Basic10000()] #cliquid.Basic100(),cliquid.Money100()] #,cliquid.Basic1000()] #,cliquid.Money100(),cliquid.Basic1000large()]
     for conf in confs:
         fn = os.path.join(cliquid.PATH_DATA,'tstack_'+conf.CONF_NAME+'.sql')
         if(not os.path.exists(fn) or True):
