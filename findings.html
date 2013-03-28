@@ -291,20 +291,24 @@
     </script>
 </head>
 <body>
-<h2>Experiments</h2>
+<h2>Experiments of openBarter</h2>
+
+<p>omega is the ratio between the quantity provided and the quantity received. This ratio is expected by an order and produced by movements of exchange cycles.</p>
 
 <p>Results presented were obtained to observe variations of foor indicators for different size of the order book:<ul>
 <li>the mean execution time of an order (delay),</li> 
 <li>the mean number of movements per cycle (nbcycle),</li>
 <li>fluidity of the market that is a measurement of it's capacity to drain values out of the order book (fluidity),</li>
-<li>the ratio between omega produced by movements and minimum omega required by the corresponding order (gain).</li>
+<li>the ratio between omega produced by movements and minimum omega expected by the corresponding order (gain).</li>
 </ul>
 </p>
-</br>Results presented here were produced by version 7.0.1 of openBarter.</p>
-<h3>Experimentation protocol</h3>
-<p>The order book is filled with barter limit orders where the ratio qtt_prov/qtt_requ between the quantity provided and the quantity required is chosen randomly using a continuous uniform distribution between 0.5 and 1.5, and where the quantity provided (qtt_prov) is 10 000. The order book is filled by producing first a big book with the desired statistic, then extracting the beginning of the book to obtain the chosen size. For this given size, results presented are the means of values obtained by submitting 1000 barter limit orders. This set of orders submitted is the same for all size.</p>
+<p>Results presented here were produced by version 7.0.1 of openBarter.</p>
 
-<p>The fluidity of the market is defined as the ratio between the output flow of values produced by movements and the input flow of values offered by orders submitted to the order book. Flows of value are obtained by summing quantities of values for all qualities. The input flow is 10 000 (qtt_prov) * 1000 orders, and the output flow is the sum of quantities moved.</p>  
+<h3>Experimentation protocol</h3>
+<p>The order book is filled with barter limit orders where omega is chosen randomly using a continuous uniform distribution between 0.5 and 1.5, and where the quantity provided (qtt_prov) is 10 000. The order book is filled by producing first a big book with the desired statistic, then extracting the beginning of the book to obtain the chosen size. For this given size, results presented are the means of values obtained by submitting 1000 barter limit orders. This set of orders submitted is the same for all sizes explored by simulations.</p>
+
+<p>The fluidity of the market is defined as the ratio between the output flow of values produced by movements and the input flow of values offered by orders submitted to the order book. Flows of value are obtained by summing quantities of values for all qualities. The input flow is 10 000 (qtt_prov) * 1000 orders, and the output flow is the sum of quantities moved.</p>
+ 
 
 <h3>regular and barter market compared</h3>
 
@@ -403,7 +407,7 @@ A diversity of qualities 100 was used to show the sensibility of these limits.</
 </ul>
 
 <h3>diversity of qualities with non uniform distributions</h3>
-<p>Different diversity of qualities are considered (100,1000 and 10000) noted (1e2,1e3,1e4) with a beta distribution (alpha=2.0,beta=5.0) in order to simulate the fact that few qualities are used far more frequently that others. A beta distribution(2.0,5.0) has a mean=0.29 and a variance=0.03.</p>
+<p>Different diversity of qualities are considered (100,1000 and 10000) noted (1e2,1e3,1e4) with a <a href="http://en.wikipedia.org/wiki/Beta_distribution" >beta distribution (alpha=2.0,beta=5.0)</a> in order to simulate the fact that few qualities are used far more frequently that others. This beta distribution has a mean=0.29 and a variance=0.03.</p>
 <p>Results was obtained with Y=64, P=1024*10 and a set of 100 orders.</p>
 <table>
 <tr>
