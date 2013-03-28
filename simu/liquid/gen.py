@@ -130,8 +130,8 @@ def test(cexec,conf,size):
     
 def perftests():
     import concat
-    cexecs = [cliquid.Exec3()] #,cliquid.Exec2(),cliquid.Exec3(),cliquid.Exec4()]  
-    confs= [cliquid.Basic100(),cliquid.Basic1000(),cliquid.Basic10000()] #cliquid.Basic100(),cliquid.Money100()] #,cliquid.Basic1000()] #,cliquid.Money100(),cliquid.Basic1000large()]
+    cexecs = [cliquid.Exec1(),cliquid.Exec2(),cliquid.Exec3(),cliquid.Exec4()]  
+    confs= [cliquid.Basic1000()] #,cliquid.Basic1000()] #,cliquid.Money100(),cliquid.Basic1000large()]
     for conf in confs:
         fn = os.path.join(cliquid.PATH_DATA,'tstack_'+conf.CONF_NAME+'.sql')
         if(not os.path.exists(fn) or True):
@@ -146,5 +146,28 @@ def perftests():
                     f.write("%i;%f;%f;%f;%f;\n" % (size,duree,liqu,nbcm,gain))
                     
     concat.makeVis('result_')
+    
+def perftests2():
+    import concat
+  
+    #confs= [(cliquid.Exec3(),cliquid.Basic100()),(cliquid.Exec5(),cliquid.Money100())] # 
+    confs= [(cliquid.Exec3(),cliquid.Basic100large())] # large order book
+    
+    for config in confs:
+        cexec,conf = config
+        fn = os.path.join(cliquid.PATH_DATA,'tstack_'+conf.CONF_NAME+'.sql')
+        if(not os.path.exists(fn) or True):
+            generate(conf)
+            
+        fn = os.path.join(cliquid.PATH_DATA,'result_'+conf.CONF_NAME+'_'+cexec.NAME+'.txt')
+        
+        with open(fn,'w') as f:
+            for i in range(conf.LIQ_ITER):
+                size = (i+1) * conf.LIQ_PAS
+                duree,liqu,nbcm,gain = test(cexec,conf,size)
+                f.write("%i;%f;%f;%f;%f;\n" % (size,duree,liqu,nbcm,gain))
+                    
+    concat.makeVis('result_')
+
 
             
