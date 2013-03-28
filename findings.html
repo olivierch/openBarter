@@ -300,26 +300,23 @@
 <li>the mean execution time of an order (delay),</li> 
 <li>the mean number of movements per cycle (nbcycle),</li>
 <li>fluidity of the market that is a measurement of it's capacity to drain values out of the order book (fluidity),</li>
-<li>the ratio between ω produced by movements and ω expected by the corresponding order (gain).</li>
+<li>the ratio between ω produced by movements and ω expected by the corresponding order, measuring the profit made by the transaction (gain).</li>
 </ul>
 </p>
-<p>Results presented here were produced by version 7.0.1 of openBarter.</p>
+<p>Results presented here were produced by version 7.0.1 of openBarter instrumented for the purpose of the simulation.</p>
 
 <h3>Experimentation protocol</h3>
-<p>The order book is filled with N barter limit orders where ω is chosen randomly using a continuous uniform distribution between 0.5 and 1.5, and where the quantity provided is 10 000. The order book is filled by producing first a big book with the desired statistic, then extracting the beginning of the book to obtain the chosen size. For this given size, results presented are the means of values obtained by submitting barter limit orders. The number of elements of this set is (S).</p>
+<p>The order book is filled with N barter limit orders where ω is chosen randomly using a continuous uniform distribution between 0.5 and 1.5, and where the quantity provided is 10 000. The protocol used to explore different size of the book is the following:</p>
+<p>A large external order book is created with the desired statistic. For each book size, the beginning of this external book is chosen to be the set of pending orders of the real order book of the given size. The table of movements is cleared. A set of barter limit orders is submitted to the book. The number of elements of this set is (S). Results presented are means of results obtained.</p>
 
-<p>Constants defined by the model to limit computation load are:<ul>
+<p>Constants defined by openbarter to limit computation load are:<ul>
 <li>The maximum number of movement per cycle (Y),</li>
 <li>The maximum number of movement per transaction, since a transaction can wrap several cycles (M),</li>
 <li>The maximum number of cycle explored (P).</li>
 </ul>
 </p>
 
-<p>The fluidity of the market is defined as the ratio between the output flow of values produced by movements and the input flow of values offered by orders submitted to the order book. Flows of value are obtained by summing quantities of values for all qualities. The input flow is 10 000 (qtt_prov) * 1000 orders, and the output flow is the sum of quantities moved.</p>
-
-
-
-
+<p>The fluidity of the market is defined as the ratio between the output flow of values produced by movements and the input flow of values offered by orders submitted to the order book. Flows of value are obtained by summing quantities of values for all qualities. The input flow is 10 000 (qtt_prov) * 1000 orders = 10 000 000, and the output flow is the sum of quantities brought by movements.</p>
 
 <h3>regular and barter market compared</h3>
 
@@ -338,15 +335,15 @@
 <td><div id="chart1_gain" style="width: 450px; height: 250px;"></div></td>
 </tr>
 </table>
-<p>These measurements leads to the following comments:</p>
+<p>When no movement is produced, values are 0 and should not be considered. These measurements leads to the following comments:</p>
 <ul>
 <li>Fluidity is far better with <i>1e2uni</i> than with the <i>money</i> scenario especially for low book volumes.</li>
 <li>The computation of the <i>1e2uni</i> scenario is more expensive, but tend to decrease with the volume of the book.</li>
-<li>The larger cycles explored by the <i>1e2uni</i> scenario give more gain and cooperation opportunities than for the <i>money</i> scenario.</li>
-<li>When no movement is produced, values are 0 and should not be considered.</li>
+<li>Larger cycles explored by the <i>1e2uni</i> scenario give more gain and cooperation opportunities than for the <i>money</i> scenario.</li>
+
 </ul></p>
 <p>A previous attempt of regular market simulation was made with Y=64, but produced non-bilateral cycles, showing that the regular market simulation was inaccurate. Cycles was found with four partners A,B,C,D exchanging qualities Q1,Q2,€ where A provides Q1 to B, B provides € to C, C provides Q2 to D and D provides € to A. This cycle should be better for partners than two separate bilateral cycles or was the single exchange possibility.</p>
-</ul>
+<p>The better fluidity of the <i>1e2uni</i> scenario can be explained by the fact that a single order brings both request and demand, while in the <i>money</i> scenario, an order just brings one of them. That's why the <a href="http://en.wikipedia.org/wiki/Percolation">percolation</a> threasold is reached by barter before the <i>money</i> scenario.<p>
 
 <h3>Large order book</h3>
 <p>This simulation was made to explore large order books with a diversity of quality of 10000 using a uniform distribution.</p>
@@ -385,8 +382,7 @@
 <ul>
 <li>The fluidity of the market increases when de diversity decreases.</li>
 <li>Greater gain reveals higher competition for low diversity of qualities.</li>
-<li>The number of partners in cycles is large when the volume of the book reaches the diversity of qualities.</li>
-<li>The computation is increased by P that was multiplied by 10.</li>
+<li>The number of partners in cycles is large when the volume of the book is near a threasold depending on the diversity of qualities.</li>
 </ul>
 
 <h3>Diversity of qualities with non uniform distributions</h3>
@@ -405,12 +401,12 @@
 <p>These measurements leads to the following comments:</p>
 <p>
 <ul>
-<li>Percolation threasolds remain even with non uniform distribution</li>
-<li>The threasold appears for lower volumes of the order book.</li>
+<li>Percolation threasolds remains even with a non uniform distribution,</li>
+<li>The threasold appears for lower volumes of the order book when compared to that of a uniform distribution.</li>
 </ul>
 </p>
 
-<h3>sensibility of limits</h3>
+<h3>Sensibility of limits</h3>
 
 <p>Different limits were used:<ul>
 <li>X1: Y=64 P=1024*5 M=128</li>
@@ -440,7 +436,7 @@ A diversity of qualities 1000 with a uniform distribution was used to show the s
 <p> <a href="./index.html">Go back to the main page</a>.</p>
 <footer>
 		
-<p><small>&copy; Copyright Olivier Chaussavoine 2011. All Rights Reserved.</small></p>
+<p><small>&copy; Copyright Olivier Chaussavoine 2011-2013. All Rights Reserved.</small></p>
 <a href='https://www.ohloh.net/accounts/126827?ref=Tiny'>
 <img alt='Ohloh profile for olchaussavoine' height='15' src='https://www.ohloh.net/accounts/126827/widgets/account_tiny.gif' width='80' /></a>
 </footer>
