@@ -84,3 +84,22 @@ def batchObIn_(strconn):
                 cur.close()
             if(conn):
                 conn.close()
+                
+def printStats(strconn):
+    conn = getConn(strconn)
+    cur = conn.cursor()
+    if(consts.dbSchema):
+        cur.execute("SET search_path TO %s" % consts.dbSchema)
+        
+    cur.execute("SELECT count(*) from tstack")
+    res = cur.fetchone()
+    print "cnt(tstack):\t%i" % res[0]
+    
+    cur.execute("SELECT count(*) from torder")
+    res = cur.fetchone()
+    print "cnt(torder):\t%i" % res[0]
+
+    cur.execute("SELECT count(*) from tmvt")
+    res = cur.fetchone()
+    print "cnt(tmvt):\t%i" % res[0]
+    

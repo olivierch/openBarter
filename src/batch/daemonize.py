@@ -7,7 +7,7 @@ def daemonize(stdin='/dev/null',stdout='/dev/null',stderr='/dev/null'):
 	try:
 		pid = os.fork()
 		if pid > 0:
-			sys.stdout.write("fork with stdout=%s,stderr=%s\n" % (stdout,stderr))
+			sys.stdout.write("fork with:\nstdin=%s\nstdout=%s\nstderr=%s\n" % (stdin,stdout,stderr))
 			sys.exit(0) #exit the first parent.
 	except OSError, e:
 		sys.stderr.write("fork #1 failed: (%d) %s\n" % (e.errno,e.stderror))
