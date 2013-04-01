@@ -242,16 +242,29 @@ DECLARE
 	_t           tstack%rowtype;
 BEGIN
 	_rs := fcheckquote(_type & 3,_own,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt);
-	IF(_r.diag != 0) THEN
-	    _r.err := _r.diag;
+	IF(_rs.diag != 0) THEN
+	    _r.err := _rs.diag;
 		RETURN _r;
 	END IF;
 	_ty := _type & ~3;
-	IF(NOT(
-	    (_ty = (4 | 8 | 64)) OR (_ty = (4 | 8 | 128)) OR (_ty = (4 | 128)) OR (_ty = (128)) 
-	)) THEN
+
+	IF(
+	    (_ty = (4 | 8 | 64))  OR (_ty = (4 | 8 | 128)) 
+	) THEN 
+	    _qtt_requ := 1;
+	    _qtt_prov := 1;
+	    _qtt := 1;
+	ELSIF(
+	    (_ty = (4 | 128)) AND (_qtt_requ IS NOT NULL) AND (_qtt_prov IS NOT NULL)
+	) THEN
+	    _qtt := 0;
+	ELSIF(
+	    (_ty = (128)) AND (_qtt_requ IS NOT NULL) AND (_qtt_prov IS NOT NULL) AND (_qtt_prov IS NOT NULL)
+	) THEN
+	    _t.oid := 0; -- rien dutout
+	ELSE
 	    _r.err := -100;
-	    RETURN _r;
+	    RETURN _r;	
 	END IF;
 
 	_t.usr := session_user;

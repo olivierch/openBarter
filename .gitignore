@@ -10,6 +10,7 @@
 /simu/liquid/data/
 /simu/liquid/test/
 /simu/liquid/test1/
+/batch/data/*
 */.*
 *~
 */*~
