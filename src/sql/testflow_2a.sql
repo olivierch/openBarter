@@ -2,7 +2,7 @@
 CREATE SCHEMA test;
 SET search_path TO test;
 
-create extension flow with version '1.0';
+create extension flowf; -- with version '1.0';
 
 RESET client_min_messages;
 RESET log_error_verbosity;

@@ -1,10 +1,10 @@
 
-MODULE_big = flow
+MODULE_big = flowf
 #OBJS = tsquery.o ywolf.o earth.o wolfc.o follow.o
 OBJS = flowm.o yflow.o yflowparse.o yorder.o flowc.o
 
-EXTENSION = flow
-DATA = flow--1.0.sql flow--unpackaged--1.0.sql
+EXTENSION = flowf
+DATA = flowf--0.7.sql flowf--unpackaged--0.7.sql
 
 REGRESS = testflow_1 testflow_2 testflow_2a testflow_3 testflow_3a testflow_3b testflow_4
 

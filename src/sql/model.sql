@@ -10,8 +10,8 @@ SET log_error_verbosity = terse;
 -- drop extension if exists btree_gin cascade;
 -- create extension btree_gin with version '1.0';
 
-drop extension if exists flow cascade;
-create extension flow with version '1.0';
+drop extension if exists flowf cascade;
+create extension flowf; -- with version '1.0';
 
 --------------------------------------------------------------------------------
 -- main constants of the model
