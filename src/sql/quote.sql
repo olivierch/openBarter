@@ -140,7 +140,7 @@ BEGIN
 	_ro := fcheckorder(_t);
 	
 	IF(_ro.err != 0) THEN RETURN _ro; END IF;
-
+    -- RAISE WARNING 'ICI %',_ro.ord;
 	_cnt := fcreate_tmp(_ro.ord);
 	_nbmvts := 0;
 	_ro.json := '';
@@ -267,6 +267,7 @@ BEGIN
 	    RETURN _r;	
 	END IF;
 
+    _t.id  := 0;
 	_t.usr := session_user;
 	_t.own := _own;
 	_t.oid := NULL;

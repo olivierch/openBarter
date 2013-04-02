@@ -1,4 +1,8 @@
 
+drop schema IF EXISTS market CASCADE;
+CREATE SCHEMA market;
+SET search_path TO market;
+grant usage on schema market to public;
 \i sql/model.sql
 RESET client_min_messages;
 RESET log_error_verbosity;
@@ -29,3 +33,5 @@ select * from fsubmitbarter(1,'luc',NULL,'ctEuro',10,'ctDollar',20,'1 hour'::int
 select * from fproducemvt();
 select * from fsubmitbarter(1,'cecile',NULL,'ctDirham',10,'ctEuro',20,'1 hour'::interval);
 select * from fproducemvt();
+
+--select * from fgetquote(78,'test','ctEuro',NULL,'ctDirham',NULL,NULL);

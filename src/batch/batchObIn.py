@@ -37,7 +37,7 @@ def batchWrap(strconn):
         try:
             batchObIn_(strconn)
         except Exception,e:
-            msg = 'Exception:\n %s' % (second,str(e),)
+            msg = 'Exception:\n %s' % (str(e),)
             daemonize.send_error('daemon standby',msg,False)
             
         second = 10
@@ -47,7 +47,7 @@ def batchWrap(strconn):
                 second = 0
 
             except Exception,e:
-                sleep(second)
+                time.sleep(second)
                 second *=2
 
         msg = 'The model is accessible' % (cnt,)
