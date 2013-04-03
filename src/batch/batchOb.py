@@ -107,7 +107,8 @@ def getPid():
 def status(pid):
     pid = getPid()
     if(pid): 
-        print "running pid=%i on bd %s" % (pid,consts.dbName)
+        print "running pid=%i on bd %s on host %s:%s" % (pid,consts.dbName,consts.dbHost,consts.dbPort)
+        print "working directory: %s" % consts.workdir
         #batchObIn.printStats(getStrConn())
     else: print "stopped"
     

@@ -895,6 +895,27 @@ GRANT EXECUTE ON FUNCTION  fackmvt() TO role_co;
 
 
 --------------------------------------------------------------------------------
+CREATE FUNCTION fackmvtid(_id int) RETURNS int AS $$
+DECLARE
+	_cnt	int;
+	_m  tmvt%rowtype;
+BEGIN
+	SELECT * INTO _m FROM tmvt WHERE usr=session_user AND ack=false AND id=_id;
+	IF(NOT FOUND) THEN
+		RETURN 0;
+	END IF;
+	UPDATE tmvt SET ack=true WHERE id=_m.id;
+	SELECT count(*) INTO STRICT _cnt FROM tmvt WHERE grp=_m.grp AND ack=false;
+	IF(_cnt = 0) THEN
+		DELETE FROM tmvt where grp=_m.grp;
+	END IF;
+	RETURN 1;
+
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fackmvtid(int) TO role_co;
+
+--------------------------------------------------------------------------------
 CREATE FUNCTION fcleanoutdatedorder() RETURNS int AS $$
 DECLARE
 	_cnt	int := 0;
