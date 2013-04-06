@@ -47,6 +47,7 @@ BEGIN
 	END IF;	
 	-- ORDER_BEST 2 NOQTTLIMIT 4 IGNOREOMEGA 8 PREQUOTE 64
 	_r.id := fsubmitorder(2 | 4 | 8 | 64,_own,NULL,_qua_requ,1,_qua_prov,1,1,NULL);
+	_r.diag = 0;
 	
 	RETURN _r;
 END; 
@@ -68,7 +69,7 @@ BEGIN
 	END IF;	
 	-- NOQTTLIMIT 4 IGNOREOMEGA 8 QUOTE 128
 	_r.id := fsubmitorder((_type & 3) | 4 | 8 | 128,_own,NULL,_qua_requ,1,_qua_prov,1,1,NULL);
-	
+	_r.diag = 0;
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
@@ -89,7 +90,7 @@ BEGIN
 	END IF;
 	--  NOQTTLIMIT 4 QUOTE 128
 	_r.id := fsubmitorder((_type & 3) | 4 | 128,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,0,NULL);
-	
+	_r.diag = 0;
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
@@ -110,7 +111,7 @@ BEGIN
 	END IF;
 	-- QUOTE 128	
 	_r.id := fsubmitorder((_type & 3) | 128,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,NULL);
-	
+	_r.diag = 0;
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;

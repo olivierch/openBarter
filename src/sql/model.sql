@@ -438,7 +438,7 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fsubmitbarter(dtypeorder,text,int,text,int8,text,int8,interval) TO role_co;
 --------------------------------------------------------------------------------
-CREATE OR REPLACE FUNCTION 
+CREATE FUNCTION 
 	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8,_duration interval)
 	RETURNS int AS $$	
 DECLARE
