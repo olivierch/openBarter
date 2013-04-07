@@ -7,7 +7,7 @@ RESET log_error_verbosity;
 SET client_min_messages = notice;
 SET log_error_verbosity = terse;
 */
--- SET search_path TO test;
+SET search_path TO market;
 truncate torder;
 truncate tstack;
 SELECT setval('tstack_id_seq',1,false);

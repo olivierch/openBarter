@@ -1,5 +1,6 @@
 \i sql/model.sql
 \set ECHO none
+psql:sql/model.sql:3: NOTICE:  schema "market" does not exist, skipping
  _create_roles 
 ---------------
              0

@@ -1,8 +1,9 @@
 \set ECHO none
 
--- drop schema IF EXISTS test CASCADE;
--- CREATE SCHEMA market;
--- SET search_path TO market;
+drop schema IF EXISTS market CASCADE;
+CREATE SCHEMA market;
+SET search_path TO market;
+
 
 SET client_min_messages = warning;
 SET log_error_verbosity = terse;
@@ -149,6 +150,9 @@ $$ LANGUAGE PLPGSQL;
 
 SELECT _create_roles();
 DROP FUNCTION _create_roles();
+
+grant usage on schema market to role_bo;
+grant usage on schema market to role_co;
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION fifo_init(_name text) RETURNS void AS $$

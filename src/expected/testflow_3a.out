@@ -1,4 +1,4 @@
--- SET search_path TO test;
+SET search_path TO market;
 truncate torder;
 truncate tstack;
 truncate tmvt;
