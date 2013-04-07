@@ -150,10 +150,16 @@ $$ LANGUAGE PLPGSQL;
 
 SELECT _create_roles();
 DROP FUNCTION _create_roles();
-
+--------------------------------------------------------------------------------
 grant usage on schema market to role_bo;
 grant usage on schema market to role_co;
 
+/* access to the market can be desabled/enabled  with the commands 
+    REVOKE role_co FROM role_client;
+    REVOKE role_bo FROM role_batch;
+    GRANT role_co TO role_client;
+    GRANT role_bo TO role_batch;
+*/
 --------------------------------------------------------------------------------
 CREATE FUNCTION fifo_init(_name text) RETURNS void AS $$
 BEGIN
