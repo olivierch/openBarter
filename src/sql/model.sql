@@ -548,6 +548,7 @@ DECLARE
 	_op			yorder;
 	_mid		int;
 	_wid		int;
+	_otype      int;
 BEGIN
 	_ro.ord 		:= NULL;
 	_ro.ordp		:= NULL;
@@ -559,11 +560,28 @@ BEGIN
 	_ro.err			:= 0;
 	_ro.json		:= NULL;
 	
-	
+	_otype = _t.type & (~3);
 	_wid := fgetowner(_t.own);
+		
+    IF((_otype & (128|64)) != 0) THEN -- quote or prequote
+		_ro.err := 0;
+			
+	ELSIF(_t.type = 32 ) THEN -- remove barter
+		_ro.err := 0;
+		RETURN _ro;
+		
+    ELSIF (_otype = 0) THEN -- barter
+        _ro.err := 0;
+        
+    ELSE --illegal command
+        _ro.err := -5;
+        _ro.json:= '{"error":"illegal command"}';
+        
+	END IF;	
+
 	
 
-	IF (_t.oid IS NOT NULL) THEN
+	IF ((_ro.err = 0) AND (_t.oid IS NOT NULL)) THEN
 		SELECT (ord).type,(ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
 			INTO _op.type,_op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder WHERE (ord).id= _t.oid;
 
@@ -643,6 +661,7 @@ DECLARE
 
 	_MAXMVTPERTRANS 	int := fgetconst('MAXMVTPERTRANS');
 	_nbmvts		int;
+	_otype      int;
 BEGIN
 
 	lock table torder in share update exclusive mode;
@@ -654,16 +673,20 @@ BEGIN
 	END IF;
 
 	DELETE FROM tstack WHERE id=_tid RETURNING * INTO STRICT _t;
-	
-	IF((_t.type & (128|64)) != 0) THEN -- quote or prequote
-		_ro := fproducequote(_t,true);	
-		RETURN _ro;
-	END IF;
-	
-	 -- the order is a barter
-	_ro := fcheckorder(_t);
-	
+
+	_ro := fcheckorder(_t);	
 	IF(_ro.err != 0) THEN RETURN _ro; END IF;
+	
+	_otype = _t.type & (~3);
+	IF((_otype & (128|64)) != 0) THEN -- quote or prequote
+		_ro := fproducequote(_ro,_t,true);	
+		RETURN _ro;
+	ELSIF(_t.type = 32) THEN -- remove barter
+		_ro := fremovebarter(_t);	
+		RETURN _ro;
+	END IF;	
+	 -- the order is a barter
+
 	
 	INSERT INTO torder(usr,ord,created,updated,duration) VALUES (_t.usr,_ro.ord,_t.created,NULL,_t.duration);
 
@@ -926,6 +949,9 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fackmvtid(int) TO role_co;
 
 --------------------------------------------------------------------------------
+-- the function cleans only parent orders,
+-- the duration of childs is that of parents.
+
 CREATE FUNCTION fcleanoutdatedorder() RETURNS int AS $$
 DECLARE
 	_cnt	int := 0;
@@ -934,24 +960,99 @@ DECLARE
 	_mid	int;
 	_json	text;
 BEGIN
-	FOR _o IN SELECT * FROM torder WHERE (_o.created + _o.duration) <= clock_timestamp() LOOP
-		_json:= '{"error":"the order is too old"}';
-		_yo := _o.ord;
-		INSERT INTO tmvt (	type,json,			nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
-							qtt,nat,			ack,exhausted,	refused,order_created,created
-						 ) 
-			VALUES       (	_yo.type,_json,	1,  1,NULL,_yo.id,_o.usr,_yo.oid,_yo.own,_yo.own,
-							_yo.qtt,_yo.qua_prov,	false,true,		-4,_o.created,statement_timestamp()
-						 )
-			RETURNING id INTO _mid;
-		UPDATE tmvt SET grp = _mid WHERE id = _mid;
-		DELETE FROM torder o WHERE (o.ord).id = _yo.id; 	
+    -- foreach parent order
+	FOR _o IN SELECT * FROM torder WHERE (_o.created + _o.duration) <= clock_timestamp() AND (_o.ord).oid = (_o.ord).id LOOP
+
+		-- delete parents and childs
+		DELETE FROM torder o WHERE (o.ord).oid = _yo.id;
+		GET DIAGNOSTICS _mid = ROW_COUNT;
+	    _cnt := _cnt + _mid;
+	    
+	    IF(_mid = 0) THEN
+	        RAISE EXCEPTION 'the order % was not found',_o.id  USING ERRCODE='YA002';
+	    ELSE
+		    _json:= '{"error":"the parent order is too old"}';
+		    _yo := _o.ord;
+		    INSERT INTO tmvt (	type,json,			nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
+							    qtt,nat,			ack,exhausted,	refused,order_created,created
+						     ) 
+			    VALUES       (	_yo.type,_json,	1,  1,NULL,_yo.id,_o.usr,_yo.oid,_yo.own,_yo.own,
+							    _yo.qtt,_yo.qua_prov,	false,true,		-4,_o.created,statement_timestamp()
+						     )
+			    RETURNING id INTO _mid;
+		    UPDATE tmvt SET grp = _mid WHERE id = _mid;
+	    END IF;
+	    
 	END LOOP;
 	RETURN _cnt;
 
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fcleanoutdatedorder() TO role_bo;
+
+--------------------------------------------------------------------------------
+-- barter delete
+-- type=32, oid is the barter to delete
+--------------------------------------------------------------------------------
+CREATE FUNCTION fremovebarter(_t tstack) RETURNS yresorder AS $$
+DECLARE
+	_ro		    yresorder%rowtype;
+	_op			yorder;	
+	_cnt		int;
+	_wid        int;
+	_mid        int;
+	_exhausted  boolean;
+	
+BEGIN
+    _ro.err := 0;
+    _ro.json := NULL;
+    _ro.qtt := 0;
+    _exhausted := false;
+    
+    _wid := fgetowner(_t.own);
+    
+	SELECT (ord).type,(ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
+		INTO _op.type,_op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder 
+		WHERE (ord).id= _t.oid AND (ord).id= _wid ;
+
+	IF (NOT FOUND) THEN
+		_ro.json:= '{"error":"the order to delete does not exist for this owner"}';
+		_ro.err := -7; 		
+	END IF;
+	
+	IF(_ro.err = 0) THEN
+	    -- _t.qua_prov := _op.qua_prov;
+	    IF(_op.id = _op.oid) THEN -- it is a parent order
+	        
+		    -- delete parents and childs
+		    DELETE FROM torder o WHERE (o.ord).oid = _op.id;
+		    GET DIAGNOSTICS _cnt = ROW_COUNT;
+		    
+		    IF(cnt = 0) THEN
+		        RAISE EXCEPTION 'the order % was not found while deleting',_op.id  USING ERRCODE='YA002';
+		    END IF;
+		    
+	        _exhausted := true;
+	        _ro.qtt := _op.qtt;
+	    -- ELSE do nothing when it is a child
+	    END IF;
+	-- ELSE do nothing on error
+	END IF;
+	
+    INSERT INTO tmvt (	type,json,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
+					    qtt,nat,ack,exhausted,refused,order_created,created
+				     ) 
+	    VALUES       (	_t.type,_ro.json,1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,
+					    _ro.qtt,_t.qua_prov,false,_exhausted,_ro.err,_t.created,statement_timestamp()
+				     )
+	    RETURNING id INTO _mid;
+    UPDATE tmvt SET grp = _mid WHERE id = _mid;
+	
+	RETURN _ro;
+
+END; 
+$$ LANGUAGE PLPGSQL;
+
 
 \i sql/quote.sql
 \i sql/stat.sql

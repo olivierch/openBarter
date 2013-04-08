@@ -33,27 +33,67 @@ void yorder_get_order(Datum eorder,Torder *orderp) {
 	tmptup.t_tableOid = InvalidOid;
 	tmptup.t_data = tuple;
 
-	orderp->type = DatumGetInt32(heap_getattr(&tmptup,1,tupDesc,&isnull)); if(isnull) goto _end;
+	orderp->type = DatumGetInt32(heap_getattr(&tmptup,1,tupDesc,&isnull)); 	
+	if(isnull) 
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			   errmsg("the field type is null in yorder_get_order")));
+
 	if(!ORDER_TYPE_IS_VALID(orderp->type)) 
 		ereport(ERROR,
 			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			   errmsg("order type incorrect in yorder_get_order"))); 
-	orderp->id = DatumGetInt32(heap_getattr(&tmptup,2,tupDesc,&isnull)); if(isnull) goto _end;
-	orderp->own = DatumGetInt32(heap_getattr(&tmptup,3,tupDesc,&isnull)); if(isnull) goto _end;
-	orderp->oid = DatumGetInt32(heap_getattr(&tmptup,4,tupDesc,&isnull)); if(isnull) goto _end;
-	orderp->qtt_requ = DatumGetInt64(heap_getattr(&tmptup,5,tupDesc,&isnull)); if(isnull) goto _end;
-	orderp->qua_requ = (Datum) PG_DETOAST_DATUM(heap_getattr(&tmptup,6,tupDesc,&isnull)); if(isnull) goto _end;
-	orderp->qtt_prov = DatumGetInt64(heap_getattr(&tmptup,7,tupDesc,&isnull)); if(isnull) goto _end;
-	orderp->qua_prov = (Datum) PG_DETOAST_DATUM(heap_getattr(&tmptup,8,tupDesc,&isnull)); if(isnull) goto _end;
-	orderp->qtt = DatumGetInt64(heap_getattr(&tmptup,9,tupDesc,&isnull)); if(isnull) goto _end;
+			   errmsg("order type incorrect in yorder_get_order")));
+			    
+	orderp->id = DatumGetInt32(heap_getattr(&tmptup,2,tupDesc,&isnull)); 
+	if(isnull) 
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			   errmsg("the field id is null in yorder_get_order")));
+
+	orderp->own = DatumGetInt32(heap_getattr(&tmptup,3,tupDesc,&isnull)); 
+		if(isnull) 
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			   errmsg("the field own is null in yorder_get_order")));
+
+	orderp->oid = DatumGetInt32(heap_getattr(&tmptup,4,tupDesc,&isnull)); 	
+	if(isnull) 
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			   errmsg("the field oid is null in yorder_get_order")));
+
+	orderp->qtt_requ = DatumGetInt64(heap_getattr(&tmptup,5,tupDesc,&isnull)); 	
+	if(isnull) 
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			   errmsg("the field qtt_requ is null in yorder_get_order")));
+
+	orderp->qua_requ = (Datum) PG_DETOAST_DATUM(heap_getattr(&tmptup,6,tupDesc,&isnull)); 	
+	if(isnull) 
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			   errmsg("the field qua_requ is null in yorder_get_order")));
+
+	orderp->qtt_prov = DatumGetInt64(heap_getattr(&tmptup,7,tupDesc,&isnull)); 	
+	if(isnull) 
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			   errmsg("the field qtt_prov is null in yorder_get_order")));
+
+	orderp->qua_prov = (Datum) PG_DETOAST_DATUM(heap_getattr(&tmptup,8,tupDesc,&isnull)); 	
+	if(isnull) 
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			   errmsg("the field qua_prov is null in yorder_get_order")));
+
+	orderp->qtt = DatumGetInt64(heap_getattr(&tmptup,9,tupDesc,&isnull)); 	
+	if(isnull) 
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			   errmsg("the field qtt is null in yorder_get_order")));
 	
 	ReleaseTupleDesc(tupDesc);
 	
-	return;
-_end:
-	ereport(ERROR,
-			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
-			   errmsg("a field is null in yorder_get_order")));	
 	return;
 }
 

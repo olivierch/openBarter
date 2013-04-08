@@ -122,9 +122,9 @@ GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8,int8
 --------------------------------------------------------------------------------
 -- quote execution at the output of the stack
 --------------------------------------------------------------------------------
-CREATE FUNCTION fproducequote(_t tstack,_record boolean) RETURNS yresorder AS $$
+CREATE FUNCTION fproducequote(_ro yresorder,_t tstack,_record boolean) RETURNS yresorder AS $$
 DECLARE
-	_ro		    yresorder%rowtype;
+	--_ro		    yresorder%rowtype;
 	_cnt		int;
 	_cyclemax 	yflow;
 	_cycle		yflow;
@@ -137,11 +137,12 @@ DECLARE
 	_MAXMVTPERTRANS 	int := fgetconst('MAXMVTPERTRANS');
 	
 BEGIN
-
+/*
 	_ro := fcheckorder(_t);
 	
 	IF(_ro.err != 0) THEN RETURN _ro; END IF;
-    -- RAISE WARNING 'ICI %',_ro.ord;
+    -- RAISE WARNING 'ICI %',_ro.ord; 
+*/
 	_cnt := fcreate_tmp(_ro.ord);
 	_nbmvts := 0;
 	_ro.json := '';
