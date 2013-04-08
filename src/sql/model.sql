@@ -994,6 +994,22 @@ GRANT EXECUTE ON FUNCTION  fcleanoutdatedorder() TO role_bo;
 -- barter delete
 -- type=32, oid is the barter to delete
 --------------------------------------------------------------------------------
+--------------------------------------------------------------------------------
+-- same as previous without _qtt
+--------------------------------------------------------------------------------
+CREATE FUNCTION 
+	frmbarter(_own text,_oid int)
+	RETURNS yressubmit AS $$
+DECLARE
+	_r			yressubmit%rowtype;	
+BEGIN
+	_r.id := fsubmitorder(32,_own,_oid,'',1,'',1,1,NULL);
+	_r.diag := 0;
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  frmbarter(text,int) TO role_co;
+
 CREATE FUNCTION fremovebarter(_t tstack) RETURNS yresorder AS $$
 DECLARE
 	_ro		    yresorder%rowtype;
@@ -1013,7 +1029,7 @@ BEGIN
     
 	SELECT (ord).type,(ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
 		INTO _op.type,_op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder 
-		WHERE (ord).id= _t.oid AND (ord).id= _wid ;
+		WHERE (ord).id= _t.oid AND (ord).own= _wid ;
 
 	IF (NOT FOUND) THEN
 		_ro.json:= '{"error":"the order to delete does not exist for this owner"}';
@@ -1028,7 +1044,7 @@ BEGIN
 		    DELETE FROM torder o WHERE (o.ord).oid = _op.id;
 		    GET DIAGNOSTICS _cnt = ROW_COUNT;
 		    
-		    IF(cnt = 0) THEN
+		    IF(_cnt = 0) THEN
 		        RAISE EXCEPTION 'the order % was not found while deleting',_op.id  USING ERRCODE='YA002';
 		    END IF;
 		    
