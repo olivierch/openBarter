@@ -423,7 +423,7 @@ BEGIN
 			RETURN _r;
 		END IF;		
 	ELSE
-		IF(NOT( (_qua_prov IS NULL) AND (_qtt_prov IS NULL) AND (_qtt IS NULL))) THEN
+		IF(NOT( (_qua_requ IS NOT NULL) AND (_qtt_requ>0) AND (_qua_prov IS NULL) AND (_qtt_prov>0) )) THEN
 			_r.diag := -4;
 			RETURN _r;
 		END IF;
@@ -625,7 +625,7 @@ BEGIN
 		_t.oid 	:= _t.id;		
 	ELSE
 		_t.qtt	:= _op.qtt;
-		_t.qtt_prov := _op.qtt_prov;
+		-- _t.qtt_prov := _op.qtt_prov;
 		_t.qua_prov := _op.qua_prov;
 		_ro.ordp := _op;
 	END IF;
