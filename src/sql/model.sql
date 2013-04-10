@@ -964,15 +964,14 @@ BEGIN
 	FOR _o IN SELECT * FROM torder WHERE (_o.created + _o.duration) <= clock_timestamp() AND (_o.ord).oid = (_o.ord).id LOOP
 
 		-- delete parents and childs
+		_yo := _o.ord;
 		DELETE FROM torder o WHERE (o.ord).oid = _yo.id;
 		GET DIAGNOSTICS _mid = ROW_COUNT;
-	    _cnt := _cnt + _mid;
 	    
-	    IF(_mid = 0) THEN
-	        RAISE EXCEPTION 'the order % was not found',_o.id  USING ERRCODE='YA002';
-	    ELSE
-		    _json:= '{"error":"the parent order is too old"}';
-		    _yo := _o.ord;
+	    IF(_mid != 0) THEN
+	        _cnt := _cnt + _mid;
+		    _json:= '{"info":"the parent order is too old - it is removed "}';
+		    
 		    INSERT INTO tmvt (	type,json,			nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
 							    qtt,nat,			ack,exhausted,	refused,order_created,created
 						     ) 
