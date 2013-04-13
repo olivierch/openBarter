@@ -188,13 +188,24 @@ comment on FUNCTION ftime_updated() is
 CREATE FUNCTION _reference_time(_table text) RETURNS int AS $$
 DECLARE
 	_res int;
+	_tablem text;
+	_tl text;
+	_tr text;
 BEGIN
-	
+    _tablem := _table;
+	LOOP
+	    _res := position('.' in _tablem);
+	    EXIT WHEN _res=0;
+	    _tl := substring(_tablem for _res-1);
+	    _tr := substring(_tablem from _res+1);
+	    _tablem := _tl || '_' || _tr;  
+	    
+	END LOOP;
 	EXECUTE 'ALTER TABLE ' || _table || ' ADD created timestamp';
 	EXECUTE 'ALTER TABLE ' || _table || ' ADD updated timestamp';
-	EXECUTE 'CREATE TRIGGER trig_befa_' || _table || ' BEFORE INSERT
+	EXECUTE 'CREATE TRIGGER trig_befa_' || _tablem || ' BEFORE INSERT
 		OR UPDATE ON ' || _table || ' FOR EACH ROW
-		EXECUTE PROCEDURE ftime_updated()' ; 
+		EXECUTE PROCEDURE market.ftime_updated()' ; 
 	RETURN 0;
 END; 
 $$ LANGUAGE PLPGSQL;
