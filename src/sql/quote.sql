@@ -172,7 +172,7 @@ BEGIN
 		_ro.json := _ro.json || yflow_to_jsona(_cyclemax);
 
 		-- for a QUOTE, set _ro.qtt_requ,_ro.qtt_prov,_ro.qtt
-		IF((_t.type & 128) = 128) THEN
+		IF((_t.type & 128) = 128) THEN -- QUOTE
 			IF(_firstloop) THEN
 				_ro.qtt_requ := _res[3]; -- qtt_requ
 				_ro.qtt_prov := _res[4]; -- qtt_prov

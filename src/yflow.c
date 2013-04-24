@@ -72,7 +72,7 @@ char *yflow_pathToStr(Tflow *yflow);
 void		_PG_init(void);
 void		_PG_fini(void);
 
-static double getRankFlow(Tflow *f);
+static double getOmegaFlow(Tflow *f);
 
 /******************************************************************************
 begin and end functions called when flow.so is loaded
@@ -517,11 +517,11 @@ Datum yflow_maxg(PG_FUNCTION_ARGS)
 	double			_rank0,_rank1;
 	bool			_sup = false;
 	
-	_rank0 = getRankFlow(f0);
+	_rank0 = getOmegaFlow(f0);
 	if(_rank0 == 0.0)
 		goto _end;
 		
-	_rank1 = getRankFlow(f1);
+	_rank1 = getOmegaFlow(f1);
 	if(_rank1 == 0.0)
 		goto _end;	
 	
@@ -562,34 +562,24 @@ _end:
 /******************************************************************************
 
 ******************************************************************************/
-static double getRankFlow(Tflow *f) {
-	short i,dim = f->dim;
+static double getOmegaFlow(Tflow *f) {
+	short i,k,dim = f->dim;
 	double	_rank = 1.0;
 	
 	if(dim < 2) // f is empty
 		return 0.0;
+    
+    k = dim;
+	if(FLOW_IS_IGNOREOMEGA(f)) 
+	    k -=1;
 
-	if(FLOW_IS_IGNOREOMEGA(f)) {
-	
-		obMRange(i,dim-1) {
-			Tfl *b = &f->x[i];
-			if(b->flowr <=0 ) 
-				return 0.0;	// flow is not a draft
-			_rank *=  GET_OMEGA_P(b);				
-		}
-		return _rank;
-			
-	} else {
-	
-		obMRange(i,dim) {
-			Tfl *b = &f->x[i];
-			if(b->flowr <=0 ) 
-				return 0.0;	// flow is not a draft
-			_rank *=  GET_OMEGA_P(b);				
-		}
-		return _rank;
-		
+	obMRange(i,k) {
+		Tfl *b = &f->x[i];
+		if(b->flowr <=0 ) 
+			return 0.0;	// flow is not a draft
+		_rank *=  GET_OMEGA_P(b);				
 	}
+	return _rank;
 		
 } 
 

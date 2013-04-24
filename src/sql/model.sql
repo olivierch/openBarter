@@ -550,7 +550,8 @@ CREATE TYPE yresorder AS (
     qtt_reci int8,
     qtt_give int8,
     err	int,
-    json text
+    json text,
+    own text
 );
 --------------------------------------------------------------------------------
 CREATE FUNCTION fcheckorder(_t	tstack) RETURNS yresorder AS $$
@@ -561,7 +562,7 @@ DECLARE
 	_wid		int;
 	_otype      int;
 BEGIN
-	_ro.ord 		:= NULL;
+	_ro.ord 		:= NULL; -- ROW(_t.type,_t.id,0,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_t.qtt)::yorder;
 	_ro.ordp		:= NULL;
 	_ro.qtt_requ	:= 0;
 	_ro.qtt_prov	:= 0;
@@ -570,6 +571,7 @@ BEGIN
 	_ro.qtt_give	:= 0;
 	_ro.err			:= 0;
 	_ro.json		:= NULL;
+	_ro.own         := _t.own;
 	
 	_otype = _t.type & (~3);
 	_wid := fgetowner(_t.own);
