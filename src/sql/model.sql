@@ -562,7 +562,7 @@ DECLARE
 	_wid		int;
 	_otype      int;
 BEGIN
-	_ro.ord 		:= NULL; -- ROW(_t.type,_t.id,0,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_t.qtt)::yorder;
+	_ro.ord 		:= ROW(_t.type,_t.id,0,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_t.qtt)::yorder;
 	_ro.ordp		:= NULL;
 	_ro.qtt_requ	:= 0;
 	_ro.qtt_prov	:= 0;
