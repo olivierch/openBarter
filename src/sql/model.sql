@@ -25,7 +25,7 @@ create table tconst(
 
 --------------------------------------------------------------------------------
 INSERT INTO tconst (name,value) VALUES 
-	('MAXCYCLE',6), --must be less than yflow_get_maxdim()
+	('MAXCYCLE',64), --must be less than yflow_get_maxdim()
 	('MAXPATHFETCHED',1024),
 	('MAXMVTPERTRANS',128),
 	-- it is the version X.Y.Z of the model, not that of the extension
