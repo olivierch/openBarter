@@ -17,7 +17,7 @@ static double _calOmega(TresChemin *chem, bool lnIgnoreOmega);
 static void _calOwns(TresChemin *chem);
 static void _calGains(TresChemin *chem,double Omega);
 static short _flowMaximum(Tflow *flow,double *piom,double *fluxExact);
-static Tstatusflow _rounding(short iExhausted, TresChemin *chem);
+static Tstatusflow _rounding(short iExhausted, TresChemin *chem,bool _lnIgOmega);
 static void _flow_maximum_barter(bool defined,TresChemin *chem);
 static bool _flow_maximum_quote(TresChemin *chem);
 
@@ -64,6 +64,7 @@ TresChemin *flowc_maximum(Tflow *flow) {
 			 errmsg("max dimension %i reached for the flow",FLOW_MAX_DIM)));
 			
 	obMRange(_i,_dim) 
+	    // all qtt >=0 and proba >=0
 		if(flow->x[_i].qtt < 0 ||  flow->x[_i].proba < 0.0) 
 			ereport(ERROR,
 				(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
@@ -73,7 +74,7 @@ TresChemin *flowc_maximum(Tflow *flow) {
 		short _m;		
 		Tfl *o = &flow->x[_i];
 				 
-		// b.oid are unique in the flow
+		// verify that each b.oid is unique in the flow
 		obMRange(_m,_i) {
 			if(o->oid == flow->x[_m].oid) {
 				ereport(ERROR,
@@ -90,11 +91,23 @@ TresChemin *flowc_maximum(Tflow *flow) {
 	}
 	chem->status = undefined;
 	
-	chem->type = _calType(flow); // CYCLE_LIMIT or CYCLE_BEST 		
+	chem->type = _calType(flow); 
+	/* chem->type set to CYCLE_LIMIT if at least one order is LIMIT. 
+	Otherise set to CYCLE_BEST	*/
+	
 	_calOwns(chem);
+	/* sets nbOwn,occOwn[.] and ownIndex[.] */
+	
+    /******************************************************************************
+     * quote,prequote,noQttLimit,lnIgnoreOmega,orderLimit
+     * 	*,      true,   true,   true,   false   prequote(qlt_requ,qlt_prov)
+     *  true,   false,  true,   false,  *       quote2(qlt_requ,qtt_requ,qlt_prov,qtt_prov) 
+     *  true,   false,  false,  false,  *       quote3(qlt_requ,qtt_requ,qlt_prov,qtt_prov) 
+     *  false,  false,  false,  false,  *       barter(qlt_requ,qtt_requ,qlt_prov,qtt_prov)
+     *****************************************************************************/
 	
 	if(FLOW_IS_IGNOREOMEGA(flow) || FLOW_IS_NOQTTLIMIT(flow)) {
-			/* qtt is set
+			/* when FLOW_IS_NOQTTLIMIT qtt is not set
 			qtt_prov,qtt_requ are set when FLOW_IS_IGNOREOMEGA
 			*/
 			//elog(WARNING,"before quote: chem %s",flowc_cheminToStr(chem));
@@ -106,21 +119,25 @@ TresChemin *flowc_maximum(Tflow *flow) {
 	return chem;
 }
 /******************************************************************************
- * gives the maximum flow of wolf
- * return chem->flowNodes[.] and chem->status
- * flowNodes is copied to wolf->x[.].flowr
+ * gives the maximum flow
+ * returns chem->flowNodes[.] and chem->status
+ * flowNodes[.] is copied to flow->x[.].flowr
  *****************************************************************************/
 static void _flow_maximum_barter(bool defined,TresChemin *chem) {
 	Tflow *flow = chem->flow;
 	short _dim = flow->dim;
 	short _iExhausted;
 	double _Omega;
+	bool _lnIgnoreOmega = FLOW_IS_IGNOREOMEGA(flow);
+	bool _lnIgnoreQtt = FLOW_IS_NOQTTLIMIT(flow);
 	
 	if(!defined) goto _dropflow;
-					
+	
+	// all nodes are used to compute chem->omega[.]				
 	_Omega  = _calOmega(chem,false); // _lnIgnoreOmega == false
 	
 	if( (chem->type == CYCLE_LIMIT) && (_Omega < 1.0 )) {
+	    // some orders of the cycle are LIMIT and the product of omega<1.0
 		chem->status = refused;
 		#ifdef WHY_REJECTED 
 			elog(WARNING,"_flow_maximum_barter: refused: 1.0 - Omega =%.10e",1.0-_Omega);
@@ -130,16 +147,25 @@ static void _flow_maximum_barter(bool defined,TresChemin *chem) {
 
 
 	// omegas are bartered so that the product(omegaCorrige[i]) for i in [0,_dim-1]) == 1 
-	_calGains(chem,_Omega); // computes omegaCorrige[i]
+	_calGains(chem,_Omega); // computes omegaCorrige[.] and piom[.]
 
-	/* maximum flow, as a floating point vector 
+	/* maximum flow, as a floating point vector chem->fluxExact[.]
 	in order than at least one stock is exhausted by the flow
 	and than the ratio between successive elements of flowr is omegaCorrige */
 	_iExhausted = _flowMaximum(flow,chem->piom,chem->fluxExact); 
 
 	/* the floating point vector is rounded 
-	to the nearest vector of positive integers */
-	chem->status = _rounding(_iExhausted, chem);
+	to the nearest vector x[.].flowr of positive integers */
+	chem->status = _rounding(_iExhausted, chem,false);
+	/* that is: 
+			* each node can provide then flow: x[.].flowr<=x[.].qtt
+			* all x[.].flowr > 0
+				=> every order provide something
+				=> every owner provide something
+			* the flow exhausts the cycle: x[i].flowr<=x[i].qtt for some i
+			* Omega ~= 1.0 and the error is minimized
+			* the limit defined by LIMIT orders are observed (when _lnIgOmega except for the last node)
+    */
 	if(chem->status == draft) {
 		return;
 	}
@@ -156,14 +182,15 @@ _dropflow:
 }
 
 /******************************************************************************
- * ignoreOmega
+ * lnIgnoreOmega
  * 	true		quote1(qlt_requ,qlt_prov)
  *  false		quote2(qlt_requ,qtt_requ,qlt_prov,qtt_prov) 
  *****************************************************************************/
 static bool _flow_maximum_quote(TresChemin *chem) { 
 	Tflow *flow = chem->flow;
 	short _dim = flow->dim;
-	short _i;  
+	short _i;
+	short _iExhausted;  
 	double _Omega;
 	bool _lnIgnoreOmega = FLOW_IS_IGNOREOMEGA(flow); 
 	int64	_qtt_prov,_qtt_requ;
@@ -175,12 +202,21 @@ static bool _flow_maximum_quote(TresChemin *chem) {
 		}
 	flow->x[_dim-1].qtt = QTTFLOW_UNDEFINED;
 	
+	// all nodes are used to compute chem->omega[.]	except the last node
 	_Omega = _calOmega(chem,_lnIgnoreOmega); 
-	// _Omega ==1.0 when _lnIgnoreOmega
-	_calGains(chem,_Omega); 
+	// _Omega ==1.0,
+	
+	// omegas are bartered so that the product(omegaCorrige[i]) for i in [0,_dim-1]) == 1 
+	_calGains(chem,_Omega); // computes omegaCorrige[.] and piom[.] 
 
-	(void) _flowMaximum(flow,chem->piom,chem->fluxExact);
+	/* maximum flow, as a floating point vector chem->fluxExact[.]
+	in order than at least one stock is exhausted by the flow
+	and than the ratio between successive elements of flowr is omegaCorrige */
+	_iExhausted = _flowMaximum(flow,chem->piom,chem->fluxExact);
 	//elog(WARNING,"after _flowMaximum: chem %s",flowc_cheminToStr(chem));
+	/* _iExhausted is not _dim-1 since the quantity of the last node is undefined */
+	
+	
 	
 	_FLOOR_INT64(chem->fluxExact[ _dim-2 ],_qtt_requ);
 	_FLOOR_INT64(chem->fluxExact[ _dim-1 ],_qtt_prov);
@@ -223,7 +259,9 @@ static TypeFlow _calType(Tflow *flow) {
 	return _type;
 }
 /******************************************************************************
- * 
+ * computes chem->omega[.] as product of flow->x[.].qtt_prov/flow->[.].qtt_requ
+ * when lnIgnoreOmega is set (ignore omega of the last node), 
+ * the last node is ignored
  *****************************************************************************/
 static double _calOmega(TresChemin *chem, bool lnIgnoreOmega) {
 	Tflow *flow = chem->flow;
@@ -309,20 +347,21 @@ static void _calOwns(TresChemin *chem) {
 }
 
 /*******************************************************************************
- (1/prodOmega) is shared between owners, and then shared between nodes of each owner.
+ 1/prodOmega is shared between owners, and then shared between nodes of each owner.
  for each owner, it is:
  	 pow(gain_owner,nb_owners) = 1/prodOmega
  if the owner j owns _occ[j] nodes, it's gain_node for each node is:
  	pow(gain_node[j],_occ[j]) = gain_owner
  	
  input-output
- In:
+ In:  for i in [0,nbNoeud[ and j in [O,nbOwn[
  	prodOmega,
+ 	omega[i]
  	nbOwn,
  	nbNoeud,
- 	ownOcc[j] for j in [O,nbOwn[
+ 	ownOcc[j]
  Out:
- 	omegaCorrige[i] for i in [0,nbNoeud[
+ 	omegaCorrige[i]
  	piom[i]
 
 	
@@ -350,7 +389,7 @@ static void _calGains(TresChemin *chem,double prodOmega) {
 	// the gain is shared between owners
 	_gain = pow(prodOmega, 1.0 /((double) chem->nbOwn));
 
-	// it is shared between nodes
+	// it then is shared between nodes
 	obMRange(_i,_dim) {
 		short _occ = occOwn[ownIndex[_i]];
 		
@@ -430,7 +469,7 @@ static short _flowMaximum(Tflow *flow,double *piom,double *fluxExact) {
 		int64 qtt = flow->x[_is].qtt;
 		//elog(WARNING,"qtt[%i]=%li",_is,qtt);
 		if( qtt == QTTFLOW_UNDEFINED ) 
-			continue;
+			continue; // the flow is not limited by a quantity undefined
 			
 		_cour = ((double) qtt) /piom[_is]; 
 		if ((_min == -1.0) || (_cour < _min)) {
@@ -487,7 +526,7 @@ floor,flow and mat are vectors of dimension _dim
 floor and flow contains integers, and mat bits.
 	in: dim,mat,floor
 	out:flow
-for each i, if the bit i of mat is 0, flow[i] := floor[i]
+for each i, if the bit i of mat is 0 then flow[i] := floor[i]
 			else flow[i] := floor[i]+1
 *******************************************************************************/ 
 #define _obtain_vertex(dim,mat,floor,flow) \
@@ -508,15 +547,13 @@ do { \
  box->dim short => must be <= 31 (2^dim loops)
 
  returns
- 	 1 if a solution is found
-  	 0 if no solution
+ 	 draft if solution
+  	 undefined or refused if no solution
  The solution is returned in pchemin->no[.].fluxArrondi
-
- when pchemin->cflags & obCLastIgnore,
 
 
  *******************************************************************************/
-static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
+static Tstatusflow _rounding(short iExhausted, TresChemin *chem, bool _lnIgOmega) {
 	short 	_i,  _k;
 	short 	_matcour, _matmax, _matbest;
 	bool 	_found;
@@ -529,7 +566,7 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 	double  *omega = chem->omega;
 	Tstatusflow _ret;
 
-	// computes floor[] from fluxExact[]
+	// computes floor[.] as the floor rounding of fluxExact[.]
 	/***********************************************************************/
 	obMRange(_i,_dim) {
 		int64 _f;
@@ -537,6 +574,11 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 		_FLOOR_INT64(fluxExact[_i],_f);
 		
 		if(_i == iExhausted) {
+		    if(flow->x[_i].qtt == QTTFLOW_UNDEFINED)
+				ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("the node exhausted by the flow is not defined")));
+					 
 			_floor[_i] = flow->x[_i].qtt; // will not change
 			
 			if(_f > _floor[_i])
@@ -579,7 +621,11 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 		/***************************************************************/
 		
 		obMRange (_k,_dim) {
-			// verify that qttAvailable >= flowNodes
+		    // verify that qttAvailable >= flowNodes
+		    
+		    if(flow->x[_k].qtt == QTTFLOW_UNDEFINED)
+		        continue;
+			
 			if(flow->x[_k].qtt < _flowNodes[_k]) {
 				#ifdef WHY_REJECTED 
 					elog(WARNING,"_rounding 1: NOT order >= flow %s",
@@ -588,22 +634,13 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 				goto _continue;
 			}
 		}
-				
-		/* At this point, 
-			* each node can provide flowNodes[.],
-			* all flowNodes[.] > 0
-				=> every order provide something
-				=> every owner provide something
-			* the flow exhausts the cycle
-			* Omega ~= 1.0 
-		*/
+
 		
 		if(chem->type == CYCLE_LIMIT) { 
 			short _kp = _dim - 1;
 
 			obMRange(_k,_dim) {
-				
-				if (ORDER_TYPE(flow->x[_k].type) == ORDER_LIMIT) {
+				if ((ORDER_TYPE(flow->x[_k].type) == ORDER_LIMIT) && (!(_lnIgOmega && (_k == (_dim-1))))  ) {
 					double _omprime  = ((double) _flowNodes[_k]) / ((double) _flowNodes[_kp]);
 					
 					// a vertex where the limit of some order is not observed is rejected
@@ -619,6 +656,16 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 				_kp = _k;
 			}
 		}
+				
+		/* At this point, 
+			* each node can provide flowNodes[.],
+			* all flowNodes[.] > 0
+				=> every order provide something
+				=> every owner provide something
+			* the flow exhausts the cycle
+			* Omega ~= 1.0 
+			* the limit defined by LIMIT orders are observed (when _lnIgOmega except for the last node)
+		*/
 		
 		// choose the best
 		/***************************************************************/
@@ -638,8 +685,10 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem) {
 _continue:
 		; // choose an other vertex
 	};
-	if(_found) {
+	if(_found) { // _matbest is defined
+	
 		_obtain_vertex(_dim,_matbest,_floor,_flowNodes);
+		// _flowNodes[.] is obtained from _matbest[.] and _floor[.]
 		//elog(WARNING,"flowc_maximum: _matbest=%x",_matbest);
 		
 		obMRange (_k,_dim) {
