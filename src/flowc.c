@@ -18,8 +18,7 @@ static void _calOwns(TresChemin *chem);
 static void _calGains(TresChemin *chem,double Omega);
 static short _flowMaximum(Tflow *flow,double *piom,double *fluxExact);
 static Tstatusflow _rounding(short iExhausted, TresChemin *chem,bool _lnIgOmega);
-static void _flow_maximum_barter(bool defined,TresChemin *chem);
-static bool _flow_maximum_quote(TresChemin *chem);
+static void _flow_maximum(TresChemin *chem);
 
 /******************************************************************************
  * int64 r = floor(d) and error if rounding < 0
@@ -45,7 +44,6 @@ do { \
 TresChemin *flowc_maximum(Tflow *flow) {
 	short _dim = flow->dim;
 	short _i;
-	bool _defined;
 	
 	TresChemin *chem = (TresChemin *) palloc(sizeof(TresChemin));
 	chem->status = empty;
@@ -106,35 +104,52 @@ TresChemin *flowc_maximum(Tflow *flow) {
      *  false,  false,  false,  false,  *       barter(qlt_requ,qtt_requ,qlt_prov,qtt_prov)
      *****************************************************************************/
 	
-	if(FLOW_IS_IGNOREOMEGA(flow) || FLOW_IS_NOQTTLIMIT(flow)) {
+	//if(FLOW_IS_IGNOREOMEGA(flow) || FLOW_IS_NOQTTLIMIT(flow)) {
 			/* when FLOW_IS_NOQTTLIMIT qtt is not set
 			qtt_prov,qtt_requ are set when FLOW_IS_IGNOREOMEGA
 			*/
 			//elog(WARNING,"before quote: chem %s",flowc_cheminToStr(chem));
-			_defined = _flow_maximum_quote(chem);
+			//_defined = _flow_maximum_quote(chem);
 			
-	} else _defined = true;
-	
-	_flow_maximum_barter(_defined,chem);
+	//} else _defined = true;
+	// TODO remove _flow_maximum_quote
+	_flow_maximum(chem);
 	return chem;
 }
 /******************************************************************************
  * gives the maximum flow
- * returns chem->flowNodes[.] and chem->status
- * flowNodes[.] is copied to flow->x[.].flowr
+ * returns flow->x[.].flowr and chem->status
  *****************************************************************************/
-static void _flow_maximum_barter(bool defined,TresChemin *chem) {
+static void _flow_maximum(TresChemin *chem) {
 	Tflow *flow = chem->flow;
-	short _dim = flow->dim;
+	short _i,_dim = flow->dim;
 	short _iExhausted;
 	double _Omega;
 	bool _lnIgnoreOmega = FLOW_IS_IGNOREOMEGA(flow);
-	bool _lnIgnoreQtt = FLOW_IS_NOQTTLIMIT(flow);
+	bool _lnIgnoreQtt = FLOW_IS_NOQTTLIMIT(flow) || FLOW_IS_IGNOREOMEGA(flow);
 	
-	if(!defined) goto _dropflow;
-	
-	// all nodes are used to compute chem->omega[.]				
-	_Omega  = _calOmega(chem,false); // _lnIgnoreOmega == false
+
+    /* when some qtt are 0, the flow cannot be formed
+    */
+    //elog(WARNING,"flowc_maximum: ici");
+    //elog(WARNING,"chem %s",flowc_cheminToStr(chem));
+	obMRange(_i,_dim) {
+	    //elog(WARNING,"for  %i in %i",_i,_dim);
+	    if(_lnIgnoreQtt && (_i == (_dim-1))) {
+	        flow->x[_dim-1].qtt = QTTFLOW_UNDEFINED;
+	        continue;
+	    }
+		if(flow->x[_i].qtt == 0) {
+		    
+			goto _dropflow;
+		}
+	}
+	//elog(WARNING,"before: chem %s",flowc_cheminToStr(chem));
+					
+	_Omega  = _calOmega(chem,_lnIgnoreOmega); 
+	/* nodes are used to compute chem->omega[.]	
+	when _lnIgnoreOmega the last node is not considered and _Omega == 1
+	*/
 	
 	if( (chem->type == CYCLE_LIMIT) && (_Omega < 1.0 )) {
 	    // some orders of the cycle are LIMIT and the product of omega<1.0
@@ -156,7 +171,7 @@ static void _flow_maximum_barter(bool defined,TresChemin *chem) {
 
 	/* the floating point vector is rounded 
 	to the nearest vector x[.].flowr of positive integers */
-	chem->status = _rounding(_iExhausted, chem,false);
+	chem->status = _rounding(_iExhausted, chem,_lnIgnoreOmega);
 	/* that is: 
 			* each node can provide then flow: x[.].flowr<=x[.].qtt
 			* all x[.].flowr > 0
@@ -166,6 +181,14 @@ static void _flow_maximum_barter(bool defined,TresChemin *chem) {
 			* Omega ~= 1.0 and the error is minimized
 			* the limit defined by LIMIT orders are observed (when _lnIgOmega except for the last node)
     */
+    
+    if(_lnIgnoreOmega) {
+		flow->x[ _dim-1 ].qtt_requ = flow->x[ _dim-2 ].flowr;
+		flow->x[ _dim-1 ].qtt_prov = flow->x[ _dim-1 ].flowr;
+    }
+    if(_lnIgnoreQtt) 
+        flow->x[ _dim-1 ].qtt = flow->x[ _dim-1 ].flowr;
+
 	if(chem->status == draft) {
 		return;
 	}
@@ -179,67 +202,6 @@ _dropflow:
 			flow->x[_k].flowr = QTTFLOW_UNDEFINED;
 	}
 	return;
-}
-
-/******************************************************************************
- * lnIgnoreOmega
- * 	true		quote1(qlt_requ,qlt_prov)
- *  false		quote2(qlt_requ,qtt_requ,qlt_prov,qtt_prov) 
- *****************************************************************************/
-static bool _flow_maximum_quote(TresChemin *chem) { 
-	Tflow *flow = chem->flow;
-	short _dim = flow->dim;
-	short _i;
-	short _iExhausted;  
-	double _Omega;
-	bool _lnIgnoreOmega = FLOW_IS_IGNOREOMEGA(flow); 
-	int64	_qtt_prov,_qtt_requ;
- 
-	obMRange(_i,_dim - 1) 
-		if(flow->x[_i].qtt == 0) {
-			// resflow unchanged
-			return false;
-		}
-	flow->x[_dim-1].qtt = QTTFLOW_UNDEFINED;
-	
-	// all nodes are used to compute chem->omega[.]	except the last node
-	_Omega = _calOmega(chem,_lnIgnoreOmega); 
-	// _Omega ==1.0,
-	
-	// omegas are bartered so that the product(omegaCorrige[i]) for i in [0,_dim-1]) == 1 
-	_calGains(chem,_Omega); // computes omegaCorrige[.] and piom[.] 
-
-	/* maximum flow, as a floating point vector chem->fluxExact[.]
-	in order than at least one stock is exhausted by the flow
-	and than the ratio between successive elements of flowr is omegaCorrige */
-	_iExhausted = _flowMaximum(flow,chem->piom,chem->fluxExact);
-	//elog(WARNING,"after _flowMaximum: chem %s",flowc_cheminToStr(chem));
-	/* _iExhausted is not _dim-1 since the quantity of the last node is undefined */
-	
-	
-	
-	_FLOOR_INT64(chem->fluxExact[ _dim-2 ],_qtt_requ);
-	_FLOOR_INT64(chem->fluxExact[ _dim-1 ],_qtt_prov);
-	// elog(WARNING,"after _flowMaximum: qtt_requ:%f -> %li,qtt_prov:%f->%li",chem->fluxExact[ _dim-2 ],_qtt_requ,chem->fluxExact[ _dim-1 ],_qtt_prov);
-	if((_qtt_requ == 0 || _qtt_prov == 0)) 
-		return false;
-	
-	if(_lnIgnoreOmega) {
-		/* the ratio _qtt_prov/_qtt_requ is increased 
-		in order to be shure that prodOmega remains >=1 
-		even with previous rounding */
-		flow->x[ _dim-1 ].qtt_requ = _qtt_requ;
-		flow->x[ _dim-1 ].qtt_prov = _qtt_prov+1;
-		
-		/* The flag ORDER_IGNOREOMEGA cannot be reset here since several instances 
-		of this node are store in _temp. The flag is reset in yflow_reduce() 
-		called by the Sql UPDATE instruction 
-		*/
-		
-	}
-	flow->x[ _dim-1 ].qtt = _qtt_prov;
-	
-	return true;
 }
 
 /******************************************************************************
@@ -700,6 +662,7 @@ _continue:
 		
 		_ret = draft; 
 	} // else _ret is undefined or refused
+	//elog(WARNING,"flowc_maximum: _matbest=%x",_matbest);
 	return _ret; 
 }
 

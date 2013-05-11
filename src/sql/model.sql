@@ -1021,6 +1021,20 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  frmbarter(text,int) TO role_co;
+/*
+CREATE TYPE yresorder AS (
+    ord yorder,
+    ordp yorder,
+    qtt_requ int8,
+    qtt_prov int8,
+    qtt int8,
+    qtt_reci int8,
+    qtt_give int8,
+    err	int,
+    json text,
+    own text
+);
+*/
 
 CREATE FUNCTION fremovebarter(_t tstack) RETURNS yresorder AS $$
 DECLARE
@@ -1042,36 +1056,40 @@ BEGIN
 	SELECT (ord).type,(ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
 		INTO _op.type,_op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder 
 		WHERE (ord).id= _t.oid AND (ord).own= _wid ;
-
-	IF (NOT FOUND) THEN
-		_ro.json:= '{"error":"the order to delete does not exist for this owner"}';
-		_ro.err := -7; 		
-	END IF;
 	
-	IF(_ro.err = 0) THEN
+	IF (FOUND) THEN
 	    -- _t.qua_prov := _op.qua_prov;
 	    IF(_op.id = _op.oid) THEN -- it is a parent order
-	        
 		    -- delete parents and childs
 		    DELETE FROM torder o WHERE (o.ord).oid = _op.id;
 		    GET DIAGNOSTICS _cnt = ROW_COUNT;
 		    
-		    IF(_cnt = 0) THEN
-		        RAISE EXCEPTION 'the order % was not found while deleting',_op.id  USING ERRCODE='YA002';
+		    IF(_cnt != 0) THEN
+		        _exhausted := true;
+	            _ro.ord := _op;
+	            _ro.ordp := _op;
 		    END IF;
 		    
-	        _exhausted := true;
-	        _ro.qtt := _op.qtt;
+
 	    -- ELSE do nothing when it is a child
 	    END IF;
 	-- ELSE do nothing on error
 	END IF;
 	
+	IF (NOT _exhausted) THEN
+        _ro.json:= '{"error":"the order to delete does not exist for this owner"}';
+        _ro.err := -7;
+        _op.qtt := 0;
+        _op.qua_prov := ''; 
+        _ro.ord := NULL;
+        _ro.ordp := NULL;
+    END IF;
+    	
     INSERT INTO tmvt (	type,json,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
 					    qtt,nat,ack,exhausted,refused,order_created,created
 				     ) 
 	    VALUES       (	_t.type,_ro.json,1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,
-					    _ro.qtt,_t.qua_prov,false,_exhausted,_ro.err,_t.created,statement_timestamp()
+					    _op.qtt,_op.qua_prov,false,_exhausted,_ro.err,_t.created,statement_timestamp()
 				     )
 	    RETURNING id INTO _mid;
     UPDATE tmvt SET grp = _mid WHERE id = _mid;
