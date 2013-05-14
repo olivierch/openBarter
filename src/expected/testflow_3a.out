@@ -18,6 +18,7 @@ SELECT setval('tstack_id_seq',10000,true);
   10000
 (1 row)
 
+\set offId 69
 select * from fsubmitquote(1,'own82','qlt22','qlt23');select * from fproducemvt();
   id   | diag 
 -------+------
@@ -139,27 +140,27 @@ select * from fsubmitbarter(1,'own82',NULL,'qlt2',60000,'qlt23',45276,45276,'1 h
 select id,nbt,nbc,xid,own_src,own_dst,qtt,nat from tmvt order by id desc limit 12;
  id | nbt | nbc |  xid  | own_src | own_dst |  qtt  |  nat  
 ----+-----+-----+-------+---------+---------+-------+-------
- 30 |  12 |   3 |   321 | own35   | own82   | 20990 | qlt2
- 29 |  12 |   3 |  2361 | own66   | own35   | 18376 | qlt72
- 28 |  12 |   3 | 10007 | own82   | own66   | 13284 | qlt23
- 27 |  12 |   3 |   337 | own37   | own82   | 37776 | qlt2
- 26 |  12 |   3 |  2361 | own66   | own37   | 30997 | qlt72
- 25 |  12 |   3 | 10007 | own82   | own66   | 23145 | qlt23
- 24 |  12 |   3 |   345 | own56   | own82   |  6035 | qlt2
- 23 |  12 |   3 |  1046 | own43   | own56   | 11725 | qlt92
- 22 |  12 |   3 | 10007 | own82   | own43   |  3249 | qlt23
- 21 |  12 |   3 |     5 | own3    | own82   | 17954 | qlt2
- 20 |  12 |   3 |  4352 | own75   | own3    | 43484 | qlt89
- 19 |  12 |   3 | 10007 | own82   | own75   |  5598 | qlt23
+ 81 |  12 |   3 |   321 | own35   | own82   | 20990 | qlt2
+ 80 |  12 |   3 |  2361 | own66   | own35   | 18376 | qlt72
+ 79 |  12 |   3 | 10007 | own82   | own66   | 13284 | qlt23
+ 78 |  12 |   3 |   337 | own37   | own82   | 37776 | qlt2
+ 77 |  12 |   3 |  2361 | own66   | own37   | 30997 | qlt72
+ 76 |  12 |   3 | 10007 | own82   | own66   | 23145 | qlt23
+ 75 |  12 |   3 |   345 | own56   | own82   |  6035 | qlt2
+ 74 |  12 |   3 |  1046 | own43   | own56   | 11725 | qlt92
+ 73 |  12 |   3 | 10007 | own82   | own43   |  3249 | qlt23
+ 72 |  12 |   3 |     5 | own3    | own82   | 17954 | qlt2
+ 71 |  12 |   3 |  4352 | own75   | own3    | 43484 | qlt89
+ 70 |  12 |   3 | 10007 | own82   | own75   |  5598 | qlt23
 (12 rows)
 
-select sum(qtt) from tmvt where own_src='own82' and nat='qlt23' and id>18;
+select sum(qtt) from tmvt where own_src='own82' and nat='qlt23' and id> :offId;
   sum  
 -------
  45276
 (1 row)
 
-select sum(qtt) from tmvt where own_dst='own82' and nat='qlt2' and id>18;
+select sum(qtt) from tmvt where own_dst='own82' and nat='qlt2' and id> :offId;
   sum  
 -------
  82755
@@ -221,21 +222,21 @@ select * from fsubmitbarter(1,'own1',NULL,'qlt1',30822,'qlt2',9667,7563,'1 hour'
  (1,10011,93,10011,30822,qlt1,9667,qlt2,7563) | (,,,,,,,,) |    30822 |     9667 | 7563 |    30819 |     7563 |   0 |      | own1 |    1 |   10011
 (1 row)
 
-select id,nbt,nbc,xid,own_src,own_dst,qtt,nat from tmvt d where id>33;
+select id,nbt,nbc,xid,own_src,own_dst,qtt,nat from tmvt d where id> (:offId+15);
  id | nbt | nbc |  xid  | own_src | own_dst |  qtt  |  nat  
 ----+-----+-----+-------+---------+---------+-------+-------
- 34 |   3 |   3 | 10011 | own1    | own15   |  7563 | qlt2
- 35 |   3 |   3 |  5071 | own15   | own58   | 12258 | qlt95
- 36 |   3 |   3 |    85 | own58   | own1    | 30819 | qlt1
+ 85 |   3 |   3 | 10011 | own1    | own15   |  7563 | qlt2
+ 86 |   3 |   3 |  5071 | own15   | own58   | 12258 | qlt95
+ 87 |   3 |   3 |    85 | own58   | own1    | 30819 | qlt1
 (3 rows)
 
-select sum(qtt) from tmvt where own_src='own1' and nat='qlt2' and id>33;
+select sum(qtt) from tmvt where own_src='own1' and nat='qlt2' and id> (:offId+15);
  sum  
 ------
  7563
 (1 row)
 
-select sum(qtt) from tmvt where own_dst='own1' and nat='qlt1' and id>33;
+select sum(qtt) from tmvt where own_dst='own1' and nat='qlt1' and id> (:offId+15);
   sum  
 -------
  30819

@@ -1,0 +1,263 @@
+/* same as testflow_3_1, but with an order BEST in the order book */
+\set ECHO all
+set search_path to market;
+select count(*) from torder;
+ count 
+-------
+     0
+(1 row)
+
+/* order book empty */
+/* one BEST and two LIMIT */
+select * from fsubmitbarter(1,'a',NULL,'q1',10,'q2',10,'1 hour'::interval);
+ id | diag 
+----+------
+ 34 |    0
+(1 row)
+
+select * from fproducemvt();
+            ord             |    ordp    | qtt_requ | qtt_prov | qtt | qtt_reci | qtt_give | err | json | own | type | stackid 
+----------------------------+------------+----------+----------+-----+----------+----------+-----+------+-----+------+---------
+ (1,34,1,34,10,q1,10,q2,10) | (,,,,,,,,) |       10 |       10 |  10 |        0 |        0 |   0 |      | a   |    1 |      34
+(1 row)
+
+select * from fsubmitbarter(1,'b',NULL,'q1',10,'q2',20,'1 hour'::interval);
+ id | diag 
+----+------
+ 35 |    0
+(1 row)
+
+select * from fproducemvt();
+            ord             |    ordp    | qtt_requ | qtt_prov | qtt | qtt_reci | qtt_give | err | json | own | type | stackid 
+----------------------------+------------+----------+----------+-----+----------+----------+-----+------+-----+------+---------
+ (1,35,2,35,10,q1,20,q2,20) | (,,,,,,,,) |       10 |       20 |  20 |        0 |        0 |   0 |      | b   |    1 |      35
+(1 row)
+
+select * from fsubmitbarter(1,'c',NULL,'q1',10,'q2',30,'1 hour'::interval);
+ id | diag 
+----+------
+ 36 |    0
+(1 row)
+
+select * from fproducemvt();
+            ord             |    ordp    | qtt_requ | qtt_prov | qtt | qtt_reci | qtt_give | err | json | own | type | stackid 
+----------------------------+------------+----------+----------+-----+----------+----------+-----+------+-----+------+---------
+ (1,36,3,36,10,q1,30,q2,30) | (,,,,,,,,) |       10 |       30 |  30 |        0 |        0 |   0 |      | c   |    1 |      36
+(1 row)
+
+/* 3 competing orders */
+select  id,type,own,oid,qtt_requ,qua_requ,qtt_prov,qua_prov,qtt from vorder;
+ id | type | own | oid | qtt_requ | qua_requ | qtt_prov | qua_prov | qtt 
+----+------+-----+-----+----------+----------+----------+----------+-----
+ 34 |    1 | a   |  34 |       10 | q1       |       10 | q2       |  10
+ 35 |    1 | b   |  35 |       10 | q1       |       20 | q2       |  20
+ 36 |    1 | c   |  36 |       10 | q1       |       30 | q2       |  30
+(3 rows)
+
+/*  form 0
+fsubmitprequote(_own,_qua_requ,_qua_prov)*/
+select * from fsubmitprequote('d','q2','q1');
+ id | diag 
+----+------
+ 37 |    0
+(1 row)
+
+/* 3 potential cycles ordered by increasing prices 10/30, 10/20, 10/10*/
+select json from fproducemvt();
+                                             json                                              
+-----------------------------------------------------------------------------------------------
+ {"qtt_requ":0,"qtt_prov":0,"qtt":0,"qtt_reci":60,"qtt_give":30,"paths":[                     +
+ [{"type":1, "id":36, "oid":36, "own":3, "qtt_requ":10, "qtt_prov":30, "qtt":30, "flowr":30}, +
+ {"type":78, "id":37, "oid":37, "own":4, "qtt_requ":30, "qtt_prov":10, "qtt":10, "flowr":10}],+
+ [{"type":1, "id":35, "oid":35, "own":2, "qtt_requ":10, "qtt_prov":20, "qtt":20, "flowr":20}, +
+ {"type":78, "id":37, "oid":37, "own":4, "qtt_requ":20, "qtt_prov":10, "qtt":10, "flowr":10}],+
+ [{"type":1, "id":34, "oid":34, "own":1, "qtt_requ":10, "qtt_prov":10, "qtt":10, "flowr":10}, +
+ {"type":78, "id":37, "oid":37, "own":4, "qtt_requ":10, "qtt_prov":10, "qtt":10, "flowr":10}] +
+ ]}
+(1 row)
+
+/* 
+ωu,qttu values defined by owner
+ωo,qtto defines by others 
+*/
+/* form 1 
+fsubmitquote(_own,_qua_requ,_qua_prov)
+flow limited by best price 10/30 and qtto */
+select * from fsubmitquote(2,'d','q2','q1');
+ id | diag 
+----+------
+ 38 |    0
+(1 row)
+
+select json from fproducemvt();
+                                             json                                              
+-----------------------------------------------------------------------------------------------
+ {"qtt_requ":30,"qtt_prov":10,"qtt":10,"qtt_reci":30,"qtt_give":10,"paths":[                  +
+ [{"type":1, "id":36, "oid":36, "own":3, "qtt_requ":10, "qtt_prov":30, "qtt":30, "flowr":30}, +
+ {"type":142, "id":38, "oid":38, "own":4, "qtt_requ":30, "qtt_prov":10, "qtt":10, "flowr":10}]+
+ ]}
+(1 row)
+
+/* form 2
+fsubmitquote(_type,_own,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov) 
+flow limited by ωu,ωo and qtto */
+/* limited by ωu,ωo and qtto */
+/* one cycle */
+select * from fsubmitquote(2,'d','q2',30,'q1',10);
+ id | diag 
+----+------
+ 39 |    0
+(1 row)
+
+select json from fproducemvt();
+                                             json                                              
+-----------------------------------------------------------------------------------------------
+ {"qtt_requ":30,"qtt_prov":10,"qtt":10,"qtt_reci":30,"qtt_give":10,"paths":[                  +
+ [{"type":1, "id":36, "oid":36, "own":3, "qtt_requ":10, "qtt_prov":30, "qtt":30, "flowr":30}, +
+ {"type":134, "id":39, "oid":39, "own":4, "qtt_requ":30, "qtt_prov":10, "qtt":10, "flowr":10}]+
+ ]}
+(1 row)
+
+/* 3 cycles */
+select * from fsubmitquote(2,'d','q2',10,'q1',10);
+ id | diag 
+----+------
+ 40 |    0
+(1 row)
+
+select json from fproducemvt();
+                                              json                                              
+------------------------------------------------------------------------------------------------
+ {"qtt_requ":10,"qtt_prov":10,"qtt":41,"qtt_reci":60,"qtt_give":41,"paths":[                   +
+ [{"type":1, "id":36, "oid":36, "own":3, "qtt_requ":10, "qtt_prov":30, "qtt":30, "flowr":30},  +
+ {"type":134, "id":40, "oid":40, "own":4, "qtt_requ":10, "qtt_prov":10, "qtt":17, "flowr":17}],+
+ [{"type":1, "id":35, "oid":35, "own":2, "qtt_requ":10, "qtt_prov":20, "qtt":20, "flowr":20},  +
+ {"type":134, "id":40, "oid":40, "own":4, "qtt_requ":10, "qtt_prov":10, "qtt":14, "flowr":14}],+
+ [{"type":1, "id":34, "oid":34, "own":1, "qtt_requ":10, "qtt_prov":10, "qtt":10, "flowr":10},  +
+ {"type":134, "id":40, "oid":40, "own":4, "qtt_requ":10, "qtt_prov":10, "qtt":10, "flowr":10}] +
+ ]}
+(1 row)
+
+/* only limited by ωo and qtto */
+select * from fsubmitquote(2,'d','q2',5,'q1',10);
+ id | diag 
+----+------
+ 41 |    0
+(1 row)
+
+select json from fproducemvt();
+                                             json                                              
+-----------------------------------------------------------------------------------------------
+ {"qtt_requ":5,"qtt_prov":10,"qtt":58,"qtt_reci":60,"qtt_give":58,"paths":[                   +
+ [{"type":1, "id":36, "oid":36, "own":3, "qtt_requ":10, "qtt_prov":30, "qtt":30, "flowr":30}, +
+ {"type":134, "id":41, "oid":41, "own":4, "qtt_requ":5, "qtt_prov":10, "qtt":24, "flowr":24}],+
+ [{"type":1, "id":35, "oid":35, "own":2, "qtt_requ":10, "qtt_prov":20, "qtt":20, "flowr":20}, +
+ {"type":134, "id":41, "oid":41, "own":4, "qtt_requ":5, "qtt_prov":10, "qtt":20, "flowr":20}],+
+ [{"type":1, "id":34, "oid":34, "own":1, "qtt_requ":10, "qtt_prov":10, "qtt":10, "flowr":10}, +
+ {"type":134, "id":41, "oid":41, "own":4, "qtt_requ":5, "qtt_prov":10, "qtt":14, "flowr":14}] +
+ ]}
+(1 row)
+
+/* form 3
+fsubmitquote(_type,_own,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,qtt) 
+flow limited by ωu,ωo and qttu,qtto */
+select * from fsubmitquote(2,'d','q2',30,'q1',10,20);
+ id | diag 
+----+------
+ 42 |    0
+(1 row)
+
+select json from fproducemvt();
+                                             json                                              
+-----------------------------------------------------------------------------------------------
+ {"qtt_requ":30,"qtt_prov":10,"qtt":20,"qtt_reci":30,"qtt_give":10,"paths":[                  +
+ [{"type":1, "id":36, "oid":36, "own":3, "qtt_requ":10, "qtt_prov":30, "qtt":30, "flowr":30}, +
+ {"type":130, "id":42, "oid":42, "own":4, "qtt_requ":30, "qtt_prov":10, "qtt":20, "flowr":10}]+
+ ]}
+(1 row)
+
+/* limited by this ωu,qttu */
+select * from fsubmitquote(2,'d','q2',30,'q1',10,5);
+ id | diag 
+----+------
+ 43 |    0
+(1 row)
+
+select json from fproducemvt();
+                                             json                                             
+----------------------------------------------------------------------------------------------
+ {"qtt_requ":30,"qtt_prov":10,"qtt":5,"qtt_reci":15,"qtt_give":5,"paths":[                   +
+ [{"type":1, "id":36, "oid":36, "own":3, "qtt_requ":10, "qtt_prov":30, "qtt":30, "flowr":15},+
+ {"type":130, "id":43, "oid":43, "own":4, "qtt_requ":30, "qtt_prov":10, "qtt":5, "flowr":5}] +
+ ]}
+(1 row)
+
+/* limited by this ωo,qtto */
+select * from fsubmitquote(2,'d','q2',10,'q1',10,100);
+ id | diag 
+----+------
+ 44 |    0
+(1 row)
+
+select json from fproducemvt();
+                                              json                                               
+-------------------------------------------------------------------------------------------------
+ {"qtt_requ":10,"qtt_prov":10,"qtt":100,"qtt_reci":60,"qtt_give":41,"paths":[                   +
+ [{"type":1, "id":36, "oid":36, "own":3, "qtt_requ":10, "qtt_prov":30, "qtt":30, "flowr":30},   +
+ {"type":130, "id":44, "oid":44, "own":4, "qtt_requ":10, "qtt_prov":10, "qtt":100, "flowr":17}],+
+ [{"type":1, "id":35, "oid":35, "own":2, "qtt_requ":10, "qtt_prov":20, "qtt":20, "flowr":20},   +
+ {"type":130, "id":44, "oid":44, "own":4, "qtt_requ":10, "qtt_prov":10, "qtt":83, "flowr":14}], +
+ [{"type":1, "id":34, "oid":34, "own":1, "qtt_requ":10, "qtt_prov":10, "qtt":10, "flowr":10},   +
+ {"type":130, "id":44, "oid":44, "own":4, "qtt_requ":10, "qtt_prov":10, "qtt":69, "flowr":10}]  +
+ ]}
+(1 row)
+
+/* barter */
+select * from fsubmitbarter(2,'d',NULL,'q2',10,'q1',10,100,'1 hour'::interval);
+ id | diag 
+----+------
+ 45 |    0
+(1 row)
+
+select json from fproducemvt();
+ json 
+------
+ 
+(1 row)
+
+select id,grp,xid,own_src,own_dst,qtt,nat from tmvt order by id desc limit 6; 
+ id | grp | xid | own_src | own_dst | qtt | nat 
+----+-----+-----+---------+---------+-----+-----
+ 52 |  51 |  34 | a       | d       |  10 | q2
+ 51 |  51 |  45 | d       | a       |  10 | q1
+ 50 |  49 |  35 | b       | d       |  20 | q2
+ 49 |  49 |  45 | d       | b       |  14 | q1
+ 48 |  47 |  36 | c       | d       |  30 | q2
+ 47 |  47 |  45 | d       | c       |  17 | q1
+(6 rows)
+
+select id,qtt from vorder; /* qtt=100-41 */
+ id | qtt 
+----+-----
+ 45 |  59
+(1 row)
+
+select * from frmbarter('d',45);
+ id | diag 
+----+------
+ 46 |    0
+(1 row)
+
+select json from fproducemvt();
+ json 
+------
+ 
+(1 row)
+
+select count(*) from vorder;
+ count 
+-------
+     0
+(1 row)
+
+/* order book empty */

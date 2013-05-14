@@ -270,7 +270,7 @@ SELECT _grant_read('towner');
 
 -- id,own,oid,qtt_requ,qua_requ,qtt_prov,qua_prov,qtt
 create view vorder as
-select (o.ord).id as id,w.name as own,(o.ord).oid as oid,
+select (o.ord).id as id,(o.ord).type as type,w.name as own,(o.ord).oid as oid,
 		(o.ord).qtt_requ as qtt_requ,(o.ord).qua_requ as qua_requ,
 		(o.ord).qtt_prov as qtt_prov,(o.ord).qua_prov as qua_prov,
 		(o.ord).qtt as qtt, o.created as created, o.updated as updated
