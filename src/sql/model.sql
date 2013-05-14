@@ -92,8 +92,6 @@ GRANT EXECUTE ON FUNCTION  fversion() TO role_co,role_bo;
 	
 	-- role_bo---->role_batch
 	
-	-- role_admin
-	
 	access by clients can be disabled/enabled with a single command:
 		REVOKE role_co FROM role_client
 		GRANT role_co TO role_client
@@ -124,10 +122,9 @@ BEGIN
 	ALTER ROLE role_client INHERIT LOGIN;
 	GRANT role_co TO role_client;
 
-	-- a single connection is allowed for role_batch and role_admin
+	-- a single connection is allowed for role_batch
 	
 	-- role_bo---->role_batch
-	-- role_admin
 	BEGIN 
 		CREATE ROLE role_bo; 
 	EXCEPTION WHEN duplicate_object THEN
@@ -551,7 +548,9 @@ CREATE TYPE yresorder AS (
     qtt_give int8,
     err	int,
     json text,
-    own text
+    own text,
+    type int,
+    stackid int
 );
 --------------------------------------------------------------------------------
 CREATE FUNCTION fcheckorder(_t	tstack) RETURNS yresorder AS $$
@@ -572,6 +571,8 @@ BEGIN
 	_ro.err			:= 0;
 	_ro.json		:= NULL;
 	_ro.own         := _t.own;
+	_ro.type        := _t.type;
+	_ro.stackid     := _t.id;
 	
 	_otype = _t.type & (~3);
 	_wid := fgetowner(_t.own);
@@ -682,24 +683,33 @@ BEGIN
 	
 	SELECT id INTO _tid FROM tstack ORDER BY id ASC LIMIT 1;
 	IF(NOT FOUND) THEN
+	    _ro.type = 0;
 		RETURN _ro; -- the stack is empty
 	END IF;
 
 	DELETE FROM tstack WHERE id=_tid RETURNING * INTO STRICT _t;
 
-	_ro := fcheckorder(_t);	
-	IF(_ro.err != 0) THEN RETURN _ro; END IF;
+	_ro := fcheckorder(_t);	-- sets _ro.type,own,stackid
+
+	IF(_ro.err != 0) THEN 
+	    RETURN _ro; 
+	END IF;
 	
 	_otype = _t.type & (~3);
 	IF((_otype & (128|64)) != 0) THEN -- quote or prequote
-		_ro := fproducequote(_ro,_t,true);	
+		_ro := fproducequote(_ro,_t,true);
+	    _ro.type = _t.type;
+	    _ro.own = _t.own;
+	    _ro.stackid = _t.id;
 		RETURN _ro;
 	ELSIF(_t.type = 32) THEN -- remove barter
-		_ro := fremovebarter(_t);	
+		_ro := fremovebarter(_t);
+	    _ro.type = _t.type;
+	    _ro.own = _t.own;
+	    _ro.stackid = _t.id;
 		RETURN _ro;
 	END IF;	
 	 -- the order is a barter
-
 	
 	INSERT INTO torder(usr,ord,created,updated,duration) VALUES (_t.usr,_ro.ord,_t.created,NULL,_t.duration);
 
@@ -1032,7 +1042,8 @@ CREATE TYPE yresorder AS (
     qtt_give int8,
     err	int,
     json text,
-    own text
+    own text,
+    type int,
 );
 */
 
@@ -1049,6 +1060,8 @@ BEGIN
     _ro.err := 0;
     _ro.json := NULL;
     _ro.qtt := 0;
+    _ro.own := _t.own;
+    _ro.type := _t.type;
     _exhausted := false;
     
     _wid := fgetowner(_t.own);
@@ -1068,6 +1081,7 @@ BEGIN
 		        _exhausted := true;
 	            _ro.ord := _op;
 	            _ro.ordp := _op;
+
 		    END IF;
 		    
 

@@ -13,6 +13,7 @@ TresChemin *flowc_maximum(Tflow *flow);
 char * flowc_vecIntStr(short dim,int64 *vecInt);
 
 static TypeFlow _calType(Tflow *flow);
+static double _prodOmega(Tflow *flow, bool lnIgnoreOmega);
 static double _calOmega(TresChemin *chem, bool lnIgnoreOmega);
 static void _calOwns(TresChemin *chem);
 static void _calGains(TresChemin *chem,double Omega);
@@ -178,21 +179,24 @@ static void _flow_maximum(TresChemin *chem) {
 				=> every order provide something
 				=> every owner provide something
 			* the flow exhausts the cycle: x[i].flowr<=x[i].qtt for some i
-			* Omega ~= 1.0 and the error is minimized
 			* the limit defined by LIMIT orders are observed (when _lnIgOmega except for the last node)
+			* the error between omegaCorrige[.] and x[.].flowr/x[.-1].flowr is minimized 
+			* when _lnIgOmega, the prodOmega computed using the last omega just set is >=1.0
+			
+			* product of x[.].flowr/x[.-1].flowr == 1.0 NECESSAIREMENT
     */
     
+	if(chem->status != draft) 
+	    goto _dropflow;
+
     if(_lnIgnoreOmega) {
-		flow->x[ _dim-1 ].qtt_requ = flow->x[ _dim-2 ].flowr;
-		flow->x[ _dim-1 ].qtt_prov = flow->x[ _dim-1 ].flowr;
+	    flow->x[ _dim-1 ].qtt_requ = flow->x[ _dim-2 ].flowr;
+	    flow->x[ _dim-1 ].qtt_prov = flow->x[ _dim-1 ].flowr;
     }
     if(_lnIgnoreQtt) 
         flow->x[ _dim-1 ].qtt = flow->x[ _dim-1 ].flowr;
+	return;
 
-	if(chem->status == draft) {
-		return;
-	}
-	
 _dropflow:
 	{
 		short _k;
@@ -219,6 +223,32 @@ static TypeFlow _calType(Tflow *flow) {
 	}
 
 	return _type;
+}
+/******************************************************************************
+ * computes prodOmega as product of flow->x[.].qtt_prov/flow->[.].qtt_requ
+ * when lnIgnoreOmega is set (ignore omega of the last node), 
+ * the last node is ignored
+ *****************************************************************************/
+static double _prodOmega(Tflow *flow, bool lnIgnoreOmega) {
+	short _n,_ldim,_dim = flow->dim;
+	double _prodOmega;
+		
+	_prodOmega = 1.0;
+	
+	_ldim = (lnIgnoreOmega)?(_dim - 1):_dim;
+	obMRange(_n,_ldim) {		
+			Tfl *b = &flow->x[_n];
+
+			// compute omega and prodOmega
+			if(b->qtt_prov == 0 || b->qtt_requ == 0 || b->proba == 0.0) {
+				ereport(ERROR,
+					(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+					 errmsg("_prodOmega: qtt_prov=%li or qtt_requ=%li or proba=%f is zero for Tfl[%i]",
+					 	b->qtt_prov,b->qtt_requ,b->proba,_n)));
+			}		 
+			_prodOmega *= GET_OMEGA_P(b);
+	}
+	return _prodOmega;
 }
 /******************************************************************************
  * computes chem->omega[.] as product of flow->x[.].qtt_prov/flow->[.].qtt_requ
@@ -527,6 +557,7 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem, bool _lnIgOmega
 	double  *fluxExact = chem->fluxExact;
 	double  *omega = chem->omega;
 	Tstatusflow _ret;
+	double  _prodOmegaPath = 0.0; // for the compiler
 
 	// computes floor[.] as the floor rounding of fluxExact[.]
 	/***********************************************************************/
@@ -562,6 +593,9 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem, bool _lnIgOmega
 			 errmsg("in _rounding, matmax=%i,flow too long",_matmax)));
 	}
 	
+	if(_lnIgOmega)
+	    _prodOmegaPath = _prodOmega(flow,true);
+	    
 	// for each vertex of the hypercude
 	/***********************************************************************/
 	_found = false;
@@ -618,6 +652,13 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem, bool _lnIgOmega
 				_kp = _k;
 			}
 		}
+		
+		if(_lnIgOmega) {
+		    double _omega  = ((double) _flowNodes[_dim-1]) / ((double) _flowNodes[_dim-2]);
+		    /* if the prodOmega resulting from rounding <1, rejected */
+		    if((_omega * _prodOmegaPath) < 1.0)
+		        goto _continue;
+		}
 				
 		/* At this point, 
 			* each node can provide flowNodes[.],
@@ -625,8 +666,8 @@ static Tstatusflow _rounding(short iExhausted, TresChemin *chem, bool _lnIgOmega
 				=> every order provide something
 				=> every owner provide something
 			* the flow exhausts the cycle
-			* Omega ~= 1.0 
 			* the limit defined by LIMIT orders are observed (when _lnIgOmega except for the last node)
+			* when _lnIgOmega, the prodOmega computed using the last omega set is >=1.0
 		*/
 		
 		// choose the best
