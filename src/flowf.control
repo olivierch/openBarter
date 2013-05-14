@@ -1,5 +1,5 @@
 # flowf extension
 comment = 'data type for cycle of orders'
-default_version = '0.7'
+default_version = '0.8'
 module_pathname = '$libdir/flowf'
 relocatable = true

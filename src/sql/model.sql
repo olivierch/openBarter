@@ -12,7 +12,7 @@ SET log_error_verbosity = terse;
 -- create extension btree_gin with version '1.0';
 
 drop extension if exists flowf cascade;
-create extension flowf; -- with version '1.0';
+create extension flowf with version '0.8';
 
 --------------------------------------------------------------------------------
 -- main constants of the model
@@ -30,8 +30,8 @@ INSERT INTO tconst (name,value) VALUES
 	('MAXMVTPERTRANS',128),
 	-- it is the version X.Y.Z of the model, not that of the extension
 	('VERSION-X',0),
-	('VERSION-Y',7),
-	('VERSION-Z',1);
+	('VERSION-Y',8),
+	('VERSION-Z',0);
 
 
 --------------------------------------------------------------------------------
@@ -222,34 +222,6 @@ create domain dquantity AS int8 check( VALUE>0);
 
 
 --------------------------------------------------------------------------------
--- ORDER
---------------------------------------------------------------------------------
-create domain dtypeorder AS int check(VALUE >0 AND VALUE < 256);
--- xxcd000a
--- xx 1 order limit
--- xx 2 order best
--- c set when ignoreOmega
--- d set when qttLimit
--- a set when quote
-
-create table torder ( 
-	usr text,
-    ord yorder,
-    created timestamp not NULL,
-    updated timestamp,
-    duration interval
-);
-
-SELECT _grant_read('torder');
-
-comment on table torder is 'description of orders';
-
-create index torder_qua_prov_idx on torder(((ord).qua_prov)); -- using gin(((ord).qua_prov) text_ops);
-create index torder_id_idx on torder(((ord).id));
-create index torder_oid_idx on torder(((ord).oid));
-
-
---------------------------------------------------------------------------------
 -- TOWNER
 --------------------------------------------------------------------------------
 create table towner (
@@ -267,8 +239,37 @@ create index towner_name_idx on towner(name);
 SELECT _reference_time('towner');
 SELECT _grant_read('towner');
 
+--------------------------------------------------------------------------------
+-- ORDER BOOK
+--------------------------------------------------------------------------------
+create domain dtypeorder AS int check(VALUE >0 AND VALUE < 256);
+-- type&3  1 order limit,2 order best
+-- type&12 bit set for c calculations 
+--    4 no qttlimit
+--    8 ignoreomega
+-- type&64 prequote
+-- type&128 quote
 
--- id,own,oid,qtt_requ,qua_requ,qtt_prov,qua_prov,qtt
+create table torder ( 
+	usr text,
+    ord yorder, --defined by the extension flowf
+    created timestamp not NULL,
+    updated timestamp,
+    duration interval
+);
+comment on table torder is 'Order book';
+comment on column torder.usr is 'user that inserted the order ';
+comment on column torder.ord is 'the order';
+comment on column torder.created is 'time when the order was inserted in the book';
+comment on column torder.updated is 'time when the order was updated';
+comment on column torder.duration is 'the life time of the order';
+SELECT _grant_read('torder');
+
+create index torder_qua_prov_idx on torder(((ord).qua_prov)); -- using gin(((ord).qua_prov) text_ops);
+create index torder_id_idx on torder(((ord).id));
+create index torder_oid_idx on torder(((ord).oid));
+
+-- id,type,own,oid,qtt_requ,qua_requ,qtt_prov,qua_prov,qtt
 create view vorder as
 select (o.ord).id as id,(o.ord).type as type,w.name as own,(o.ord).oid as oid,
 		(o.ord).qtt_requ as qtt_requ,(o.ord).qua_requ as qua_requ,
@@ -276,6 +277,8 @@ select (o.ord).id as id,(o.ord).type as type,w.name as own,(o.ord).oid as oid,
 		(o.ord).qtt as qtt, o.created as created, o.updated as updated
 from torder o left join towner w on ((o.ord).own=w.id) where o.usr=session_user;
 SELECT _grant_read('vorder');
+
+
 --------------------------------------------------------------------------------
 
 --------------------------------------------------------------------------------
@@ -337,9 +340,11 @@ create table tmvt (
 );
 SELECT _grant_read('tmvt');
 
-comment on table tmvt is 'Records a ownership changes';
-comment on column tmvt.nbc is 'number of movements of the exchange';
-comment on column tmvt.nbt is 'number of movements of the transaction';
+comment on table tmvt is 'Records ownership changes';
+
+comment on column tmvt.json is 'record message errors or quote output';
+comment on column tmvt.nbc is 'number of movements of the exchange cycle';
+comment on column tmvt.nbt is 'number of movements of the transaction containing several exchange cycles';
 comment on column tmvt.grp is 'references the first movement of the exchange';
 comment on column tmvt.xid is 'references the order.id';
 comment on column tmvt.xoid is 'references the order.oid';
@@ -347,6 +352,11 @@ comment on column tmvt.own_src is 'owner provider';
 comment on column tmvt.own_dst is 'owner receiver';
 comment on column tmvt.qtt is 'quantity of the value moved';
 comment on column tmvt.nat is 'quality of the value moved';
+comment on column tmvt.ack is 'set when movement has been acknowledged';
+comment on column tmvt.exhausted is 'set when the movement exhausted the order providing the value';
+comment on column tmvt.refused is 'set with the field json when the movement recors an error';
+comment on column tmvt.om_exp is 'ω expected by the order';
+comment on column tmvt.om_rea is 'real ω of movement';
 
 CREATE VIEW vmvt AS select id,nbc,grp,own_src,own_dst,qtt,nat from tmvt;
 SELECT _grant_read('vmvt');
@@ -379,7 +389,7 @@ create table tstack (
     PRIMARY KEY (id)
 );
 
-comment on table tstack is 'Records a stack of orders';
+comment on table tstack is 'Records the stack of orders';
 comment on column tstack.id is 'id of this order';
 comment on column tstack.oid is 'id of a parent order';
 comment on column tstack.own is 'owner of this order';
@@ -455,6 +465,26 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fsubmitbarter(dtypeorder,text,int,text,int8,text,int8,interval) TO role_co;
+
+--------------------------------------------------------------------------------
+-- submits a barter delete
+-- type=32, oid is the barter to delete
+--------------------------------------------------------------------------------
+
+CREATE FUNCTION 
+	frmbarter(_own text,_oid int)
+	RETURNS yressubmit AS $$
+DECLARE
+	_r			yressubmit%rowtype;	
+BEGIN
+	_r.id := fsubmitorder(32,_own,_oid,'',1,'',1,1,NULL);
+	_r.diag := 0;
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  frmbarter(text,int) TO role_co;
+--------------------------------------------------------------------------------
+-- put the order on the stack
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
 	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8,_duration interval)
@@ -470,19 +500,24 @@ END;
 $$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
-/* for an order O creates a temporary table _tmp of objects.
+/* function fcreate_tmp
+
+It is the central query of openbarter
+
+for an order O creates a temporary table _tmp of objects.
 Each object represents a chain of orders - a flows - going to O. 
 
 The table has columns
 	debut 	the first order of the path
 	path	the path
 	fin		the end of the path (O)
-	depth	the depth of exploration
+	depth	the exploration depth
 	cycle	a boolean true when the path contains the new order
 
 The number of paths fetched is limited to MAXPATHFETCHED
 Among those objects representing chains of orders, 
 only those making a potential exchange (draft) are recorded.
+
 */
 --------------------------------------------------------------------------------
 /*
@@ -517,8 +552,8 @@ was specified  on Z in the search_backward WHERE condition */
 			) SELECT debut,path,fin from search_backward 
 			LIMIT _MAXPATHFETCHED
 		) Z WHERE (Z.fin).qua_prov=(Z.debut).qua_requ 
-				AND yflow_match(Z.fin,Z.debut)
-				AND yflow_is_draft(yflow_finish(Z.debut,Z.path,Z.fin))
+				AND yflow_match(Z.fin,Z.debut) -- it is a cycle
+				AND yflow_is_draft(yflow_finish(Z.debut,Z.path,Z.fin)) -- and a draft
 	);
 	RETURN 0;
 	
@@ -550,7 +585,7 @@ CREATE TYPE yresorder AS (
     json text,
     own text,
     type int,
-    stackid int
+    stackid int -- the id of the order
 );
 --------------------------------------------------------------------------------
 CREATE FUNCTION fcheckorder(_t	tstack) RETURNS yresorder AS $$
@@ -609,7 +644,7 @@ BEGIN
 			_ro.json:= '{"error":"the parent must have the same owner"}';
 			_ro.err := -2; END IF;
 		IF (_op.oid != _op.id) THEN 
-			_ro.json:= '{"error":"the parent must not have parent"}';
+			_ro.json:= '{"error":"a parent cannot have parent"}';
 			_ro.err := -3; END IF;
 		
 	END IF;
@@ -652,6 +687,7 @@ END;
 $$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
+/* unstack an order and execute it */
 CREATE FUNCTION fproducemvt() RETURNS yresorder AS $$
 DECLARE
 
@@ -1014,39 +1050,7 @@ GRANT EXECUTE ON FUNCTION  fcleanoutdatedorder() TO role_bo;
 
 --------------------------------------------------------------------------------
 -- barter delete
--- type=32, oid is the barter to delete
 --------------------------------------------------------------------------------
---------------------------------------------------------------------------------
--- same as previous without _qtt
---------------------------------------------------------------------------------
-CREATE FUNCTION 
-	frmbarter(_own text,_oid int)
-	RETURNS yressubmit AS $$
-DECLARE
-	_r			yressubmit%rowtype;	
-BEGIN
-	_r.id := fsubmitorder(32,_own,_oid,'',1,'',1,1,NULL);
-	_r.diag := 0;
-	RETURN _r;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  frmbarter(text,int) TO role_co;
-/*
-CREATE TYPE yresorder AS (
-    ord yorder,
-    ordp yorder,
-    qtt_requ int8,
-    qtt_prov int8,
-    qtt int8,
-    qtt_reci int8,
-    qtt_give int8,
-    err	int,
-    json text,
-    own text,
-    type int,
-);
-*/
-
 CREATE FUNCTION fremovebarter(_t tstack) RETURNS yresorder AS $$
 DECLARE
 	_ro		    yresorder%rowtype;

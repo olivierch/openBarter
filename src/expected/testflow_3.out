@@ -10,14 +10,14 @@ psql:sql/model.sql:3: NOTICE:  schema "market" does not exist, skipping
  
 (1 row)
 
- _grant_read 
--------------
- 
-(1 row)
-
  _reference_time 
 -----------------
                0
+(1 row)
+
+ _grant_read 
+-------------
+ 
 (1 row)
 
  _grant_read 
