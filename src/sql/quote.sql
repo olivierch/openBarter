@@ -135,6 +135,7 @@ DECLARE
 	_nbmvts		int;
 	_wid		int;
 	_MAXMVTPERTRANS 	int := fgetconst('MAXMVTPERTRANS');
+	_give       text;
 	
 BEGIN
 /*
@@ -146,6 +147,7 @@ BEGIN
 	_cnt := fcreate_tmp(_ro.ord);
 	_nbmvts := 0;
 	_ro.json := '';
+	_give := '';
 	
 	LOOP
 		SELECT yflow_max(cycle) INTO _cyclemax FROM _tmp WHERE yflow_is_draft(cycle);
@@ -164,7 +166,7 @@ BEGIN
 		END IF;
 		
 		_res := yflow_qtts(_cyclemax);
-		-- _res = [qtt_in,qtt_out,qtt_requ,qtt_prov,qtt]
+		-- _res = [qtt_in,qtt_out,qtt_requ,qtt_prov,qtt,id_give]
 		
 		_ro.qtt_reci := _ro.qtt_reci + _res[1];
 		_ro.qtt_give := _ro.qtt_give + _res[2];

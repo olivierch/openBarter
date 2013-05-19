@@ -755,7 +755,7 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 	char        _typalign;
 	int         _dims[1];
 	int         _lbs[1];
-	int64		_qtt_in =0,_qtt_out =0,_qtt_requ =0,_qtt_prov = 0,_qtt = 0;
+	int64		_qtt_in =0,_qtt_out =0,_qtt_requ =0,_qtt_prov = 0,_qtt = 0;//,_id_give = 0;
 	short		_i;
 	bool		_isDraft = true;
 	
@@ -772,6 +772,7 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 		_qtt_requ = Int64GetDatum(f->x[f->dim-1].qtt_requ);
 		_qtt_prov = Int64GetDatum(f->x[f->dim-1].qtt_prov);
 		_qtt = Int64GetDatum(f->x[f->dim-1].qtt);
+		//_id_give = Int64GetDatum(f->x[f->dim-2].id);
 		//_in = DatumGetInt64(_qtt_in);
 		//_out = DatumGetInt64(_qtt_out);
 		//elog(WARNING,"_in=%li _out=%li",_in,_out);
@@ -787,7 +788,8 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 	_datum_out[2] = _qtt_requ;	_isnull[2] = false;
 	_datum_out[3] = _qtt_prov;	_isnull[3] = false;
 	_datum_out[4] = _qtt;		_isnull[4] = false;
-
+    //_datum_out[5] = _id_give;	_isnull[5] = false;
+    
 	_dims[0] = 5;
 	_lbs[0] = 1;
 				 

@@ -1,6 +1,6 @@
 # openbarter extension
-comment = ’Multilateral agreement production engine.’
-default_version = ’0.7.0’
+comment = 'Multilateral agreement engine.’
+default_version = ’0.8.0’
 module_pathname = '$libdir/openBarter'
 relocatable = true
 

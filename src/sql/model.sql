@@ -260,8 +260,8 @@ create table torder (
 comment on table torder is 'Order book';
 comment on column torder.usr is 'user that inserted the order ';
 comment on column torder.ord is 'the order';
-comment on column torder.created is 'time when the order was inserted in the book';
-comment on column torder.updated is 'time when the order was updated';
+comment on column torder.created is 'time when the order was put on the stack';
+comment on column torder.updated is 'time when the (quantity) of the order was updated by the order book';
 comment on column torder.duration is 'the life time of the order';
 SELECT _grant_read('torder');
 
@@ -293,7 +293,7 @@ BEGIN
 		END IF;
 		BEGIN
 			if(char_length(_name)<1) THEN
-				RAISE EXCEPTION 'Owner s name cannot be empty' USING ERRCODE='YU001';
+				RAISE EXCEPTION 'The name of an owner cannot be empty' USING ERRCODE='YU001';
 			END IF;
 			INSERT INTO towner (name) VALUES (_name) RETURNING id INTO _wid;
 			-- RAISE NOTICE 'owner % created',_name;
@@ -379,13 +379,36 @@ create table tstack (
     own text NOT NULL,
     oid int, -- can be NULL
     type int NOT NULL,
-    qua_requ text NOT NULL ,
-    qtt_requ dquantity NOT NULL,
-    qua_prov text ,
-    qtt_prov dquantity ,
+    qua_requ text,
+    qtt_requ int8,
+    qua_prov text,
+    qtt_prov int8,
     qtt int8 ,
     duration interval,
-    created timestamp not NULL,   
+    created timestamp not NULL, 
+	CHECK (
+	(   (
+	        (type&(~15) = 0) AND (char_length(qua_requ)>0) AND (char_length(qua_prov)>0) 
+	        AND (qtt_requ>0) AND (qtt_prov>0) AND (qtt>0) --barter
+	    ) OR (
+	        (type&(~15) = 64) AND (char_length(qua_requ)>0) AND (char_length(qua_prov)>0) 
+	         --prequote
+	    ) OR (
+	        (type&(~15) = 128) AND (char_length(qua_requ)>0) AND (char_length(qua_prov)>0) 
+	        --quote
+	    ) OR (
+	        (type = 32) AND (oid>0) 
+	         --rmbarter
+	    )
+	) AND (
+	    (qtt IS NULL) OR (qtt >=0)
+    ) AND (
+	    (qtt_prov IS NULL) OR (qtt_prov >0)
+    ) AND (
+	    (qtt_requ IS NULL) OR (qtt_requ >0)
+    ) AND char_length(usr)>0 
+    AND char_length(own)>0
+    ),  
     PRIMARY KEY (id)
 );
 
@@ -484,7 +507,7 @@ END;
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  frmbarter(text,int) TO role_co;
 --------------------------------------------------------------------------------
--- put the order on the stack
+-- put the order on the stack common to all orders
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
 	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8,_duration interval)

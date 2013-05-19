@@ -1,8 +1,8 @@
 {
    "name": "openbarter",
    "abstract": "Multilateral agreement production engine.",
-   "description": "openBarter is a postgreSQL extension defining a barter market. It implements the economic mechanisms of a regular market and allows cyclic exchange between more than two partners (buyer and seller) in a single transaction. Even if competition is performed between offers, it does not require any central monetary standard to express prices to be compared. It provides a liquidity equivalent to that of a regular market place.",
-   "version": "0.7.1",
+   "description": "openBarter is a central limit order book that performs competition on price even if money is not necessary to express them. It is a barter market and allows cyclic exchange between two partners (buyer and seller) or more in a single transaction. It provides a fluidity equivalent to that of a regular market place.",
+   "version": "0.8.0",
    "maintainer": [
       "Olivier Chaussavoine <olivier.chaussavoine@gmail.com>"
    ],
@@ -20,8 +20,8 @@
      "openbarter": {
        "file": "src/sql/model.sql",
        "docfile": "doc/doc-ob.pdf",
-       "version": "0.7.1",
-       "abstract": "Multilateral agreement production engine."
+       "version": "0.8.0",
+       "abstract": "Multilateral agreement engine."
      }
    },
    "resources": {
@@ -40,7 +40,8 @@
       "url": "http://pgxn.org/meta/spec.txt"
    },
    "tags": [
-      "non-bilateral",
+      "cyclic exchange","non-bilateral",
+      "central","limit","order","book",
       "barter",
       "market"
    ],
