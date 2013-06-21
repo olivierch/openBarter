@@ -1,34 +1,26 @@
 
 --------------------------------------------------------------------------------
--- check parameters of a quote
+-- check params of quote
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
-	fcheckquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
+	fcheckquaown(_own text,_qua_requ text,_qua_prov text)
 	RETURNS yressubmit AS $$	
 DECLARE
 	_r			 yressubmit%rowtype;
 BEGIN
-	_r.diag := 0;
-
-	IF(_qua_requ = _qua_prov) THEN
+    _r.id := 0;
+    _r.diag := 0;
+    
+	IF(NOT((fchecktxt(_qua_prov)=0) AND (fchecktxt(_qua_requ)=0) AND (fchecktxt(_own)=0))) THEN 
 		_r.diag := -1;
 		RETURN _r;
-	END IF;
-			
-	IF( 
-		(((_qtt_requ IS NOT NULL) OR (_qtt_requ IS NOT NULL)) AND ((_qtt_requ <=0) OR (_qtt_prov <= 0)))
-	 OR ((_qtt      IS NOT NULL) AND (_qtt <= 0)) 
-	 ) THEN
-		_r.diag := -2;
-		RETURN _r;
-	END IF;
-	
-	IF(NOT (0 < _type AND _type <4)) THEN
-		_r.diag := -3;
-		RETURN _r;
-	END IF;
-
-	RETURN _r;
+	END IF;	
+    IF(_qua_prov = _qua_requ) THEN
+	    _r.diag := -1;
+	    RETURN _r;
+    END IF;
+    
+    RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL;
 
@@ -41,12 +33,13 @@ CREATE FUNCTION
 DECLARE
 	_r			 yressubmit%rowtype;
 BEGIN
-	_r := fcheckquote(2,_own,_qua_requ,NULL,_qua_prov,NULL,NULL);
-	IF(_r.diag != 0) THEN
-		RETURN _r;
-	END IF;	
+    _r := fcheckquaown(_own,_qua_requ,_qua_prov);
+    if(_r.diag !=0) THEN
+        return _r;
+    END IF;
+	
 	-- ORDER_BEST 2 NOQTTLIMIT 4 IGNOREOMEGA 8 PREQUOTE 64
-	_r.id := fsubmitorder(2 | 4 | 8 | 64,_own,NULL,_qua_requ,1,_qua_prov,1,1,NULL);
+	_r.id := fsubmitorder(2 | 4 | 8 | 64,_own,NULL,_qua_requ,NULL,_qua_prov,NULL,NULL,NULL);
 	_r.diag = 0;
 	
 	RETURN _r;
@@ -55,68 +48,69 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fsubmitprequote(text,text,text) TO role_co;
 
 --------------------------------------------------------------------------------
--- quote first form
---------------------------------------------------------------------------------
-CREATE FUNCTION 
-	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qua_prov text)
-	RETURNS yressubmit AS $$	
-DECLARE
-	_r			 yressubmit%rowtype;
-BEGIN
-	_r := fcheckquote(_type,_own,_qua_requ,NULL,_qua_prov,NULL,NULL);
-	IF(_r.diag != 0) THEN
-		RETURN _r;
-	END IF;	
-	-- NOQTTLIMIT 4 IGNOREOMEGA 8 QUOTE 128
-	_r.id := fsubmitorder((_type & 3) | 4 | 8 | 128,_own,NULL,_qua_requ,1,_qua_prov,1,1,NULL);
-	_r.diag = 0;
-	RETURN _r;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,text) TO role_co;
-
---------------------------------------------------------------------------------
--- quote second form
---------------------------------------------------------------------------------
-CREATE FUNCTION 
-	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
-	RETURNS yressubmit AS $$	
-DECLARE
-	_r			 yressubmit%rowtype;
-BEGIN
-	_r := fcheckquote(_type,_own,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,NULL);
-	IF(_r.diag != 0) THEN
-		RETURN _r;
-	END IF;
-	--  NOQTTLIMIT 4 QUOTE 128
-	_r.id := fsubmitorder((_type & 3) | 4 | 128,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,0,NULL);
-	_r.diag = 0;
-	RETURN _r;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8) TO role_co;
-
---------------------------------------------------------------------------------
--- quote third form
+-- all forms
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
 	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
 	RETURNS yressubmit AS $$	
 DECLARE
 	_r			 yressubmit%rowtype;
+	_otype      int;
 BEGIN
-	_r := fcheckquote(_type,_own,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt);
-	IF(_r.diag != 0) THEN
-		RETURN _r;
+    _r := fcheckquaown(_own,_qua_requ,_qua_prov);
+    if(_r.diag !=0) THEN
+        return _r;
+    END IF;
+	
+	_otype := _type & 3;
+	
+	IF((_qtt IS NULL) AND (_qtt_requ IS NULL) AND (_qtt_prov IS NULL)) THEN -- quote first form
+	    _otype := _otype | 4 | 8 | 128; -- NOQTTLIMIT 4 IGNOREOMEGA 8 QUOTE 128
+	ELSIF((_qtt IS NULL) AND (_qtt_requ >0) AND (_qtt_prov >0)) THEN -- quote second form
+	    _otype := _otype | 4 | 128; --  NOQTTLIMIT 4 QUOTE 128
+	ELSIF((_qtt > 0) AND (_qtt_requ >0) AND (_qtt_prov >0) ) THEN -- quote third form	
+	    _otype := _otype | 128; --  QUOTE 128
+	ELSE 
+	    _r.diag := -2;
+	    RETURN _r;
 	END IF;
-	-- QUOTE 128	
-	_r.id := fsubmitorder((_type & 3) | 128,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,NULL);
+	
+	_r.id := fsubmitorder(_otype,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,NULL);
 	_r.diag = 0;
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8,int8) TO role_co;
 
+--------------------------------------------------------------------------------
+-- quote first form -shortcut
+--------------------------------------------------------------------------------
+CREATE FUNCTION 
+	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qua_prov text)
+	RETURNS yressubmit AS $$
+DECLARE
+	_r			 yressubmit%rowtype;	
+BEGIN
+	_r := fsubmitquote(_type,_own,_qua_requ,NULL,_qua_prov,NULL,NULL);
+	RETURN _r; 
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,text) TO role_co;
+
+--------------------------------------------------------------------------------
+-- quote second form -shortcut
+--------------------------------------------------------------------------------
+CREATE FUNCTION 
+	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
+	RETURNS yressubmit AS $$	
+DECLARE
+	_r			 yressubmit%rowtype;	
+BEGIN
+	_r := fsubmitquote(_type,_own,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,NULL);
+	RETURN _r; 
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8) TO role_co;
 
 
 --------------------------------------------------------------------------------
@@ -124,7 +118,6 @@ GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8,int8
 --------------------------------------------------------------------------------
 CREATE FUNCTION fproducequote(_ro yresorder,_t tstack,_record boolean) RETURNS yresorder AS $$
 DECLARE
-	--_ro		    yresorder%rowtype;
 	_cnt		int;
 	_cyclemax 	yflow;
 	_cycle		yflow;
@@ -138,12 +131,6 @@ DECLARE
 	_give       text;
 	
 BEGIN
-/*
-	_ro := fcheckorder(_t);
-	
-	IF(_ro.err != 0) THEN RETURN _ro; END IF;
-    -- RAISE WARNING 'ICI %',_ro.ord; 
-*/
 	_cnt := fcreate_tmp(_ro.ord);
 	_nbmvts := 0;
 	_ro.json := '';
@@ -166,7 +153,8 @@ BEGIN
 		END IF;
 		
 		_res := yflow_qtts(_cyclemax);
-		-- _res = [qtt_in,qtt_out,qtt_requ,qtt_prov,qtt,id_give]
+		-- _res = [qtt_in,qtt_out,qtt_requ,qtt_prov,qtt]
+		-- _res = [x[f->dim-2].flowr,x[f->dim-1].flowr,x[f->dim-1].qtt_requ,x[f->dim-1].qtt_prov,x[f->dim-1].qtt]
 		
 		_ro.qtt_reci := _ro.qtt_reci + _res[1];
 		_ro.qtt_give := _ro.qtt_give + _res[2];
@@ -216,13 +204,14 @@ BEGIN
 	_ro.json :='{"qtt_requ":' || _ro.qtt_requ || ',"qtt_prov":' || _ro.qtt_prov || ',"qtt":' || _ro.qtt  || 
 		',"qtt_reci":' || _ro.qtt_reci || ',"qtt_give":' || _ro.qtt_give || 
 		',"paths":[' || chr(10) || _ro.json || chr(10) ||']}';
+	_ro.err := 1;
 		
 	IF(_record) THEN
-	    INSERT INTO tmvt (	type,json,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
-						    qtt,nat,ack,exhausted,refused,order_created,created
+	    INSERT INTO tmvt (	type,json,xid,    usr,xoid, 
+						    refused,order_created,created
 					     ) 
-		    VALUES       (	_t.type,_ro.json,1,  1,NULL,_t.id,_t.usr,(_ro.ord).oid,_t.own,_t.own,
-						    _ro.qtt,_t.qua_prov,false,false,_ro.err,_t.created,statement_timestamp()
+		    VALUES       (	_t.type,_ro.json,_t.id,_t.usr,(_ro.ord).oid,
+						    _ro.err,_t.created,statement_timestamp()
 					     )
 		    RETURNING id INTO _mid;
 	    UPDATE tmvt SET grp = _mid WHERE id = _mid;
@@ -234,7 +223,7 @@ END;
 $$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
--- obtain quote directly
+-- obtain quote directly TODO
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
 	fgetquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)

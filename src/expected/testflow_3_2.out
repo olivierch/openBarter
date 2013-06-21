@@ -249,9 +249,9 @@ select * from frmbarter('d',32);
 (1 row)
 
 select json from fproducemvt();
- json 
-------
- 
+                         json                          
+-------------------------------------------------------
+ {"info":"removeorder - the barter order is removed "}
 (1 row)
 
 select count(*) from vorder;

@@ -182,6 +182,8 @@ comment on FUNCTION ftime_updated() is
 'trigger updating fields created and updated';
 
 --------------------------------------------------------------------------------
+-- add ftime_updated trigger to the table
+--------------------------------------------------------------------------------
 CREATE FUNCTION _reference_time(_table text) RETURNS int AS $$
 DECLARE
 	_res int;
@@ -310,32 +312,26 @@ $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 create table tmvt (
 	id serial UNIQUE not NULL,
-	type int not NULL,
-	json text, -- can be NULL
-	nbc int not NULL, -- Number of mvts in the exchange
-	nbt int not NULL, -- Number of mvts in the transaction
-	grp int, -- References the first mvt of an exchange.
-	-- can be NULL
-	xid int not NULL,
-	usr text not NULL,
-	xoid int not NULL,
-	own_src text not NULL, 
-	own_dst text not NULL,
-	qtt int8 not NULL,
-	nat text not NULL,
+	type int default NULL,
+	json text default NULL, 
+	nbc int default NULL, 
+	nbt int default NULL, 
+	grp int default NULL,
+	xid int default NULL,
+	usr text default NULL,
+	xoid int default NULL,
+	own_src text default NULL, 
+	own_dst text default NULL,
+	qtt int8 default NULL,
+	nat text default NULL,
 	ack	boolean default false,
-	exhausted boolean default false,
-	refused int default 0,
-	order_created timestamp not NULL,
-	created	timestamp not NULL,
-	om_exp double precision,
-	om_rea double precision 
-	CHECK ((
-		(nbc = 1 AND own_src = own_dst)
-		OR 	(nbc !=1) -- ( AND own_src != own_dst)
-	) AND (
-		qtt >=0
-	)),
+	exhausted boolean default NULL,
+	refused int default NULL,
+	order_created timestamp default NULL,
+	created	timestamp default NULL,
+	om_exp double precision default NULL,
+	om_rea double precision default NULL,
+
 	CONSTRAINT ctmvt_grp FOREIGN KEY (grp) references tmvt(id) ON UPDATE CASCADE
 );
 SELECT _grant_read('tmvt');
@@ -426,7 +422,18 @@ alter sequence tstack_id_seq owned by tstack.id;
 
 SELECT _grant_read('tstack');
 SELECT fifo_init('tstack');
-
+--------------------------------------------------------------------------------
+CREATE FUNCTION fchecktxt(_txt text) RETURNS int AS $$
+BEGIN
+    IF(_txt IS NULL) THEN
+        RETURN -1;
+    END IF;
+    IF char_length(_txt)=0 THEN
+        RETURN -1;
+    END IF;
+    RETURN 0;
+END; 
+$$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 CREATE TYPE yressubmit AS (
     id int,
@@ -448,42 +455,51 @@ DECLARE
 	_r			yressubmit%rowtype;	
 BEGIN
 	_r.diag := 0;
-	IF(_qua_prov = _qua_requ) THEN
-		_r.diag := -1;
-		RETURN _r;
-	END IF;
-	
+	_r.id   := 0;
+
 	IF(NOT (0 < _type AND _type <4)) THEN
 		_r.diag := -3;
 		RETURN _r;
 	END IF;
 	
 	IF( _oid IS NULL) THEN
-		IF((_qtt_requ <=0) OR (_qtt_prov <= 0) OR (_qua_prov IS NULL) OR (_qtt IS NULL)) THEN
+		IF(NOT( (_qtt_requ>0) AND (_qtt_prov>0) AND (fchecktxt(_qua_prov)=0) AND (fchecktxt(_qua_requ)=0) AND (_qtt>0) )) THEN 
 			_r.diag := -2;
 			RETURN _r;
-		END IF;		
+		END IF;	
+	    IF(_qua_prov = _qua_requ) THEN
+		    _r.diag := -1;
+		    RETURN _r;
+	    END IF;	
 	ELSE
-		IF(NOT( (_qua_requ IS NOT NULL) AND (_qtt_requ>0) AND (_qua_prov IS NULL) AND (_qtt_prov>0) )) THEN
+		IF(NOT( (fchecktxt(_qua_requ)=0) AND (_qtt_requ>0) AND (_qua_prov IS NULL) AND (_qtt_prov>0) AND (_qtt IS NULL) AND (_interval IS NULL))) THEN
 			_r.diag := -4;
 			RETURN _r;
 		END IF;
 	END IF;
+	
+	IF NOT(fchecktxt(_own)=0) THEN
+	    _r.diag := -5;
+	    RETURN _r;
+	END IF;
+	
 	_r.id := fsubmitorder(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,_interval);
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fsubmitbarter(dtypeorder,text,int,text,int8,text,int8,int8,interval) TO role_co;
 --------------------------------------------------------------------------------
--- same as previous without _qtt
+-- same as previous with _qtt_prov == _qtt
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
 	fsubmitbarter(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_interval interval)
 	RETURNS yressubmit AS $$
 DECLARE
-	_r			yressubmit%rowtype;	
+	_r			yressubmit%rowtype;
+	_qtt        int8;	
 BEGIN
-	_r := fsubmitbarter(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt_prov,_interval);
+    IF(_oid is NULL) THEN _qtt := _qtt_prov; ELSE _qtt := NULL; END IF;
+	_r := fsubmitbarter(_type,_own,_oid,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,_interval);
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
@@ -500,14 +516,20 @@ CREATE FUNCTION
 DECLARE
 	_r			yressubmit%rowtype;	
 BEGIN
-	_r.id := fsubmitorder(32,_own,_oid,'',1,'',1,1,NULL);
+	_r.id := 0;
 	_r.diag := 0;
+	IF NOT((fchecktxt(_own)=0) AND (_oid>0)) THEN
+	    _r.diag := -1;
+	    RETURN _r;
+	END IF;
+	
+	_r.id := fsubmitorder(32,_own,_oid,NULL,NULL,NULL,NULL,NULL,NULL);
 	RETURN _r;
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  frmbarter(text,int) TO role_co;
 --------------------------------------------------------------------------------
--- put the order on the stack common to all orders
+-- put the order on the stack common to all orders (barter,quote or rmbarter)
 --------------------------------------------------------------------------------
 CREATE FUNCTION 
 	fsubmitorder(_type dtypeorder,_own text,_oid int,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8,_duration interval)
@@ -609,17 +631,14 @@ CREATE TYPE yresorder AS (
     own text,
     type int,
     stackid int -- the id of the order
-);
+);	
+
 --------------------------------------------------------------------------------
-CREATE FUNCTION fcheckorder(_t	tstack) RETURNS yresorder AS $$
+CREATE FUNCTION fgetyresorder() RETURNS yresorder AS $$
 DECLARE
 	_ro		    yresorder%rowtype;
-	_op			yorder;
-	_mid		int;
-	_wid		int;
-	_otype      int;
 BEGIN
-	_ro.ord 		:= ROW(_t.type,_t.id,0,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_t.qtt)::yorder;
+	_ro.ord 		:= NULL;
 	_ro.ordp		:= NULL;
 	_ro.qtt_requ	:= 0;
 	_ro.qtt_prov	:= 0;
@@ -628,84 +647,94 @@ BEGIN
 	_ro.qtt_give	:= 0;
 	_ro.err			:= 0;
 	_ro.json		:= NULL;
+	_ro.own         := NULL;
+	_ro.type        := NULL;
+	_ro.stackid     := NULL;
+	RETURN _ro;
+END; 
+$$ LANGUAGE PLPGSQL;
+
+--------------------------------------------------------------------------------
+CREATE FUNCTION fcheckorder(_t	tstack) RETURNS yresorder AS $$
+DECLARE
+	_ro		    yresorder%rowtype;
+	_op			yorder; -- parent_order
+	_mid		int;
+	_wid		int;
+	_otype      int;
+BEGIN
+    _wid := fgetowner(_t.own);
+    _ro := fgetyresorder();
 	_ro.own         := _t.own;
 	_ro.type        := _t.type;
 	_ro.stackid     := _t.id;
 	
 	_otype = _t.type & (~3);
-	_wid := fgetowner(_t.own);
-		
-    IF((_otype & (128|64)) != 0) THEN -- quote or prequote
-		_ro.err := 0;
-			
+	
+	IF (_otype = 0) THEN -- barter
+        IF((_ro.err = 0) AND (_t.oid IS NOT NULL)) THEN
+            -- get the parent order
+	        SELECT (ord).type,(ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
+		        INTO _op.type,_op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder WHERE (ord).id= _t.oid;
+
+	        IF (NOT FOUND) THEN
+		        -- the parent order was not found in the book
+		        _ro.json:= '{"error":"barter order - the parent order must exist"}';
+		        _ro.err := -1; 
+	        END IF;
+	
+	        IF (_op.own != _wid) THEN 
+		        _ro.json:= '{"error":"barter order - the parent must have the same owner"}';
+		        _ro.err := -2; END IF;
+	        IF (_op.oid != _op.id) THEN 
+		        _ro.json:= '{"error":"barter order - a parent cannot have parent"}';
+		        _ro.err := -3; END IF;
+	
+        END IF;
+
+        IF((_ro.err = 0) AND (_t.duration IS NOT NULL)) THEN
+	        IF((_t.created + _t.duration) < clock_timestamp()) THEN
+		        _ro.json:= '{"error":"barter order - the order is too old"}';
+		        _ro.err := -4; 
+	        END IF;
+        END IF;
+        
+        IF (_t.oid IS NULL) THEN
+		    _t.oid 	:= _t.id;		
+	    ELSE
+		    _t.qtt	:= _op.qtt;
+		    _t.qua_prov := _op.qua_prov;
+		    _ro.ordp := _op;
+	    END IF;
+        
 	ELSIF(_t.type = 32 ) THEN -- remove barter
-		_ro.err := 0;
+	
+	    _ro.ord := ROW(_t.type,_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_t.qtt)::yorder;
 		RETURN _ro;
-		
-    ELSIF (_otype = 0) THEN -- barter
-        _ro.err := 0;
-        
-    ELSE --illegal command
+    
+    ELSEIF ((_otype & (128|64)) != 0) THEN -- quote or prequote
+    
+        _t.oid := _t.id;
+        IF(_t.qtt_requ IS NULL) THEN _t.qtt_requ := 1; END IF;
+        IF(_t.qtt_prov IS NULL) THEN _t.qtt_prov := 1; END IF;
+        IF(_t.qtt IS NULL) THEN _t.qtt := 0; END IF;
+         
+    ELSE   --illegal command
+    
         _ro.err := -5;
-        _ro.json:= '{"error":"illegal command"}';
+        _ro.json:= '{"error":"illegal order"}';
         
-	END IF;	
-
-	
-
-	IF ((_ro.err = 0) AND (_t.oid IS NOT NULL)) THEN
-		SELECT (ord).type,(ord).id,(ord).own,(ord).oid,(ord).qtt_requ,(ord).qua_requ,(ord).qtt_prov,(ord).qua_prov,(ord).qtt 
-			INTO _op.type,_op.id,_op.own,_op.oid,_op.qtt_requ,_op.qua_requ,_op.qtt_prov,_op.qua_prov,_op.qtt FROM torder WHERE (ord).id= _t.oid;
-
-		IF (NOT FOUND) THEN
-			-- the parent order was not found in the book
-			_ro.json:= '{"error":"the parent order must exist"}';
-			_ro.err := -1; 
-		END IF;
-		
-		IF (_op.own != _wid) THEN 
-			_ro.json:= '{"error":"the parent must have the same owner"}';
-			_ro.err := -2; END IF;
-		IF (_op.oid != _op.id) THEN 
-			_ro.json:= '{"error":"a parent cannot have parent"}';
-			_ro.err := -3; END IF;
-		
 	END IF;
 	
-	IF((_ro.err = 0) AND (_t.duration IS NOT NULL)) THEN
-		IF((_t.created + _t.duration) < clock_timestamp()) THEN
-			_ro.json:= '{"error":"the order is too old"}';
-			_ro.err := -4; 
-		END IF;
-	END IF;
+	_ro.ord := ROW(_t.type,_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_t.qtt)::yorder;	
 
-	IF (_ro.err != 0) THEN
-		IF(_t.oid IS NULL) THEN _t.oid := _t.id; END IF;
-		INSERT INTO tmvt (	type,json,			nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
-							qtt,nat,			ack,exhausted,	refused,order_created,created
-						 ) 
-			VALUES       (	_t.type,_ro.json,	1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,
-							_t.qtt,_t.qua_prov,	false,true,		_ro.err,_t.created,statement_timestamp()
-						 )
-			RETURNING id INTO _mid;
-		UPDATE tmvt SET grp = _mid WHERE id = _mid;
-		_ro.ord := _op;
-		RETURN _ro; 
+	IF (_ro.err != 0) THEN -- order rejected
+		INSERT INTO tmvt (	type,json,xid,usr,xoid,refused,order_created,created) 
+			VALUES       (	_t.type,_ro.json,_t.id,_t.usr,_t.oid,_ro.err,_t.created,statement_timestamp())
+			RETURNING id INTO _mid; 
 	END IF;
 	
-	IF (_t.oid IS NULL) THEN
-		_t.oid 	:= _t.id;		
-	ELSE
-		_t.qtt	:= _op.qtt;
-		-- _t.qtt_prov := _op.qtt_prov;
-		_t.qua_prov := _op.qua_prov;
-		_ro.ordp := _op;
-	END IF;
-
-	_ro.ord := ROW(_t.type,_t.id,_wid,_t.oid,_t.qtt_requ,_t.qua_requ,_t.qtt_prov,_t.qua_prov,_t.qtt)::yorder;
-		
 	RETURN _ro;
-
 END; 
 $$ LANGUAGE PLPGSQL;
 
@@ -739,7 +768,7 @@ BEGIN
 
 	lock table torder in share update exclusive mode;
 
-	
+	_ro := fgetyresorder();
 	SELECT id INTO _tid FROM tstack ORDER BY id ASC LIMIT 1;
 	IF(NOT FOUND) THEN
 	    _ro.type = 0;
@@ -757,15 +786,15 @@ BEGIN
 	_otype = _t.type & (~3);
 	IF((_otype & (128|64)) != 0) THEN -- quote or prequote
 		_ro := fproducequote(_ro,_t,true);
-	    _ro.type = _t.type;
-	    _ro.own = _t.own;
-	    _ro.stackid = _t.id;
+	    --_ro.type = _t.type;
+	    --_ro.own = _t.own;
+	    --_ro.stackid = _t.id;
 		RETURN _ro;
 	ELSIF(_t.type = 32) THEN -- remove barter
-		_ro := fremovebarter(_t);
-	    _ro.type = _t.type;
-	    _ro.own = _t.own;
-	    _ro.stackid = _t.id;
+		_ro := fremovebarter(_ro,_t);
+	    --_ro.type = _t.type;
+	    --_ro.own = _t.own;
+	    --_ro.stackid = _t.id;
 		RETURN _ro;
 	END IF;	
 	 -- the order is a barter
@@ -950,12 +979,12 @@ BEGIN
 		SELECT name INTO STRICT _ownnext 	FROM towner WHERE id=_idownnext;
 		SELECT name INTO STRICT _own 		FROM towner WHERE id=_o.own;
 		
-		INSERT INTO tmvt (type,json,nbc,nbt,grp,
+		INSERT INTO tmvt (type,nbc,nbt,grp,
 						xid,usr,xoid,own_src,own_dst,qtt,nat,
-						ack,exhausted,refused,order_created,created,om_exp,om_rea) 
-			VALUES((_or.ord).type,NULL,_nbcommit,1,_first_mvt,
+						exhausted,refused,order_created,created,om_exp,om_rea) 
+			VALUES((_or.ord).type,_nbcommit,1,_first_mvt,
 						_o.id,_or.usr,_o.oid,_own,_ownnext,_flowr,(_or.ord).qua_prov,
-						false,_mvtexhausted,0,_or.created,statement_timestamp(),_om_exp,_om_rea)
+						_mvtexhausted,0,_or.created,statement_timestamp(),_om_exp,_om_rea)
 			RETURNING id INTO _mvt_id;
 			
 		IF(_first_mvt IS NULL) THEN
@@ -1054,14 +1083,14 @@ BEGIN
 	        _cnt := _cnt + _mid;
 		    _json:= '{"info":"the parent order is too old - it is removed "}';
 		    
-		    INSERT INTO tmvt (	type,json,			nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
-							    qtt,nat,			ack,exhausted,	refused,order_created,created
+		    INSERT INTO tmvt (	json,xid,    usr,xoid,
+							    refused,order_created,created
 						     ) 
-			    VALUES       (	_yo.type,_json,	1,  1,NULL,_yo.id,_o.usr,_yo.oid,_yo.own,_yo.own,
-							    _yo.qtt,_yo.qua_prov,	false,true,		-4,_o.created,statement_timestamp()
+			    VALUES       (	_json,_yo.id,_o.usr,_yo.oid,
+							    4,_o.created,statement_timestamp()
 						     )
 			    RETURNING id INTO _mid;
-		    UPDATE tmvt SET grp = _mid WHERE id = _mid;
+		    -- UPDATE tmvt SET grp = _mid WHERE id = _mid;
 	    END IF;
 	    
 	END LOOP;
@@ -1074,22 +1103,16 @@ GRANT EXECUTE ON FUNCTION  fcleanoutdatedorder() TO role_bo;
 --------------------------------------------------------------------------------
 -- barter delete
 --------------------------------------------------------------------------------
-CREATE FUNCTION fremovebarter(_t tstack) RETURNS yresorder AS $$
+CREATE FUNCTION fremovebarter(_ro yresorder,_t tstack) RETURNS yresorder AS $$
 DECLARE
-	_ro		    yresorder%rowtype;
 	_op			yorder;	
 	_cnt		int;
 	_wid        int;
 	_mid        int;
-	_exhausted  boolean;
+	_done  boolean;
 	
 BEGIN
-    _ro.err := 0;
-    _ro.json := NULL;
-    _ro.qtt := 0;
-    _ro.own := _t.own;
-    _ro.type := _t.type;
-    _exhausted := false;
+    _done := false;
     
     _wid := fgetowner(_t.own);
     
@@ -1105,35 +1128,37 @@ BEGIN
 		    GET DIAGNOSTICS _cnt = ROW_COUNT;
 		    
 		    IF(_cnt != 0) THEN
-		        _exhausted := true;
+		        _done := true;
 	            _ro.ord := _op;
 	            _ro.ordp := _op;
 
 		    END IF;
 		    
-
 	    -- ELSE do nothing when it is a child
 	    END IF;
 	-- ELSE do nothing on error
 	END IF;
 	
-	IF (NOT _exhausted) THEN
-        _ro.json:= '{"error":"the order to delete does not exist for this owner"}';
+	IF (_done) THEN
+        _ro.json:= '{"info":"removeorder - the barter order is removed "}';
+        _ro.err := 5;
+	ELSE
+        _ro.json:= '{"error":"removeorder - the barter order to be deleted does not exist for this owner or is a child order"}';
         _ro.err := -7;
+
         _op.qtt := 0;
         _op.qua_prov := ''; 
-        _ro.ord := NULL;
-        _ro.ordp := NULL;
+
     END IF;
     	
-    INSERT INTO tmvt (	type,json,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
-					    qtt,nat,ack,exhausted,refused,order_created,created
+    INSERT INTO tmvt (	type,json,xid,    usr,
+					    refused,order_created,created
 				     ) 
-	    VALUES       (	_t.type,_ro.json,1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,
-					    _op.qtt,_op.qua_prov,false,_exhausted,_ro.err,_t.created,statement_timestamp()
+	    VALUES       (	_t.type,_ro.json,_t.id,_t.usr,
+					    _ro.err,_t.created,statement_timestamp()
 				     )
 	    RETURNING id INTO _mid;
-    UPDATE tmvt SET grp = _mid WHERE id = _mid;
+    -- UPDATE tmvt SET grp = _mid WHERE id = _mid;
 	
 	RETURN _ro;
 
