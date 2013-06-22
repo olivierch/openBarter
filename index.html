@@ -107,9 +107,9 @@
 <dd>Removes barter orders related to a single value provided.</dd>
 </dl>
 </div>
-<p>A movement provides a quantity and recieves an other. It is related to barter order. The ratio <em>ω' = (quantity provided)/(quantity received)</em> is the result of a compromize between barter orders of the exchange cycle where the economic product of the exchange is fairly distributed between partners of the cycle. A barter LIMIT order is used when the author of the barter order requires that <em>ω'>=ω</em>, otherwise a barter BEST order is used. Quote can also be BEST or LIMIT.</p>
+<p>A movement provides a quantity and at the same time give an other. It is related to a barter order. The ratio <em>ω' = (quantity provided)/(quantity given)</em> is the result of a compromize between barter orders of the exchange cycle where the economic product of the exchange is fairly distributed between partners of the cycle. A barter LIMIT order is used when the author of the barter order requires that <em>ω'>=ω</em>, otherwise a barter BEST order is used. Quote can also be BEST or LIMIT.</p>
 
-<h2>Differences with a regular market</h2>
+<h2>Differences with a regular CLOB</h2>
 <p>The competition between potential cycles maximizes a non-dimensional quantity Ω that is the mathematical product of ω of orders of a cycle. When applied to bilateral exchange cycles, the choice made by this competition on Ω is the same as what would be obtained using the best price rule. But the difference between Ω maximization and individual profit maximization of the best price rule appears when cycles have more than two partners. As ω measures the individal exchange will, their product Ω on a cycle can be seen as measuring the collective exchange will. In this sense, maximizing  Ω or the collective exchange will is compliant with a fundamental democratic principles.</p>
 
 <h2>Performances</h2>
@@ -121,13 +121,13 @@
 <dt>atomic transactions</dt>
 <dd>Exchange cycles are wrapped in atomic transactions with full <a href="http://en.wikipedia.org/wiki/ACID">ACID</a> property.</dd>
 <dt>fluidity</dt>
-<dd>Simulations show that the fluidity and opportunities of both cooperation and profit are better than with a regular CLOB. Non-bilateral cycles increase cooperation for low order book volumes while increasing competition for higher volumes.</dd>
+<dd>Simulations show that the fluidity and opportunities of both cooperation and profit are higher than with a regular CLOB. Non-bilateral cycles increase cooperation for low order book volumes while increasing competition for higher volumes.</dd>
 <dt><a href="http://en.wikipedia.org/wiki/Percolation_threshold">percolation threasold</a></dt>
 <dd>An emty order book does not provide any movement, but the flow of values grows as the volume of the order book. A threasold of fluidity is observed when the volume of the book increases depending on the diversity of qualities of the market. This treasold appears earlier for openBarter than for a regular CLOB.</dd>
 <dt>Speed</dt>
-<dd>The exploration of potential cycles is limited in width and depth providing high speed even with a large order book and despite of the complexity of combinatorics. Simulation provided a mean time of 150 milliseconds for the execution of a single barter order with 100 000 orders on a small laptop.</dd>
+<dd>The exploration of potential cycles is limited in width and depth providing high speed even execution with a large order book and despite of the complexity of combinatorics. Simulation provided a mean time of 150 milliseconds for the execution of a single barter order with 100 000 orders on a small laptop.</dd>
 <dt>Security</dt>
-<dd>Security mechanisms offered by postgreSql are not restricted by openBarter implementation.</dd>
+<dd>Security mechanisms offered by postgreSql are not restricted by the implementation of openBarter.</dd>
 </dl>
 </div>
 <p>Details about simulations are presented on this <a href="./findings.html">page</a>.</p>
