@@ -1060,7 +1060,7 @@ $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fackmvtid(int) TO role_co;
 
 --------------------------------------------------------------------------------
--- the function cleans only parent orders,
+-- the function cleans parent an child barter but reports only parent barter,
 -- the duration of childs is that of parents.
 
 CREATE FUNCTION fcleanoutdatedorder() RETURNS int AS $$
@@ -1099,6 +1099,34 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER;
 GRANT EXECUTE ON FUNCTION  fcleanoutdatedorder() TO role_bo;
+
+--------------------------------------------------------------------------------
+-- the function cleans the town table for owners not present in the order book.
+-- owners of tstack and tmvt are not stored using id representation but with their name 
+
+CREATE FUNCTION fcleanowners() RETURNS int AS $$
+DECLARE
+	_cnt	int := 0;
+	_wid    int;
+	_yo		yorder%rowtype;
+	_cn	int;
+	_json	text;
+BEGIN
+
+	FOR _wid IN SELECT id FROM towner LOOP
+        
+        SELECT count(*) INTO STRICT _cn FROM torder o WHERE (o.ord).wid = _wid;
+        IF (_cn = 0) THEN
+            DELETE FROM towner w WHERE w.id = _wid;
+            _cnt := _cnt +1;
+        END IF;
+
+	END LOOP;
+	RETURN _cnt;
+
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fcleanowners() TO role_bo;
 
 --------------------------------------------------------------------------------
 -- barter delete
