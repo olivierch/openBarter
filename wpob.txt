@@ -1,0 +1,32 @@
+{{Infobox Logiciel
+ | nom = openBarter
+ | logo = Gccegg.svg
+ | image = 
+ | description = 
+ | développeur = olivier Chaussavoine
+ | date de première version = 13 mai 2011<ref name="historique">{{en}} {{Lien web |url=https://github.com/olivierch/openBarter/tags | titre=''openBarter releases''|site=github.com |en ligne le=23 juin 2013 |consulté le=23 juin 2013.}}</ref>
+ | environnement = [[Multiplateforme]],[[PostgreSQL]]
+ | langage de programmation = [[C]],[[GNU_Bison]]
+ | type = [[SGDB]]
+ | licence = [[Licence publique générale GNU|GNU GPL]]
+ | site web = {{Site officiel|en|http://olivierch.github.io/openBarter/}}
+}}
+openbarter est un logiciel qui étend le mécanisme d'un [[CLOB|CLOB]] en permettant des trocs multilatéraux. Il permet de concevoir un marché dont la concurrence ne nécessite pas l'usage d'une monnaie pour exprimer les prix. 
+
+== Histoire ==
+olivier Chaussavoine dépose un brevet
+
+== Applications potentielles ==
+* régulation écologique: chaque usage de ressources peut être limité indépendamment des autres. Il n'y a plus nécessité d'agrégats tels que les quotas de CO2. La régulation écologique réalisée par les marchés reste efficace même avec une profonde crise économique et des rationnement drastiques quelquesoit la diversité des quotas nécessaires.
+* pour des pays dont les ressources souterraines sont riches: La plupart sont pauvres et possèdent des monnaies faibles. Son usage permet d'épargner les ressources du sous sol et de diminuer la pauvreté du pays.
+* smart grid: Permet l'échange d'eau, d'électricité ou de quotas de déchets pour chaque niveau du smart grid indépendamment des autres niveaux.
+* monnaies locales: Permet l'établissement d'échanges économiques entre monnaies locales, ou bien entre une monnaie locale et la monnaie officielle sans compromettre la souveraineté de cette monnaie.  
+
+NOTA:Un CLOB est le mécanisme central de toutes les grandes places de marché.
+
+== Références ==
+http://olivierch.github.io/openBarter/
+http://regbrvfr.inpi.fr/register/application?number=FR0602620
+http://rfconference2012.worldeconomicsassociation.org/contributingauthor/olivier-chaussavoine/
+http://www.postgresql.org/
+
