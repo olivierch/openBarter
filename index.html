@@ -65,35 +65,33 @@
 
 <div>
 <h1>openBarter</h1>
-<p>The goal of economy is to make the best use of scarce resources available. World wide resources are decreasing while it's population grows.</p>
-<p>A <a href="http://en.wikipedia.org/wiki/Central_limit_order_book">central limit order book</a> (CLOB) is the key component of a market, and markets organize economy. openBarter is a CLOB performing competition without the requirement of a central currency to express prices. It can be used to exchange property of any value that can be measured with a standard including natural resources, ecological quota, energy and even currencies.</p>
+
+<p>A <a href="http://en.wikipedia.org/wiki/Central_limit_order_book">central limit order book</a> (CLOB) is the key component of a global markets performing competition on price, and markets organize the economy. openBarter implements essentials primitives of a CLOB and extends it allowing multilateral barter exchange. It performs competition without the requirement of a central currency to express prices. It can be used to exchange property of any value that can be measured including natural resources, ecological quota, energy and even currencies.</p>
 
 <h2>Potential applications</h2>
-
+<p>The goal of economy is to make the best use of scarce resources available. But world wide resources are decreasing. It's population grows and inequality of allocation of these resources is growing. In this context, the benefits of openbarter are for:</p>
 <div class="dlist">
 <dl>
-<dt>Scarcity of resources</dt>
-<dd>Management of scarcity of money performed by markets can be applied to any resource and market economy remains efficient even with drastic rationing.</dd>
-<dt>Ecological governor</dt>
-<dd>Use of each resource can be limited independently of others while maintaining the efficiency of the ecological governor performed by markets. No need of global aggregates such as CO2 quota and <a href="http://en.wikipedia.org/wiki/Global-warming_potential">GWP</a>. Ecological governor remains efficient even with a deep economic crisis.</dd>
+<dt>Ecological control</dt>
+<dd>Artificial global aggregates such as CO2 quotas are not necessary even when the diversity of resource rationing increases. Ecological control of markets remains efficient even with a deep economic crisis and drastic rationing.</dd>
 <dt>For countries with rich underground</dt>
 <dd>Most are also poor with a weak currency. Save underground resources while decrease economic unbalance.</dd>
 <dt>Smart grid</dt>
 <dd>Allow energy, water or waste quota exchange for each level of the smart grib independently of others.</dd>
 <dt>Community currencies(CC)</dt>
-<dd>Allow economic exchange between CCs or between CC and fiat money without compromizing the CC sovereignty.</dd>
+<dd>Allow economic exchange between CCs or between CC and fiat money without compromizing the sovereignty of the CC.</dd>
 </dl>
 </div>
  
 <h2>Overview</h2>
 
 <object data="static/images/logo.svg" type="image/svg+xml"></object>
-<p>openBarter accepts barter orders from owners and produces movements exchanging ownership between them. It allows cyclic exchange between more than two partners. Each value has a pecular <em>quality</em> and is measured by a <em>quantity</em> using the standard related to this quality. openBarter accepts barter orders of the form:</p>
+<p>openBarter accepts barter orders from owners and produces movements exchanging ownership between them. It allows cyclic exchange between more than two partners. Each value is measured by a <em>quantity</em> using a standard defined by it's pecular <em>quality</em> independently of any currency. openBarter accepts barter orders of the form:</p>
 <div class="verseblock">
 <div class="verseblock-content">I propose a value in exchange of an other for a ratio ω.
 </div>
 </div>
-<p>A price measures the <em>will to exchange</em>. The ratio <em>ω = (quantity offered)/(quantity required)</em>  measures the same <em>will</em> with different units: It grows as the <em>quantity offered</em> and decreases as the <em>quantity required</em> grows. The market finds potential exchange cycles with two partners or more and performs a competition between them. This competition between potential cycles is based on the product of their ω.</p>
+<p>A price using a currency can be seen as the measurement of the <em>exchange will</em>. The ratio <em>ω = (quantity offered)/(quantity required)</em>  measures the same <em>will</em>: It grows as the <em>quantity offered</em> and decreases as the <em>quantity required</em> grows. The market finds potential exchange cycles with two partners or more and performs a competition between them. This competition between potential cycles maximizes the product of their ω.</p>
 
 <h2>Orders</h2>
 <p>Can be:</p>
@@ -107,7 +105,7 @@
 <dd>Removes barter orders related to a single value provided.</dd>
 </dl>
 </div>
-<p>A movement provides a quantity and at the same time give an other. It is related to a barter order. The ratio <em>ω' = (quantity provided)/(quantity given)</em> is the result of a compromize between barter orders of the exchange cycle where the economic product of the exchange is fairly distributed between partners of the cycle. A barter LIMIT order is used when the author of the barter order requires that <em>ω'>=ω</em>, otherwise a barter BEST order is used. Quote can also be BEST or LIMIT.</p>
+<p>A movement provides a quantity and at the same time provides an other. It is related to a barter order. The ratio <em>ω' = (quantity provided)/(quantity obtained)</em> is the result of a compromize between barter orders of the exchange cycle where the economic product of the exchange is fairly distributed between partners of the cycle. A barter LIMIT order is used when it's author requires that <em>ω'>=ω</em>, otherwise a barter BEST order is used. Quote can also be BEST or LIMIT.</p>
 
 <h2>Differences with a regular CLOB</h2>
 <p>The competition between potential cycles maximizes a non-dimensional quantity Ω that is the mathematical product of ω of orders of a cycle. When applied to bilateral exchange cycles, the choice made by this competition on Ω is the same as what would be obtained using the best price rule. But the difference between Ω maximization and individual profit maximization of the best price rule appears when cycles have more than two partners. As ω measures the individal exchange will, their product Ω on a cycle can be seen as measuring the collective exchange will. In this sense and supposing the initial value allocation is fair, maximizing  Ω or the collective exchange will is compliant with a fundamental democratic principles.</p>
@@ -121,20 +119,23 @@
 <dt>atomic transactions</dt>
 <dd>Exchange cycles are wrapped in atomic transactions with full <a href="http://en.wikipedia.org/wiki/ACID">ACID</a> property.</dd>
 <dt>fluidity</dt>
-<dd>Simulations show that the fluidity and opportunities of both cooperation and profit are higher than with a regular CLOB. Non-bilateral cycles increase cooperation for low order book volumes while increasing competition for higher volumes.</dd>
+<dd>Simulations show that the fluidity and opportunities of both cooperation and profit are higher than with a regular CLOB. Non-bilateral cycles increase cooperation for low order book volumes while competition prevails for higher volumes.</dd>
 <dt><a href="http://en.wikipedia.org/wiki/Percolation_threshold">percolation threasold</a></dt>
-<dd>An empty order book does not provide any movement, but the flow of values grows as the volume of the order book. A  fluidity threasold is observed when the volume of the book increases depending on the diversity of qualities of the market. This treasold appears earlier for openBarter than for a regular CLOB.</dd>
+<dd>An empty order book does not provide any movement, but the flow of values grows as the volume of the order book. A fluidity threasold is observed when the volume of the book increases depending on the diversity of qualities of the market. This threasold appears earlier for openBarter than for a regular CLOB. This illustrates the percolation threasold observed for random graphs - a research field in mathematics and physics.</dd>
 <dt>Execution speed</dt>
-<dd>The exploration of potential cycles is limited in width and depth providing high speed even execution with a large order book and despite of the complexity of combinatorics. Simulation provided a mean time of 150 milliseconds for the execution of a single barter order with 100 000 orders on a small laptop.</dd>
+<dd>The exploration of potential cycles is limited in breadth and depth providing high speed even for execution with a large order book and despite of the complexity of combinatorics. Simulation provided a mean time of 150 milliseconds for the execution of a single barter order with 100 000 orders on a small laptop.</dd>
 <dt>Security</dt>
-<dd>Security mechanisms offered by postgreSql are not restricted by the implementation of openBarter.</dd>
+<dd>Security mechanisms offered by postgreSql are preserved by the implementation of openBarter.</dd>
 </dl>
 </div>
-<p>Details about simulations are presented on this <a href="./findings.html">page</a>.</p>
-<p>Details of openBarter can be found in this <a href="https://github.com/downloads/olivierch/openBarter/paper-ob.pdf">paper</a>.
+<h2>Reference</h2>
+<p>This page describes detailed <a href="./findings.html">results</a> of simulations.</p>
+<p><a href="http://regbrvfr.inpi.fr/register/application?number=FR0602620">Patent FR0602620</a> is out in the public domain, related to a preliminary definition of openBarter.</p>
+<p>This <a href="https://github.com/downloads/olivierch/openBarter/paper-ob.pdf">paper</a> describes openBarter principles.</p>
+<p><a href="http://rfconference2012.worldeconomicsassociation.org/contributingauthor/olivier-chaussavoine/">paper</a> published on the World Economic Association.</p>
 
 <h2>Versions</h2>
-<p>The latest version 0.8.0 is stable. It can be dowload from this <a href="https://github.com/olivierch/openBarter/tags">page</a>.</p>
+<p>The latest version 0.8.1 is stable. It can be dowload from this <a href="https://github.com/olivierch/openBarter/tags">page</a>.</p>
 
 <h2>Development</h2>
 <p>You can fork the project on <a href="https://github.com/olivierch/openBarter">github</a></p>
