@@ -1,0 +1,39 @@
+drop extension if exists cube cascade;
+NOTICE:  drop cascades to extension flowf
+drop extension if exists flowf cascade;
+NOTICE:  extension "flowf" does not exist, skipping
+create extension cube with version '1.0';
+create extension flowf with version '0.8';
+RESET client_min_messages;
+RESET log_error_verbosity;
+SET client_min_messages = notice;
+SET log_error_verbosity = terse;
+/*
+48.670828,1.874488 ici
+48.670389,1.87415  mimi
+*/
+select earth_dist_points('(48.670828,1.874488)'::point,'(48.670389,1.87415)'::point);
+ earth_dist_points  
+--------------------
+ 0.0547622024263353
+(1 row)
+
+select earth_dist_points('(-91.0,0.0)'::point,'(-30.0,0.0)'::point);
+ERROR:  attempt to get a distance form a point out of range
+select earth_get_square('(48.670828,1.874488)'::point,1.0);
+                             earth_get_square                              
+---------------------------------------------------------------------------
+ (48.6618347966451, 1.86086985937971),(48.6798212033549, 1.88810614062029)
+(1 row)
+
+select earth_get_square('(48.670828,1.874488)'::point,0.0);
+                           earth_get_square                            
+-----------------------------------------------------------------------
+ (-89.99999999991, -179.99999999982),(89.99999999991, 179.99999999982)
+(1 row)
+
+-- d in [0,EARTH_RADIUS * PI/2.[
+select earth_get_square('(48.670828,1.874488)'::point,(6371.009 * 3.1415926535 *1.001 / 2.0));
+ERROR:  attempt to get a square form a dist:10017.565092 km for a point:(lat=48.670828, lon=1.874488) out of range
+select earth_get_square('(48.670828,1.874488)'::point,-1.0);
+ERROR:  attempt to get a square form a dist:-1.000000 km for a point:(lat=48.670828, lon=1.874488) out of range

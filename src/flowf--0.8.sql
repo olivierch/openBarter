@@ -116,3 +116,33 @@ AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
 
 
+--------------------------------------------------------------------------------
+-- earth
+--------------------------------------------------------------------------------
+CREATE FUNCTION earth_dist_points(point,point)
+    RETURNS float8
+    AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+/* cube are cube_s0 */
+CREATE FUNCTION earth_dist_cubes_s0(cube,cube)
+    RETURNS float8
+    AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION earth_get_square(point, float8)
+    RETURNS cube
+    AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION earth_get_cube_s0(point)
+    RETURNS cube
+    AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION earth_get_point(cube)
+    RETURNS point
+    AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+

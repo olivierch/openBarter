@@ -2,13 +2,8 @@
 #include "fmgr.h"
 #include "lib/stringinfo.h"
 #include "utils/array.h"
-// #include "tsearch/ts_type.h" // define TSQuery and TSVector
+#include "utils/geo_decls.h"	/* for Point */
 
-// #define ACTIVATE_DISTANCE
-/* ACTIVATE_FULLTEXT is defined when qua_prov and qua_requ are tsvector and tsquery
-when undefines, both are texts
-*/
-// #define ACTIVATE_FULLTEXT
 /******************************************************************************
  * 
  *****************************************************************************/
@@ -141,6 +136,46 @@ typedef struct TresChemin {
 	// int64	qttAv[FLOW_MAX_DIM];
 } TresChemin;
 
+
+/******************************************************************************
+geographic representations
+
+native type of postgres
+    Point(latitude,longitude) in degree
+    
+cube extension of postgres to represent a square on the sphere
+    '(latmin,lonmax),(latmax,lonmax)'::cube in SQL
+    is the same as Tcarre(latmin,lonmin,latmax,lonmax)
+    
+cube is a cube where min==max with a surface 0
+    is a cube_s0
+
+distance in Km - earth radius defined in earth.c
+
+ *****************************************************************************/
+typedef struct { // cube dim2
+	int32		vl_len_;		/* varlena header (do not touch directly!) */
+	unsigned int dim;
+	double		latmin,lonmin,latmax,lonmax;
+} Tsquare;
+
+#define DatumGetTsquareP(x)	    ((Tsquare*)DatumGetPointer(x))
+#define PG_GETARG_TSQUARE(x)	((Tsquare*)PG_GETARG_POINTER(x))
+#define PG_RETURN_TSQUARE(x)	PG_RETURN_POINTER(x)
+
+/* for the cube extension, we have:
+typedef struct NDBOX
+{
+	int32		vl_len_;		// varlena header (do not touch directly!) 
+	unsigned int dim;
+	double		x[1];
+} NDBOX;
+
+#define DatumGetNDBOX(x)	((NDBOX*)DatumGetPointer(x))
+#define PG_GETARG_NDBOX(x)	DatumGetNDBOX( PG_DETOAST_DATUM(PG_GETARG_DATUM(x)) )
+#define PG_RETURN_NDBOX(x)	PG_RETURN_POINTER(x)
+*/
+
 /******************************************************************************
  * 
  *****************************************************************************/
@@ -164,5 +199,9 @@ extern void yorder_to_fl(Torder *o,Tfl *fl);
 extern bool yorder_match(Torder *prev,Torder *next);
 extern bool yorder_matche(Datum *prev,Datum *next);
 extern double yorder_match_proba(Torder *prev,Torder *next);
+
+extern double earth_points_distance(Point *pt1, Point *pt2);
+extern int earth_check_point(Point *p);
+extern int earth_check_dist(Point *p,double d);
 
 
