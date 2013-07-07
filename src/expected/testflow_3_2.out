@@ -9,54 +9,54 @@ select count(*) from torder;
 
 /* order book empty */
 /* one BEST and two LIMIT */
-select * from fsubmitbarter(2,'a',NULL,'q1',10,'q2',10,'1 hour'::interval);
+select * from fsubmitbarter(2,'a',NULL,'|q1',10,'|q2',10,'1 hour'::interval);
  id | diag 
 ----+------
  21 |    0
 (1 row)
 
 select * from fproducemvt();
-            ord             |    ordp    | qtt_requ | qtt_prov | qtt | qtt_reci | qtt_give | err | json | own | type | stackid 
-----------------------------+------------+----------+----------+-----+----------+----------+-----+------+-----+------+---------
- (2,21,1,21,10,q1,10,q2,10) | (,,,,,,,,) |       10 |       10 |  10 |        0 |        0 |   0 |      | a   |    2 |      21
+             ord              |    ordp    | qtt_requ | qtt_prov | qtt | qtt_reci | qtt_give | err | json | own | type | stackid 
+------------------------------+------------+----------+----------+-----+----------+----------+-----+------+-----+------+---------
+ (2,21,1,21,10,|q1,10,|q2,10) | (,,,,,,,,) |       10 |       10 |  10 |        0 |        0 |   0 |      | a   |    2 |      21
 (1 row)
 
-select * from fsubmitbarter(1,'b',NULL,'q1',10,'q2',20,'1 hour'::interval);
+select * from fsubmitbarter(1,'b',NULL,'|q1',10,'|q2',20,'1 hour'::interval);
  id | diag 
 ----+------
  22 |    0
 (1 row)
 
 select * from fproducemvt();
-            ord             |    ordp    | qtt_requ | qtt_prov | qtt | qtt_reci | qtt_give | err | json | own | type | stackid 
-----------------------------+------------+----------+----------+-----+----------+----------+-----+------+-----+------+---------
- (1,22,2,22,10,q1,20,q2,20) | (,,,,,,,,) |       10 |       20 |  20 |        0 |        0 |   0 |      | b   |    1 |      22
+             ord              |    ordp    | qtt_requ | qtt_prov | qtt | qtt_reci | qtt_give | err | json | own | type | stackid 
+------------------------------+------------+----------+----------+-----+----------+----------+-----+------+-----+------+---------
+ (1,22,2,22,10,|q1,20,|q2,20) | (,,,,,,,,) |       10 |       20 |  20 |        0 |        0 |   0 |      | b   |    1 |      22
 (1 row)
 
-select * from fsubmitbarter(1,'c',NULL,'q1',10,'q2',30,'1 hour'::interval);
+select * from fsubmitbarter(1,'c',NULL,'|q1',10,'|q2',30,'1 hour'::interval);
  id | diag 
 ----+------
  23 |    0
 (1 row)
 
 select * from fproducemvt();
-            ord             |    ordp    | qtt_requ | qtt_prov | qtt | qtt_reci | qtt_give | err | json | own | type | stackid 
-----------------------------+------------+----------+----------+-----+----------+----------+-----+------+-----+------+---------
- (1,23,3,23,10,q1,30,q2,30) | (,,,,,,,,) |       10 |       30 |  30 |        0 |        0 |   0 |      | c   |    1 |      23
+             ord              |    ordp    | qtt_requ | qtt_prov | qtt | qtt_reci | qtt_give | err | json | own | type | stackid 
+------------------------------+------------+----------+----------+-----+----------+----------+-----+------+-----+------+---------
+ (1,23,3,23,10,|q1,30,|q2,30) | (,,,,,,,,) |       10 |       30 |  30 |        0 |        0 |   0 |      | c   |    1 |      23
 (1 row)
 
 /* 3 competing orders */
 select  id,type,own,oid,qtt_requ,qua_requ,qtt_prov,qua_prov,qtt from vorder;
  id | type | own | oid | qtt_requ | qua_requ | qtt_prov | qua_prov | qtt 
 ----+------+-----+-----+----------+----------+----------+----------+-----
- 21 |    2 | a   |  21 |       10 | q1       |       10 | q2       |  10
- 22 |    1 | b   |  22 |       10 | q1       |       20 | q2       |  20
- 23 |    1 | c   |  23 |       10 | q1       |       30 | q2       |  30
+ 21 |    2 | a   |  21 |       10 | |q1      |       10 | |q2      |  10
+ 22 |    1 | b   |  22 |       10 | |q1      |       20 | |q2      |  20
+ 23 |    1 | c   |  23 |       10 | |q1      |       30 | |q2      |  30
 (3 rows)
 
 /*  form 0
 fsubmitprequote(_own,_qua_requ,_qua_prov)*/
-select * from fsubmitprequote('d','q2','q1');
+select * from fsubmitprequote('d','|q2','|q1');
  id | diag 
 ----+------
  24 |    0
@@ -83,7 +83,7 @@ select json from fproducemvt();
 /* form 1 
 fsubmitquote(_own,_qua_requ,_qua_prov)
 flow limited by best price 10/30 and qtto */
-select * from fsubmitquote(1,'d','q2','q1');
+select * from fsubmitquote(1,'d','|q2','|q1');
  id | diag 
 ----+------
  25 |    0
@@ -103,7 +103,7 @@ fsubmitquote(_type,_own,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov)
 flow limited by ωu,ωo and qtto */
 /* limited by ωu,ωo and qtto */
 /* one cycle */
-select * from fsubmitquote(1,'d','q2',30,'q1',10);
+select * from fsubmitquote(1,'d','|q2',30,'|q1',10);
  id | diag 
 ----+------
  26 |    0
@@ -119,7 +119,7 @@ select json from fproducemvt();
 (1 row)
 
 /* 3 cycles */
-select * from fsubmitquote(1,'d','q2',10,'q1',10);
+select * from fsubmitquote(1,'d','|q2',10,'|q1',10);
  id | diag 
 ----+------
  27 |    0
@@ -139,7 +139,7 @@ select json from fproducemvt();
 (1 row)
 
 /* only limited by ωo and qtto */
-select * from fsubmitquote(1,'d','q2',5,'q1',10);
+select * from fsubmitquote(1,'d','|q2',5,'|q1',10);
  id | diag 
 ----+------
  28 |    0
@@ -161,7 +161,7 @@ select json from fproducemvt();
 /* form 3
 fsubmitquote(_type,_own,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,qtt) 
 flow limited by ωu,ωo and qttu,qtto */
-select * from fsubmitquote(1,'d','q2',30,'q1',10,20);
+select * from fsubmitquote(1,'d','|q2',30,'|q1',10,20);
  id | diag 
 ----+------
  29 |    0
@@ -177,7 +177,7 @@ select json from fproducemvt();
 (1 row)
 
 /* limited by this ωu,qttu */
-select * from fsubmitquote(1,'d','q2',30,'q1',10,5);
+select * from fsubmitquote(1,'d','|q2',30,'|q1',10,5);
  id | diag 
 ----+------
  30 |    0
@@ -193,7 +193,7 @@ select json from fproducemvt();
 (1 row)
 
 /* limited by this ωo,qtto */
-select * from fsubmitquote(1,'d','q2',10,'q1',10,100);
+select * from fsubmitquote(1,'d','|q2',10,'|q1',10,100);
  id | diag 
 ----+------
  31 |    0
@@ -213,7 +213,7 @@ select json from fproducemvt();
 (1 row)
 
 /* barter */
-select * from fsubmitbarter(1,'d',NULL,'q2',10,'q1',10,100,'1 hour'::interval);
+select * from fsubmitbarter(1,'d',NULL,'|q2',10,'|q1',10,100,'1 hour'::interval);
  id | diag 
 ----+------
  32 |    0
@@ -228,12 +228,12 @@ select json from fproducemvt();
 select id,grp,xid,own_src,own_dst,qtt,nat from tmvt order by id desc limit 6; 
  id | grp | xid | own_src | own_dst | qtt | nat 
 ----+-----+-----+---------+---------+-----+-----
- 37 |  36 |  21 | a       | d       |  10 | q2
- 36 |  36 |  32 | d       | a       |  10 | q1
- 35 |  34 |  22 | b       | d       |  20 | q2
- 34 |  34 |  32 | d       | b       |  14 | q1
- 33 |  32 |  23 | c       | d       |  30 | q2
- 32 |  32 |  32 | d       | c       |  17 | q1
+ 37 |  36 |  21 | a       | d       |  10 | |q2
+ 36 |  36 |  32 | d       | a       |  10 | |q1
+ 35 |  34 |  22 | b       | d       |  20 | |q2
+ 34 |  34 |  32 | d       | b       |  14 | |q1
+ 33 |  32 |  23 | c       | d       |  30 | |q2
+ 32 |  32 |  32 | d       | c       |  17 | |q1
 (6 rows)
 
 select id,qtt from vorder; /* qtt=100-41 */

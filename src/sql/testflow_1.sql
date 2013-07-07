@@ -9,18 +9,18 @@ SET client_min_messages = notice;
 SET log_error_verbosity = terse;
 
 SELECT '[(1,1,2,3,4,5,6,7.00)]'::yflow;
-SELECT yflow_init(ROW(1,1,1,1,100,'q1',200,'q2',50)::yorder);
+SELECT yflow_init(ROW(1,1,1,1,100,'|q1',200,'|q2',50)::yorder);
 
-SELECT yflow_grow(ROW(1,2,1,2,100,'q2',200,'q1',50)::yorder, ROW(1,1,1,1,100,'q1',200,'q2',50)::yorder, yflow_init(ROW(1,1,1,1,100,'q1',200,'q2',50)::yorder) );
+SELECT yflow_grow(ROW(1,2,1,2,100,'|q2',200,'|q1',50)::yorder, ROW(1,1,1,1,100,'|q1',200,'|q2',50)::yorder, yflow_init(ROW(1,1,1,1,100,'|q1',200,'|q2',50)::yorder) );
 
-SELECT yflow_finish(ROW(1,2,1,2,100,'q2',200,'q1',50)::yorder,
-yflow_grow(ROW(1,2,1,2,100,'q2',200,'q1',50)::yorder, ROW(1,1,1,1,100,'q1',200,'q2',50)::yorder, yflow_init(ROW(1,1,1,1,100,'q1',200,'q2',50)::yorder) ),
-ROW(1,1,1,1,100,'q1',200,'q2',50)::yorder);
+SELECT yflow_finish(ROW(1,2,1,2,100,'|q2',200,'|q1',50)::yorder,
+yflow_grow(ROW(1,2,1,2,100,'|q2',200,'|q1',50)::yorder, ROW(1,1,1,1,100,'|q1',200,'|q2',50)::yorder, yflow_init(ROW(1,1,1,1,100,'|q1',200,'|q2',50)::yorder) ),
+ROW(1,1,1,1,100,'|q1',200,'|q2',50)::yorder);
 
-SELECT yflow_dim(yflow_init(ROW(1,1,1,2,100,'q1',200,'q2',50)::yorder));
+SELECT yflow_dim(yflow_init(ROW(1,1,1,2,100,'|q1',200,'|q2',50)::yorder));
 
-SELECT yflow_contains_oid(1,yflow_init(ROW(1,1,1,2,100,'q1',200,'q2',50)::yorder));
-SELECT yflow_contains_oid(2,yflow_init(ROW(1,1,1,2,100,'q1',200,'q2',50)::yorder));
+SELECT yflow_contains_oid(1,yflow_init(ROW(1,1,1,2,100,'|q1',200,'|q2',50)::yorder));
+SELECT yflow_contains_oid(2,yflow_init(ROW(1,1,1,2,100,'|q1',200,'|q2',50)::yorder));
 
 
 select yflow_is_draft('[(1,35, 93, 35, 21170, 2685, 2685, 1.000000),(1,636, 50, 636, 12213, 95415, 95415, 1.000000
