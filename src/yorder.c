@@ -142,7 +142,8 @@ bool yorder_checktxt(Datum qua) {
 	char *_p = VARDATA(qua);
 	int32 _l = VARSIZE(qua)-VARHDRSZ;
 	int32 _k;
-	int32 _res;
+	int32 _res = 0;
+	
 	if (_l >= 1) _res |= 1; // not empty
 	
 	GETPREFIX(_k,_p,_l);
@@ -152,14 +153,19 @@ bool yorder_checktxt(Datum qua) {
 }
 
 bool yorder_match(Torder *prev,Torder *next) {
-
-	bool _res = true;
 	Datum _qprov = prev->qua_prov;
 	Datum _qrequ = next->qua_requ;
-	char *_pv = VARDATA(_qprov);
-	char *_pu = VARDATA(_qrequ);
-	int32 _lv = VARSIZE(_qprov)-VARHDRSZ;
-	int32 _lu = VARSIZE(_qrequ)-VARHDRSZ;
+	return yorder_match_quality(_qprov,_qrequ);
+}
+
+bool yorder_match_quality(Datum qprov,Datum qrequ) {
+	bool _res = true;
+	//Datum _qprov = prev->qua_prov;
+	//Datum _qrequ = next->qua_requ;
+	char *_pv = VARDATA(qprov);
+	char *_pu = VARDATA(qrequ);
+	int32 _lv = VARSIZE(qprov)-VARHDRSZ;
+	int32 _lu = VARSIZE(qrequ)-VARHDRSZ;
 	int32 _rku,_rkv,_l;
 	
 	_l = (_lu < _lv)?_lu:_lv;
@@ -171,10 +177,10 @@ bool yorder_match(Torder *prev,Torder *next) {
     
     // required
     GETPREFIX(_rku,_pu,_lu);
-    if(_lu == 0) // required cath all
+    if(_lu == 0) // cath all
         return true;
         
-    if(_rku == 0 || _rku > _lu) // _rku undefined
+    if(_rku > _lu) // _rku too long
         _rku = _lu; 
        
     // provided
@@ -182,9 +188,12 @@ bool yorder_match(Torder *prev,Torder *next) {
     if(_lv == 0) // provide nothing 
         return false;
     
-    if(_rku < _lv) // limit comparison length
+    if(_rku != 0 && _rku < _lv) {// limit comparison length
         _lv = _rku;
-    IDEMTXT(_pu,_rku,_pv,_lv,_res);
+        _lu = _rku;
+    }
+
+    IDEMTXT(_pu,_lu,_pv,_lv,_res);
     return _res;
 }
 

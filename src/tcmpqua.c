@@ -4,7 +4,7 @@
  #include <unistd.h>
  #include <string.h>
 int cmpqua(char *p1,char *p2);
-#define LENTESTS 10
+#define LENTESTS 15
 #define true 1
 #define false 0
 #define int32 int
@@ -43,10 +43,17 @@ int main(int argc, char *argv[])
     exp[7]=false;strs[7][0] = "titititititititi",strs[7][1] = "15tititititititixx";
     exp[8]=true;strs[8][0] = "titi",strs[8][1] = "300titi";
     exp[9]=true;strs[9][0] = "20titi",strs[9][1] = "titi";
+    
+    exp[10]=false;strs[10][0] = "abc",strs[10][1] = "abcd";
+    exp[11]=false;strs[11][0] = "abcdef",strs[11][1] = "abcd";
+    exp[12]=true;strs[12][0] = "abcdef",strs[12][1] = "4abcd";
+    exp[13]=true;strs[13][0] = "abcdef",strs[13][1] = "3abcx";
+    exp[14]=true;strs[14][0] = "abcdef",strs[14][1] = "5abcd";
+    
     for (i=0;i<LENTESTS;i++)
         
         if(cmpqua(strs[i][0],strs[i][1]) != exp[i]) {
-            printf("test Ko: prov ? requ '%s' %s '%s'\n",strs[i][0],cmpqua(strs[i][0],strs[i][1])?"=":"!=",strs[i][1]);
+            printf("test Ko: expected %s prov '%s' %s requ '%s'\n",exp[i]?"=":"!=",strs[i][0],cmpqua(strs[i][0],strs[i][1])?"=":"!=",strs[i][1]);
             resu = false;
         }
     if(resu) printf ("test Ok\n");
@@ -95,7 +102,7 @@ bool cmpqua(char *prov,char *requ) {
     if(_lu == 0) // cath all
         return true;
         
-    if(_rku == 0 || _rku > _lu) // _rku undefined
+    if(_rku > _lu) // _rku too long
         _rku = _lu;
         
     //printf ("required '%s' %i %i\n",_pu,_lu,_rku); 
@@ -106,9 +113,12 @@ bool cmpqua(char *prov,char *requ) {
         return false;
     //printf ("provided '%s' %i\n",_pv,_lv);
     
-    if(_rku < _lv) // limit comparison length
+    if(_rku != 0 && _rku < _lv) {// limit comparison length
         _lv = _rku;
-    IDEMTXT(_pu,_rku,_pv,_lv,_res);
+        _lu = _rku;
+    }
+    //printf ("_pu '%s' _lu %i _pv %s _lv %i\n",_pu,_lu,_pv,_lv);
+    IDEMTXT(_pu,_lu,_pv,_lv,_res);
     return _res;
 }
 

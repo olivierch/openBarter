@@ -458,7 +458,7 @@ BEGIN
 			_r.diag := -2;
 			RETURN _r;
 		END IF;	
-	    IF(_qua_prov = _qua_requ) THEN
+	    IF(yflow_match_quality(_qua_prov,_qua_requ)) THEN
 		    _r.diag := -1;
 		    RETURN _r;
 	    END IF;	

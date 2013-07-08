@@ -187,7 +187,8 @@ extern void yorder_get_order(Datum eorder,Torder *orderp);
 extern void yorder_to_fl(Torder *o,Tfl *fl);
 extern bool yorder_checktxt(Datum texte);
 extern bool yorder_match(Torder *prev,Torder *next);
-extern bool yorder_matche(Datum *prev,Datum *next);
+extern bool yorder_match_quality(Datum qprov,Datum qrequ);
+//extern bool yorder_matche(Datum *prev,Datum *next);
 extern double yorder_match_proba(Torder *prev,Torder *next);
 
 extern double earth_points_distance(Point *pt1, Point *pt2);
