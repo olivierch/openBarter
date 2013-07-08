@@ -37,6 +37,7 @@ PG_FUNCTION_INFO_V1(yflow_grow);
 PG_FUNCTION_INFO_V1(yflow_finish);
 PG_FUNCTION_INFO_V1(yflow_contains_oid);
 PG_FUNCTION_INFO_V1(yflow_match);
+PG_FUNCTION_INFO_V1(yflow_checktxt);
 PG_FUNCTION_INFO_V1(yflow_maxg);
 PG_FUNCTION_INFO_V1(yflow_reduce);
 PG_FUNCTION_INFO_V1(yflow_is_draft);
@@ -57,6 +58,7 @@ Datum yflow_grow(PG_FUNCTION_ARGS);
 Datum yflow_finish(PG_FUNCTION_ARGS);
 Datum yflow_contains_oid(PG_FUNCTION_ARGS);
 Datum yflow_match(PG_FUNCTION_ARGS);
+Datum yflow_checktxt(PG_FUNCTION_ARGS);
 Datum yflow_maxg(PG_FUNCTION_ARGS);
 Datum yflow_reduce(PG_FUNCTION_ARGS);
 Datum yflow_is_draft(PG_FUNCTION_ARGS);
@@ -500,6 +502,19 @@ Datum yflow_match(PG_FUNCTION_ARGS) {
 	yorder_get_order(dnext,&next);
 
 	PG_RETURN_BOOL(yorder_match(&prev,&next));
+}
+/******************************************************************************
+ yflow_checktxt(text) = res
+  res & 1 notempty
+  res & 2 prefixed not empty
+  res & 4 suffixe not empty
+  
+******************************************************************************/
+Datum yflow_checktxt(PG_FUNCTION_ARGS) {
+	
+	Datum	texte = (Datum) PG_DETOAST_DATUM(PG_GETARG_POINTER(0));
+
+	PG_RETURN_INT32(yorder_checktxt(texte));
 }
 
 /******************************************************************************

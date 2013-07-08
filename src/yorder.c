@@ -113,15 +113,79 @@ void yorder_to_fl(Torder *o,Tfl *fl) {
 
 /******************************************************************************
  * returns true when orders prev and next match
+ testé avec yorder.c
+ quality are prefixed with integers.
+ when the integer of qua_requ is defined, then comparison with qua_prov is limited to this length 
  *****************************************************************************/
+#define IDEMTXT(a,lena,b,lenb,res) \
+do { \
+	if(lena != lenb) res = false; \
+	else { \
+		if(memcmp(a,b,lena) == 0) res = true; \
+		else res = false; \
+	} \
+} while(0)
+
+#define GETPREFIX(rk,ra,rlen) \
+do { \
+	rk = 0; \
+	if(rlen != 0) do { \
+	    if ('0' <= *ra && *ra <= '9' ) { \
+            rk *=10; \
+            rk += (int32)(*ra -'0'); \
+            ra +=1; rlen -=1; \
+	    } else break; \
+	} while(rlen > 0); \
+} while(0)
+
+bool yorder_checktxt(Datum qua) {
+	char *_p = VARDATA(qua);
+	int32 _l = VARSIZE(qua)-VARHDRSZ;
+	int32 _k;
+	int32 _res;
+	if (_l >= 1) _res |= 1; // not empty
+	
+	GETPREFIX(_k,_p,_l);
+	if (_k >= 1) _res |= 2; // prefix not empty
+	if (_l >= 1) _res |= 4; // suffix not empty
+	return _res;
+}
+
 bool yorder_match(Torder *prev,Torder *next) {
-	bool _res = false;
+
+	bool _res = true;
 	Datum _qprov = prev->qua_prov;
 	Datum _qrequ = next->qua_requ;
-
-	IDEMTXT(_qprov,_qrequ,_res);
-	// elog(WARNING,"_qprov: %s,_qrequ: %s,_res: %c",follow_DatumTxtToStr(_qprov),follow_DatumTxtToStr(_qrequ),_res?'t':'f');
-	return _res;
+	char *_pv = VARDATA(_qprov);
+	char *_pu = VARDATA(_qrequ);
+	int32 _lv = VARSIZE(_qprov)-VARHDRSZ;
+	int32 _lu = VARSIZE(_qrequ)-VARHDRSZ;
+	int32 _rku,_rkv,_l;
+	
+	_l = (_lu < _lv)?_lu:_lv;
+    if(_l <1) {
+		ereport(ERROR,
+			(errcode(ERRCODE_FEATURE_NOT_SUPPORTED),
+			   errmsg("a quality is empty")));
+    }  
+    
+    // required
+    GETPREFIX(_rku,_pu,_lu);
+    if(_lu == 0) // required cath all
+        return true;
+        
+    if(_rku == 0 || _rku > _lu) // _rku undefined
+        _rku = _lu; 
+       
+    // provided
+    GETPREFIX(_rkv,_pv,_lv);
+    if(_lv == 0) // provide nothing 
+        return false;
+    
+    if(_rku < _lv) // limit comparison length
+        _lv = _rku;
+    IDEMTXT(_pu,_rku,_pv,_lv,_res);
+    return _res;
 }
 
 /******************************************************************************

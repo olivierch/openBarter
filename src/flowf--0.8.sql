@@ -80,6 +80,11 @@ RETURNS boolean
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
 
+CREATE FUNCTION yflow_checktxt(text)
+RETURNS int
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
 --------------------------------------------------------------------------------
 -- AGGREGATE ywolf_max(yflow) 
 --------------------------------------------------------------------------------

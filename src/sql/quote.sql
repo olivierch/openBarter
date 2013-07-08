@@ -11,7 +11,11 @@ BEGIN
     _r.id := 0;
     _r.diag := 0;
     
-	IF(NOT((fchecktxt(_qua_prov)=0) AND (fchecktxt(_qua_requ)=0) AND (fchecktxt(_own)=0))) THEN 
+	IF(NOT( 
+	    ((yflow_checktxt(_qua_prov)&4)=4) AND
+	    ((yflow_checktxt(_qua_requ)&4)=4) AND
+	    ((yflow_checktxt(_own)&1)=1)
+	)) THEN 
 		_r.diag := -1;
 		RETURN _r;
 	END IF;	

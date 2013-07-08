@@ -424,18 +424,7 @@ alter sequence tstack_id_seq owned by tstack.id;
 
 SELECT _grant_read('tstack');
 SELECT fifo_init('tstack');
---------------------------------------------------------------------------------
-CREATE FUNCTION fchecktxt(_txt text) RETURNS int AS $$
-BEGIN
-    IF(_txt IS NULL) THEN
-        RETURN -1;
-    END IF;
-    IF char_length(_txt)=0 THEN
-        RETURN -1;
-    END IF;
-    RETURN 0;
-END; 
-$$ LANGUAGE PLPGSQL;
+
 --------------------------------------------------------------------------------
 CREATE TYPE yressubmit AS (
     id int,
@@ -465,7 +454,7 @@ BEGIN
 	END IF;
 	
 	IF( _oid IS NULL) THEN
-		IF(NOT( (_qtt_requ>0) AND (_qtt_prov>0) AND (fchecktxt(_qua_prov)=0) AND (fchecktxt(_qua_requ)=0) AND (_qtt>0) )) THEN 
+		IF(NOT( (_qtt_requ>0) AND (_qtt_prov>0) AND ((yflow_checktxt(_qua_prov)&4)=4) AND ((yflow_checktxt(_qua_requ)&4)=4) AND (_qtt>0) )) THEN 
 			_r.diag := -2;
 			RETURN _r;
 		END IF;	
@@ -474,13 +463,13 @@ BEGIN
 		    RETURN _r;
 	    END IF;	
 	ELSE
-		IF(NOT( (fchecktxt(_qua_requ)=0) AND (_qtt_requ>0) AND (_qua_prov IS NULL) AND (_qtt_prov>0) AND (_qtt IS NULL) AND (_interval IS NULL))) THEN
+		IF(NOT( ((yflow_checktxt(_qua_requ)&4)=4) AND (_qtt_requ>0) AND (_qua_prov IS NULL) AND (_qtt_prov>0) AND (_qtt IS NULL) AND (_interval IS NULL))) THEN
 			_r.diag := -4;
 			RETURN _r;
 		END IF;
 	END IF;
 	
-	IF NOT(fchecktxt(_own)=0) THEN
+	IF NOT((yflow_checktxt(_own)&1)=1) THEN
 	    _r.diag := -5;
 	    RETURN _r;
 	END IF;
@@ -520,7 +509,7 @@ DECLARE
 BEGIN
 	_r.id := 0;
 	_r.diag := 0;
-	IF NOT((fchecktxt(_own)=0) AND (_oid>0)) THEN
+	IF NOT(((yflow_checktxt(_own)&1)=1) AND (_oid>0)) THEN
 	    _r.diag := -1;
 	    RETURN _r;
 	END IF;

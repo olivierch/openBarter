@@ -14,17 +14,6 @@
 #define PG_GETARG_TFLOW(x)	((Tflow*)PG_GETARG_POINTER(x))
 #define PG_RETURN_TFLOW(x)	PG_RETURN_POINTER(x)
 
-/* used to compare two Datum representing a text */
-#define IDEMTXT(a,b,res) \
-do { \
-	int32 __i = VARSIZE(a); \
-	if(__i != VARSIZE(b)) res = false; \
-	else { \
-		if(memcmp(VARDATA(a),VARDATA(b),__i-VARHDRSZ) == 0) res = true; \
-		else res = false; \
-	} \
-} while(0)
-
 #define DATUM_TO_STR(d,s) \
 do { \
 	int __i = VARSIZE(d); \
@@ -196,6 +185,7 @@ extern Tflow *flowm_init(void);
 
 extern void yorder_get_order(Datum eorder,Torder *orderp);
 extern void yorder_to_fl(Torder *o,Tfl *fl);
+extern bool yorder_checktxt(Datum texte);
 extern bool yorder_match(Torder *prev,Torder *next);
 extern bool yorder_matche(Datum *prev,Datum *next);
 extern double yorder_match_proba(Torder *prev,Torder *next);
