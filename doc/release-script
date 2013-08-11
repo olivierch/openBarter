@@ -1,7 +1,7 @@
 #!/bin/bash
 # AUTOMATISATION DES RELEASE
 # **************************
-# produire le doc/doc-ob.pdf
+# modifier VERSION-X,VERSION-Y,VERSION-Z
 # cd openbarter
 # ./doc/release-script 0.1.2 0.1.3 > ~/.bash/do-release_0.1.3
 # chmod u+x ~/.bash/do-release_0.1.3
@@ -15,13 +15,16 @@
 last="$1"
 new="$2"
 echo "sed 's,MODULE_VERSION,$new,g' META.json.in > META.json"
+echo "soffice --invisible --norestore --convert-to pdf --outdir ./doc ./doc/*.odt"
 echo "git commit -a -m 'preparation for v$new' "
 echo "git tag -s v$new -m 'release v$new'"
-echo "mkdir -p ../release/openbarter-$new"
-echo "git archive --format=tar --prefix=openbarter-$new/ v$new | gzip -9 > ../release/openbarter-$new/openbarter-$new.tar.gz"
-echo "# git archive --format zip --prefix=openbarter-$new/ v$new --output ../release/openbarter-$new/openbarter-$new.zip"
-echo "cp doc/doc-ob.pdf ../release/openbarter-$new/openbarter-doc-$new.pdf"
-echo "git log --no-merges v$new ^v$last > ../release/openbarter-$new/ChangeLog-$new"
-echo "git shortlog --no-merges v$new ^v$last > ../release/openbarter-$new/ShortLog-$new"
-echo "git diff --stat --summary -M v$last v$new > ../release/openbarter-$new/diffstat-$new"
+dirnew="../release/openbarter-$new"
+namenew="openbarter-$new"
+echo "mkdir -p $dirnew"
+echo "git archive --format=tar --prefix=$namenew/ v$new | gzip -9 > $dirnew/$namenew.tar.gz"
+echo "# git archive --format zip --prefix=$namenew/ v$new --output $dirnew/$namenew.zip"
+echo "cp doc/doc-ob.pdf $dirnew/$namenew-doc.pdf"
+echo "git log --no-merges v$new ^v$last > $dirnew/ChangeLog-$new"
+echo "git shortlog --no-merges v$new ^v$last > $dirnew/ShortLog-$new"
+echo "git diff --stat --summary -M v$last v$new > $dirnew/diffstat-$new"
 echo "git push --tags"
