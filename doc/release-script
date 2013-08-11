@@ -1,20 +1,27 @@
 #!/bin/bash
-# $ cd openBarter
-# $ doc/release-script 0.3.1 0.3.2 > ~/.bash/do-release_0.3.2
-# $ chmod 777 ~/.bash/do-release_0.3.2
-# $ do-release_0.3.2
-# connect to https://manager.pgxn.org/upload 
-# upload the file ../openbarter-0.3.2.tar.gz
+# AUTOMATISATION DES RELEASE
+# **************************
+# produire le doc/doc-ob.pdf
+# cd openbarter
+# ./doc/release-script 0.1.2 0.1.3 > ~/.bash/do-release_0.1.3
+# chmod u+x ~/.bash/do-release_0.1.3
+# do-release_0.1.3
+#
+#	chargement sur pgxn
+#	https://manager.pgxn.org/upload
+#	(olivierch,...)
+#       upload the file ../release/openbarter-0.1.3
+
 last="$1"
 new="$2"
 echo "sed 's,MODULE_VERSION,$new,g' META.json.in > META.json"
 echo "git commit -a -m 'preparation for v$new' "
 echo "git tag -s v$new -m 'release v$new'"
-echo "mkdir ../openbarter-$new"
-echo "git archive --format=tar --prefix=openbarter-$new/ v$new | gzip -9 > ../openbarter-$new/openbarter-$new.tar.gz"
-echo "# git archive --format zip --prefix=openbarter-$new/ v$new --output ../openbarter-$new/openbarter-$new.zip"
-echo "cp doc/doc-ob.pdf ../openbarter-$new/openbarter-doc-$new.pdf"
-echo "git log --no-merges v$new ^v$last > ../openbarter-$new/ChangeLog-$new"
-echo "git shortlog --no-merges v$new ^v$last > ../openbarter-$new/ShortLog-$new"
-echo "git diff --stat --summary -M v$last v$new > ../openbarter-$new/diffstat-$new"
+echo "mkdir -p ../release/openbarter-$new"
+echo "git archive --format=tar --prefix=openbarter-$new/ v$new | gzip -9 > ../release/openbarter-$new/openbarter-$new.tar.gz"
+echo "# git archive --format zip --prefix=openbarter-$new/ v$new --output ../release/openbarter-$new/openbarter-$new.zip"
+echo "cp doc/doc-ob.pdf ../release/openbarter-$new/openbarter-doc-$new.pdf"
+echo "git log --no-merges v$new ^v$last > ../release/openbarter-$new/ChangeLog-$new"
+echo "git shortlog --no-merges v$new ^v$last > ../release/openbarter-$new/ShortLog-$new"
+echo "git diff --stat --summary -M v$last v$new > ../release/openbarter-$new/diffstat-$new"
 echo "git push --tags"

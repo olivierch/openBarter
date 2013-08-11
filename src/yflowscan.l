@@ -9,9 +9,14 @@
 /* No reason to constrain amount of data slurped */
 #define YY_READ_BUF_SIZE 16777216
 
-/* Avoid exit() on fatal scanner errors (a bit ugly -- see yy_fatal_error) */
+/*
+ * flex emits a yy_fatal_error() function that it calls in response to
+ * critical errors like malloc failure, file I/O errors, and detection of
+ * internal inconsistency.  That function prints a message and calls exit().
+ * Mutate it to instead call our handler, which jumps out of the parser.
+ */
 #undef fprintf
-#define fprintf(file, fmt, msg)  ereport(ERROR, (errmsg_internal("%s", msg)))
+#define fprintf(file, fmt, msg) yflow_flex_fatal(msg)
 
 /* Handles to the buffer that the lexer uses internally */
 static YY_BUFFER_STATE scanbufhandle;
@@ -23,6 +28,7 @@ int yflow_yylex(void);
 
 void yflow_scanner_init(const char *str);
 void yflow_scanner_finish(void);
+static int yflow_flex_fatal(const char *msg);
 /*
 ([0-9]+|([0-9]*\.[0-9]+)([eE][-+]?[0-9]+)?)
 */
@@ -40,11 +46,11 @@ void yflow_scanner_finish(void);
 %%
 
 ([0-9]*\.[0-9]+)([eE][-+]?[0-9]+)? 	{
-		yylval.dval = atof(yytext);
+		yylval.dval = atof(yflow_yytext);
 		return NUMBER;
 		}
 ([0-9]+)    {
-		yylval.in = atoll(yytext); return FLOWINT;
+		yylval.in = atoll(yflow_yytext); return FLOWINT;
 		}
 \[           yylval.text = "("; return O_BRACKET;
 \]           yylval.text = ")"; return C_BRACKET;
@@ -52,14 +58,14 @@ void yflow_scanner_finish(void);
 \)           yylval.text = ")"; return C_PAREN;
 \,           yylval.text = ")"; return COMMA;
 [ \t\n\r\f]+ /* discard spaces */
-.            return yytext[0]; /* alert parser of the garbage */
+.            return yflow_yytext[0]; /* alert parser of the garbage */
 
 %%
 
 void
-yyerror(const char *message)
+yflow_yyerror(const char *message)
 {
-	if (*yytext == YY_END_OF_BUFFER_CHAR)
+	if (*yflow_yytext == YY_END_OF_BUFFER_CHAR)
 	{
 		ereport(ERROR,
 				(errcode(ERRCODE_SYNTAX_ERROR),
@@ -73,7 +79,7 @@ yyerror(const char *message)
 				(errcode(ERRCODE_SYNTAX_ERROR),
 				 errmsg("bad yflow representation"),
 				 /* translator: first %s is typically "syntax error" */
-				 errdetail("%s at or near \"%s\"", message, yytext)));
+				 errdetail("%s at or near \"%s\"", message, yflow_yytext)));
 	}
 }
 
@@ -113,4 +119,11 @@ yflow_scanner_finish(void)
 {
 	yy_delete_buffer(scanbufhandle);
 	pfree(scanbuf);
+}
+
+static int
+yflow_flex_fatal(const char *msg)
+{
+	elog(FATAL, "%s\n",msg);
+	return 0;	/* keep compiler quiet */
 }

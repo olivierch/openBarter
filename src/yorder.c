@@ -10,6 +10,7 @@
 #include "catalog/pg_type.h" 
 #include "funcapi.h"
 #include "utils/typcache.h" // lookup_rowtype_tupdesc() 
+#include "access/relscan.h" // HeapTupleHeaderGetTypeId
 
 #include "wolf.h"
 
