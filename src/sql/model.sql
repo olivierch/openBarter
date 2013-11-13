@@ -569,6 +569,7 @@ DECLARE
 BEGIN
 /* the statement LIMIT would not avoid deep exploration if the condition
 was specified  on Z in the search_backward WHERE condition */
+	--DROP TABLE IF EXISTS _tmp;
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
 		SELECT yflow_finish(Z.debut,Z.path,Z.fin) as cycle FROM (
 			WITH RECURSIVE search_backward(debut,path,fin,depth,cycle) AS(
@@ -1030,9 +1031,9 @@ GRANT EXECUTE ON FUNCTION  fackmvt() TO role_co;
 
 
 --------------------------------------------------------------------------------
-CREATE FUNCTION fackmvtid(_id int) RETURNS int AS $$
+CREATE OR REPLACE FUNCTION fackmvtid(_id int) RETURNS int AS $$
 DECLARE
-	_cnt	int;
+	_cnt   int;
 	_m  tmvt%rowtype;
 BEGIN
 	SELECT * INTO _m FROM tmvt WHERE usr=session_user AND ack=false AND id=_id;

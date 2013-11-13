@@ -208,14 +208,14 @@ BEGIN
 	_ro.json :='{"qtt_requ":' || _ro.qtt_requ || ',"qtt_prov":' || _ro.qtt_prov || ',"qtt":' || _ro.qtt  || 
 		',"qtt_reci":' || _ro.qtt_reci || ',"qtt_give":' || _ro.qtt_give || 
 		',"paths":[' || chr(10) || _ro.json || chr(10) ||']}';
-	_ro.err := 1;
+
 		
 	IF(_record) THEN
-	    INSERT INTO tmvt (	type,json,xid,    usr,xoid, 
-						    refused,order_created,created
+	    INSERT INTO tmvt (	type,json,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
+						    qtt,nat,ack,exhausted,refused,order_created,created
 					     ) 
-		    VALUES       (	_t.type,_ro.json,_t.id,_t.usr,(_ro.ord).oid,
-						    _ro.err,_t.created,statement_timestamp()
+		    VALUES       (	_t.type,_ro.json,1,  1,NULL,_t.id,_t.usr,(_ro.ord).oid,_t.own,_t.own,
+						    _ro.qtt,_t.qua_prov,false,false,_ro.err,_t.created,statement_timestamp()
 					     )
 		    RETURNING id INTO _mid;
 	    UPDATE tmvt SET grp = _mid WHERE id = _mid;

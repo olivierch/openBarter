@@ -1,0 +1,58 @@
+install:
+
+mkdir ~/ob/git
+cd ob/git
+git clone git://git.postgresql.org/git/postgresql.git pgsql
+mkdir build
+cd build
+../pgsql/configure --with-openssl --prefix=/home/olivier/ob/git
+make world
+sudo su
+mkdir ~olivier/ob/git/data
+mkdir ~olivier/ob/git/log
+chown postgres ~olivier/ob/git/data
+chown postgres ~olivier/ob/git/log
+su - postgres
+make install-world # testé seulement sous le user olivier
+
+# dans /etc/bash.bashrc ajouter les lignes
+# export PGDATA="/home/olivier/ob/git/data"
+# export MANPATH="/home/olivier/ob/git/build/doc/src/sgml"
+# PATH="/home/olivier/ob/git/bin:/home/olivier/ob/git/build/src/tools:$PATH"
+
+# la doc est installée, faire par exemple man 7 BEGIN 
+su - postgres
+initdb
+postgres >~olivier/ob/git/log/logfile 2>&1 &
+psql
+create role olivier with login usperuser;
+ctrl D
+
+
+
+cd ~/ob/git
+git clone git://github.com:olivierch/openBarter.git
+ln -s /home/olivier/ob/git/openBarter /home/olivier/ob/git/pgsql/contrib/openBarter
+cd src
+make
+make install 
+
+*************************************************************************
+# procédure d'install postgres short version
+ 
+./configure
+gmake
+su
+gmake install
+adduser postgres
+mkdir /usr/local/pgsql/data
+chown postgres /usr/local/pgsql/data
+su - postgres
+/usr/local/pgsql/bin/initdb -D /usr/local/pgsql/data
+/usr/local/pgsql/bin/postgres -D /usr/local/pgsql/data >logfile 2>&1 &
+/usr/local/pgsql/bin/createdb test
+/usr/local/pgsql/bin/psql test
+
+
+
+
