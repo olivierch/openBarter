@@ -569,7 +569,7 @@ DECLARE
 BEGIN
 /* the statement LIMIT would not avoid deep exploration if the condition
 was specified  on Z in the search_backward WHERE condition */
-	--DROP TABLE IF EXISTS _tmp;
+	DROP TABLE IF EXISTS _tmp;
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
 		SELECT yflow_finish(Z.debut,Z.path,Z.fin) as cycle FROM (
 			WITH RECURSIVE search_backward(debut,path,fin,depth,cycle) AS(
@@ -1075,14 +1075,14 @@ BEGIN
 	        _cnt := _cnt + _mid;
 		    _json:= '{"info":"the parent order is too old - it is removed "}';
 		    
-		    INSERT INTO tmvt (	json,xid,    usr,xoid,
-							    refused,order_created,created
+		    INSERT INTO tmvt (	type,json,			nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
+							    qtt,nat,			ack,exhausted,	refused,order_created,created
 						     ) 
-			    VALUES       (	_json,_yo.id,_o.usr,_yo.oid,
-							    4,_o.created,statement_timestamp()
+			    VALUES       (	_yo.type,_json,	1,  1,NULL,_yo.id,_o.usr,_yo.oid,_yo.own,_yo.own,
+							    _yo.qtt,_yo.qua_prov,	false,true,		-4,_o.created,statement_timestamp()
 						     )
 			    RETURNING id INTO _mid;
-		    -- UPDATE tmvt SET grp = _mid WHERE id = _mid;
+		    UPDATE tmvt SET grp = _mid WHERE id = _mid;
 	    END IF;
 	    
 	END LOOP;
@@ -1125,14 +1125,20 @@ GRANT EXECUTE ON FUNCTION  fcleanowners() TO role_bo;
 --------------------------------------------------------------------------------
 CREATE FUNCTION fremovebarter(_ro yresorder,_t tstack) RETURNS yresorder AS $$
 DECLARE
+	_ro		    yresorder%rowtype;
 	_op			yorder;	
 	_cnt		int;
 	_wid        int;
 	_mid        int;
-	_done  boolean;
+	_exhausted  boolean;
 	
 BEGIN
-    _done := false;
+    _ro.err := 0;
+    _ro.json := NULL;
+    _ro.qtt := 0;
+    _ro.own := _t.own;
+    _ro.type := _t.type;
+    _exhausted := false;
     
     _wid := fgetowner(_t.own);
     
@@ -1148,40 +1154,37 @@ BEGIN
 		    GET DIAGNOSTICS _cnt = ROW_COUNT;
 		    
 		    IF(_cnt != 0) THEN
-		        _done := true;
+		        _exhausted := true;
 	            _ro.ord := _op;
 	            _ro.ordp := _op;
 
 		    END IF;
 		    
+
 	    -- ELSE do nothing when it is a child
 	    END IF;
 	-- ELSE do nothing on error
 	END IF;
 	
-	IF (_done) THEN
-        _ro.json:= '{"info":"removeorder - the barter order is removed "}';
-        _ro.err := 5;
-	ELSE
-        _ro.json:= '{"error":"removeorder - the barter order to be deleted does not exist for this owner or is a child order"}';
+	IF (NOT _exhausted) THEN
+        _ro.json:= '{"error":"the order to delete does not exist for this owner"}';
         _ro.err := -7;
-
         _op.qtt := 0;
         _op.qua_prov := ''; 
-
+        _ro.ord := NULL;
+        _ro.ordp := NULL;
     END IF;
     	
-    INSERT INTO tmvt (	type,json,xid,    usr,
-					    refused,order_created,created
+    INSERT INTO tmvt (	type,json,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
+					    qtt,nat,ack,exhausted,refused,order_created,created
 				     ) 
-	    VALUES       (	_t.type,_ro.json,_t.id,_t.usr,
-					    _ro.err,_t.created,statement_timestamp()
+	    VALUES       (	_t.type,_ro.json,1,  1,NULL,_t.id,_t.usr,_t.oid,_t.own,_t.own,
+					    _op.qtt,_op.qua_prov,false,_exhausted,_ro.err,_t.created,statement_timestamp()
 				     )
 	    RETURNING id INTO _mid;
-    -- UPDATE tmvt SET grp = _mid WHERE id = _mid;
+    UPDATE tmvt SET grp = _mid WHERE id = _mid;
 	
 	RETURN _ro;
-
 END; 
 $$ LANGUAGE PLPGSQL;
 
