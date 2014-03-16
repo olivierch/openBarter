@@ -1,14 +1,13 @@
 
 MODULE_big = flowf
-#OBJS = tsquery.o ywolf.o earth.o wolfc.o follow.o
-OBJS = flowm.o yflow.o yflowparse.o yorder.o flowc.o earth.o
+OBJS = flowm.o yflow.o yflowparse.o yorder.o flowc.o earthrad.o worker_ob.o
 
 EXTENSION = flowf
-DATA = flowf--0.8.sql flowf--unpackaged--0.8.sql
+DATA = flowf--1.3.sql flowf--unpackaged--1.3.sql
 
-REGRESS = testflow_1 testflow_2 testflow_2a testflow_earth testflow_3 testflow_3_1 testflow_3_2  testflow_3_3 testflow_3_4 testflow_3a testflow_3b testflow_4
+REGRESS = testflow_1 testflow_2 testflow_2a testflow_earth 
 
-EXTRA_CLEAN = yflowparse.c yflowscan.c
+EXTRA_CLEAN = yflowparse.c yflowscan.c test/results/*.res test/py/*.pyc
 
 PGXS := $(shell pg_config --pgxs)
 include $(PGXS)
@@ -16,6 +15,7 @@ include $(PGXS)
 yflowparse.o: yflowscan.c
 
 yflowparse.c: yflowparse.y
+
 ifdef BISON
 	$(BISON) $(BISONFLAGS) -o $@ $<
 else
@@ -28,4 +28,7 @@ ifdef FLEX
 else
 	@$(missing) flex $< $@
 endif
+
+test: installcheck test/py/run.py test/*.sql
+	cd test; python py/run.py; cd ..
 

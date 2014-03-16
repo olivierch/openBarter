@@ -9,7 +9,12 @@ CREATE TYPE yorder AS (
     qua_requ text,
     qtt_prov int8,
     qua_prov text,
-    qtt int8
+    qtt int8,
+    
+    pos_requ box, -- box (point(lat,lon),point(lat,lon))
+	pos_prov box, -- box (point(lat,lon),point(lat,lon))
+    dist	float8,
+ 	carre_prov box -- carre_prov @> pos_requ 
 );
 
 CREATE FUNCTION yflow_in(cstring)
@@ -60,7 +65,12 @@ RETURNS yflow
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
 
-CREATE FUNCTION yflow_grow(yorder,yorder,yflow)
+CREATE FUNCTION yflow_grow_backward(yorder,yorder,yflow)
+RETURNS yflow
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION yflow_grow_forward(yflow,yorder,yorder)
 RETURNS yflow
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
@@ -89,6 +99,13 @@ CREATE FUNCTION yflow_checktxt(text)
 RETURNS int
 AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
+
+CREATE FUNCTION yflow_checkquaownpos(text,text,point,text,point,float8)
+RETURNS int
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+
+
 
 --------------------------------------------------------------------------------
 -- AGGREGATE ywolf_max(yflow) 
@@ -135,22 +152,27 @@ CREATE FUNCTION earth_dist_points(point,point)
 LANGUAGE C IMMUTABLE STRICT;
 
 /* cube are cube_s0 */
+/*
 CREATE FUNCTION earth_dist_cubes_s0(cube,cube)
     RETURNS float8
     AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
+*/
 
 CREATE FUNCTION earth_get_square(point, float8)
-    RETURNS cube
+    RETURNS box
     AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
 
-CREATE FUNCTION earth_get_cube_s0(point)
-    RETURNS cube
+/* same as box(point,point) */
+/*
+CREATE FUNCTION earth_point_to_box_s0(point)
+    RETURNS box
     AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;
+*/
 
-CREATE FUNCTION earth_get_point(cube)
+CREATE FUNCTION earth_box_to_point(box)
     RETURNS point
     AS 'MODULE_PATHNAME'
 LANGUAGE C IMMUTABLE STRICT;

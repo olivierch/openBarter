@@ -1,14 +1,8 @@
-/*drop schema IF EXISTS test CASCADE;
-CREATE SCHEMA test;
-SET search_path TO test;
-
-create extension flowf; -- with version '1.0';
-
-RESET client_min_messages;
-RESET log_error_verbosity;
-SET client_min_messages = notice;
-SET log_error_verbosity = terse; */
-
+-- drop extension if exists hstore cascade;
+-- create extension hstore;
+drop extension if exists flowf cascade;
+create extension flowf with version '1.1';
+	
 -- yflow ''[(type,id,oid,own,qtt_requ,qtt_prov,qtt,proba), ...]''
 
 

@@ -2,7 +2,7 @@
 #include "fmgr.h"
 #include "lib/stringinfo.h"
 #include "utils/array.h"
-#include "utils/geo_decls.h"	/* for Point */
+#include "utils/geo_decls.h"	/* for Point and Box*/
 
 /******************************************************************************
  * 
@@ -20,7 +20,7 @@ do { \
 	s = palloc(__i+1); \
 	memcpy(s,VARDATA(d),__i); \
 	s[__i] = '\0'; \
-} while(0);
+} while(0)
 
 #define GET_OMEGA(b) (((double)(b.qtt_prov)) / ((double)(b.qtt_requ)))
 #define GET_OMEGA_P(b) (((double)(b->qtt_prov)) / ((double)(b->qtt_requ)))
@@ -64,6 +64,12 @@ do { \
 */
 #define OB_PRECISION 1.E-12
 #define QTTFLOW_UNDEFINED -1
+/******************************************************************************
+ * yorder_checktxt
+ *****************************************************************************/
+#define TEXT_NOT_EMPTY 1
+#define TEXT_PREFIX_NOT_EMPTY 2
+#define TEXT_SUFFIX_NOT_EMPTY 4
 
 // defines the status of the flow
 typedef enum Tstatusflow {
@@ -85,11 +91,17 @@ typedef struct Torder {
 	int 	own; 
 	int		oid;
 	int64	qtt_requ;
-	Datum	qua_requ; // text 
+	// HStore	*qua_requ;
+	Datum	qua_requ;
 	int64	qtt_prov;
-	Datum	qua_prov; // text 
+	// HStore	*qua_prov;
+	Datum   qua_prov;
 	int64	qtt;
 	int64	flowr;
+
+	Point   pos_requ;
+	Point	pos_prov;
+	double	dist;
 } Torder;
 
 typedef struct Tfl {
@@ -129,19 +141,40 @@ typedef struct TresChemin {
 /******************************************************************************
 geographic representations
 
-native type of postgres
-    Point(latitude,longitude) in degree
+native type Point of postgres
+    Point(latitude,longitude) in radians
+double distance in radians
     
 cube extension of postgres to represent a square on the sphere
     '(latmin,lonmax),(latmax,lonmax)'::cube in SQL
-    is the same as Tcarre(latmin,lonmin,latmax,lonmax)
+    is the same as Tsquare(latmin,lonmin,latmax,lonmax)
     
-cube is a cube where min==max with a surface 0
-    is a cube_s0
+cube_s0 is a cube where min==max with a surface 0
 
-distance in Km - earth radius defined in earth.c
 
- *****************************************************************************/
+
+******************************************************************************/
+/* defined in geo_delcs.h
+
+typedef struct
+{
+	double		x,
+				y;
+} Point;
+
+typedef struct
+{
+	Point		high,
+				low;	// sorted		
+} BOX;
+
+#define DatumGetBoxP(X)    ((BOX *) DatumGetPointer(X))
+#define BoxPGetDatum(X)    PointerGetDatum(X)
+#define PG_GETARG_BOX_P(n) DatumGetBoxP(PG_GETARG_DATUM(n))
+#define PG_RETURN_BOX_P(x) return BoxPGetDatum(x)
+
+index gist(box), pas d'extension
+*/
 typedef struct { // cube dim2
 	int32		vl_len_;		/* varlena header (do not touch directly!) */
 	unsigned int dim;
@@ -151,6 +184,19 @@ typedef struct { // cube dim2
 #define DatumGetTsquareP(x)	    ((Tsquare*)DatumGetPointer(x))
 #define PG_GETARG_TSQUARE(x)	((Tsquare*)PG_GETARG_POINTER(x))
 #define PG_RETURN_TSQUARE(x)	PG_RETURN_POINTER(x)
+
+
+#ifdef GL_VERIFY
+#define GL_CHECK_BOX_S0(s) \
+do { \
+	if(!((s->low.x == s->high.x) && (s->low.y == s->high.y))) \
+    		ereport(ERROR, \
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED), \
+			errmsg("box_s0 is expected"))); \
+} while(0)
+#else
+#define GL_CHECK_BOX_S0(s)
+#endif
 
 /* for the cube extension, we have:
 typedef struct NDBOX
@@ -187,12 +233,15 @@ extern void yorder_get_order(Datum eorder,Torder *orderp);
 extern void yorder_to_fl(Torder *o,Tfl *fl);
 extern bool yorder_checktxt(Datum texte);
 extern bool yorder_match(Torder *prev,Torder *next);
+// extern bool yorder_match_quality(HStore *qprov,HStore *qrequ);
 extern bool yorder_match_quality(Datum qprov,Datum qrequ);
+
 //extern bool yorder_matche(Datum *prev,Datum *next);
 extern double yorder_match_proba(Torder *prev,Torder *next);
 
 extern double earth_points_distance(Point *pt1, Point *pt2);
 extern int earth_check_point(Point *p);
-extern int earth_check_dist(Point *p,double d);
+extern int earth_check_dist(double d);
+extern bool earth_match_position(double dist,Point *pos_prov,Point *pos_requ);
 
 

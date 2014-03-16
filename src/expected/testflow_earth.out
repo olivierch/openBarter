@@ -1,39 +1,46 @@
-drop extension if exists cube cascade;
-NOTICE:  drop cascades to extension flowf
+--drop extension if exists hstore cascade;
+--create extension hstore;
 drop extension if exists flowf cascade;
-NOTICE:  extension "flowf" does not exist, skipping
-create extension cube with version '1.0';
-create extension flowf with version '0.8';
+create extension flowf with version '1.1';
 RESET client_min_messages;
 RESET log_error_verbosity;
 SET client_min_messages = notice;
 SET log_error_verbosity = terse;
 /*
-48.670828,1.874488 ici
+(48.670828,1.874488)deg ici (0.849466198,0.032715987)rad
 48.670389,1.87415  mimi
+(48.670389,1.87415)deg mimi (0.849458536,0.032710088)rad
 */
-select earth_dist_points('(48.670828,1.874488)'::point,'(48.670389,1.87415)'::point);
- earth_dist_points  
---------------------
- 0.0547622024263353
+--select earth_dist_points('(48.670828,1.874488)'::point,'(48.670389,1.87415)'::point);
+select earth_dist_points('(0.849466198,0.032715987)'::point,'(0.849458536,0.032710088)'::point);
+  earth_dist_points   
+----------------------
+ 8.59547091253083e-06
 (1 row)
 
-select earth_dist_points('(-91.0,0.0)'::point,'(-30.0,0.0)'::point);
-ERROR:  attempt to get a distance form a point out of range
-select earth_get_square('(48.670828,1.874488)'::point,1.0);
-                             earth_get_square                              
----------------------------------------------------------------------------
- (48.6618347966451, 1.86086985937971),(48.6798212033549, 1.88810614062029)
+--  0.0547622024263353 km = a*6371.009 (Rterre) => a = 0.0547622024263353/6371.009 = 0,000008596 radians
+-- select earth_dist_points('(-91.0,0.0)'::point,'(-30.0,0.0)'::point);
+select earth_dist_points('(-1.588249619,0.0)'::point,'(-0.523598776,0.0)'::point);
+ERROR:  attempt to get a distance form points out of range
+-- select earth_get_square('(48.670828,1.874488)'::point,1.0);
+-- select earth_get_square('(48.670828,1.874488)'::point,0.0);
+select earth_get_square('(0.849466198,0.032715987)'::point,1.0/6371.009);
+                               earth_get_square                                
+-------------------------------------------------------------------------------
+ (0.849623159008845,0.0329536683917499),(0.849309236991155,0.0324783056082495)
 (1 row)
 
-select earth_get_square('(48.670828,1.874488)'::point,0.0);
-                           earth_get_square                            
------------------------------------------------------------------------
- (-89.99999999991, -179.99999999982),(89.99999999991, 179.99999999982)
+select earth_get_square('(0.849466198,0.032715987)'::point,0.0);
+                            earth_get_square                             
+-------------------------------------------------------------------------
+ (1.5707963267949,3.14159265358979),(-1.5707963267949,-3.14159265358979)
 (1 row)
 
 -- d in [0,EARTH_RADIUS * PI/2.[
-select earth_get_square('(48.670828,1.874488)'::point,(6371.009 * 3.1415926535 *1.001 / 2.0));
-ERROR:  attempt to get a square form a dist:10017.565092 km for a point:(lat=48.670828, lon=1.874488) out of range
-select earth_get_square('(48.670828,1.874488)'::point,-1.0);
-ERROR:  attempt to get a square form a dist:-1.000000 km for a point:(lat=48.670828, lon=1.874488) out of range
+-- select earth_get_square('(48.670828,1.874488)'::point,(6371.009 * 3.1415926535 *1.001 / 2.0));
+-- select earth_get_square('(48.670828,1.874488)'::point,-1.0);
+-- d in [0,PI[
+select earth_get_square('(0.849466198,0.032715987)'::point,(3.14159265358979323846 *1.00001));
+ERROR:  attempt to get a box form a dist:3.1416240695 rad for a point:(lat=0.8494661980, lon=0.0327159870) out of range
+select earth_get_square('(0.849466198,0.032715987)'::point,-1.0);
+ERROR:  attempt to get a box form a dist:-1.0000000000 rad for a point:(lat=0.8494661980, lon=0.0327159870) out of range

@@ -1,16 +1,7 @@
-/*drop schema IF EXISTS test CASCADE;
-CREATE SCHEMA test;
-SET search_path TO test;
-
-create extension flowf; -- with version '1.0';
-
-RESET client_min_messages;
-RESET log_error_verbosity;
-SET client_min_messages = notice;
-SET log_error_verbosity = terse; 
-*/
--- yflow ''[(type,id,oid,own,qtt_requ,qtt_prov,qtt,proba), ...]''
-
+--drop extension if exists hstore cascade;
+--create extension hstore;
+drop extension if exists flowf cascade;
+create extension flowf with version '1.1';
 -- order limit
 SELECT yflow_show('[(1,1,1,1,10,20,20,7.00),(1,2,2,1,10,20,20,7.00)]'::yflow); -- omega >1
 SELECT yflow_show('[(1,1,1,1,20,20,20,7.00),(1,2,2,1,20,20,20,7.00)]'::yflow); -- omega =1

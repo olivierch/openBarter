@@ -1,126 +1,222 @@
 
 --------------------------------------------------------------------------------
--- check params of quote
+-- prequote -- err_offset -30
 --------------------------------------------------------------------------------
-CREATE FUNCTION 
-	fcheckquaown(_own text,_qua_requ text,_qua_prov text)
-	RETURNS yressubmit AS $$	
+CREATE FUNCTION fsubmitprequote(_own text,_qua_requ text,_pos_requ point,_qua_prov text,_pos_prov point,_dist float8)
+	RETURNS yerrororder AS $$
 DECLARE
-	_r			 yressubmit%rowtype;
+	_r			yerrororder%rowtype;
+	_s 			tstack%rowtype;
+
 BEGIN
-    _r.id := 0;
-    _r.diag := 0;
-    
-	IF(NOT( 
-	    ((yflow_checktxt(_qua_prov)&4)=4) AND
-	    ((yflow_checktxt(_qua_requ)&4)=4) AND
-	    ((yflow_checktxt(_own)&1)=1)
-	)) THEN 
-		_r.diag := -1;
-		RETURN _r;
-	END IF;	
-    IF(yflow_match_quality(_qua_prov,_qua_requ)) THEN
-	    _r.diag := -2;
-	    RETURN _r;
-    END IF;
-    
-    RETURN _r;
+	-- ORDER_BEST 2 NOQTTLIMIT 4 IGNOREOMEGA 8 PREQUOTE 64
+	_s := ROW(NULL,NULL,_own,NULL,2 | 4 | 8 | 64,_qua_requ,NULL,_pos_requ,_qua_prov,NULL,NULL,_pos_prov,_dist,NULL,NULL,NULL,NULL,NULL)::tstack;
+	_r := fprocessprequote('submitted',_s);
+	RETURN _r;
 END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+-- GRANT EXECUTE ON FUNCTION  fsubmitprequote(text,text,point,text,point,float8) TO role_co;
+
+--------------------------------------------------------------------------------
+CREATE FUNCTION fprocessprequote(_state eorderstate, _s tstack)
+	RETURNS yerrororder AS $$
+DECLARE
+	_r			yerrororder;
+	_wid		int;
+	_o          yorder;
+	_tx 		text;
+BEGIN
+	_r := ROW(_s.id,0,NULL);
+
+    CASE
+    	WHEN (_state = 'submitted') THEN -- before stack insertion
+
+		    _r := fcheckquaown(_r,_s.own,_s.qua_requ,_s.pos_requ,_s.qua_prov,_s.pos_prov,_s.dist);
+		    if(_r.code !=0) THEN
+				_r.code := _r.code -1000;
+		        RETURN _r;
+		    END IF;
+
+    		IF (NOT fchecknameowner(_s.own,session_user)) THEN
+				_r.code := -1001;
+				_r.reason := 'illegal owner name';
+				RETURN _r;
+    		END IF;
+
+			_r := fpushorder(_r,_s);
+			
+			RETURN _r;
+
+    	WHEN (_state = 'pending') THEN -- execution
+
+    		_wid := fgetowner(_s.own);
+
+	        _s.oid := _s.id;
+	        IF(_s.qtt_requ IS NULL) THEN _s.qtt_requ := 1; END IF;
+	        IF(_s.qtt_prov IS NULL) THEN _s.qtt_prov := 1; END IF;
+	        IF(_s.qtt IS NULL) THEN _s.qtt := 0; END IF;
+
+	        _o := ROW(_s.type,_s.id,_wid,_s.oid,_s.qtt_requ,_s.qua_requ,_s.qtt_prov,_s.qua_prov,_s.qtt,
+	                    box(_s.pos_requ,_s.pos_requ),box(_s.pos_prov,_s.pos_prov),
+	                    _s.dist,earth_get_square(_s.pos_prov,_s.dist))::yorder;
+
+	        _tx := fproducequote(_o,_s,true);
+
+	        RETURN _r;
+
+	    WHEN (_state = 'aborted') THEN -- failure on stack output
+	    	return _r;
+
+    	ELSE
+
+    		RAISE EXCEPTION 'Should not reach this point';
+
+    END CASE;
+    
+END;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+
+
+--------------------------------------------------------------------------------
+-- quote all forms -- err_offset -40
+-- type & ~3 == 0 
+--------------------------------------------------------------------------------
+CREATE FUNCTION fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_pos_requ point,_qua_prov text,_qtt_prov int8,_qtt int8,_pos_prov point,_dist float8)
+	RETURNS yerrororder AS $$
+DECLARE
+	_r			yerrororder%rowtype;
+	_s 			tstack%rowtype;
+	_otype		int;
+
+BEGIN
+	_otype := (_type & 3) | 128; -- QUOTE 128
+
+	IF((_qtt IS NULL) AND (_qtt_requ IS NULL) AND (_qtt_prov IS NULL) ) THEN -- quote first form
+	    _otype := _otype | 4 | 8; -- NOQTTLIMIT 4 IGNOREOMEGA 8
+	ELSIF((_qtt IS NULL) AND (_qtt_requ >0) AND (_qtt_prov >0) ) THEN -- quote second form
+	    _otype := _otype | 4 ; --  NOQTTLIMIT 4
+	ELSIF((_qtt > 0) AND (_qtt_requ >0) AND (_qtt_prov >0) ) THEN -- quote third form	
+	    _otype := _otype ;
+	ELSE 
+	    _otype := _otype | 32; -- bit d'erreur inséré
+	END IF;
+
+	_s := ROW(NULL,NULL,_own,NULL,_otype,_qua_requ,_qtt_requ,_pos_requ,_qua_prov,_qtt_prov,_qtt,_pos_prov,_dist,NULL,NULL,NULL,NULL,NULL)::tstack;
+	_r := fprocessquote('submitted',_s);
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+-- GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,point,text,int8,int8,point,float8) TO role_co;
+--------------------------------------------------------------------------------
+CREATE FUNCTION fsubmitlquote(_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
+	RETURNS yerrororder AS $$
+DECLARE
+	_r			yerrororder%rowtype;
+	_s 			tstack%rowtype;
+	_otype		int;
+
+BEGIN
+	_r := ROW(NULL,0,NULL);
+	_otype := 2 | 128; -- Best 2 QUOTE 128 
+
+	IF(NOT((_qtt_requ >0) AND (_qtt_prov >0)) ) THEN -- quote third form	
+	    _r.code := -2000;
+	    _r.reason := 'quantities required';
+	    return _r;
+	END IF;
+
+	_s := ROW(NULL,NULL,_own,NULL,_otype,_qua_requ,_qtt_requ,'(0,0)'::point,_qua_prov,_qtt_prov,_qtt_prov,'(0,0)'::point,0,NULL,NULL,NULL,NULL,NULL)::tstack;
+	_r := fprocessquote('submitted',_s);
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+GRANT EXECUTE ON FUNCTION  fsubmitlquote(text,text,int8,text,int8) TO role_co;
+
+
+--------------------------------------------------------------------------------
+CREATE FUNCTION fprocessquote(_state eorderstate, _s tstack)
+	RETURNS yerrororder AS $$
+DECLARE
+	_r			yerrororder;
+	_wid		int;
+	_o          yorder;
+	_tx 		text;
+BEGIN
+	_r := ROW(_s.id,0,NULL);
+    CASE
+    	WHEN (_state = 'submitted') THEN -- before stack insertion
+
+		    _r := fcheckquaown(_r,_s.own,_s.qua_requ,_s.pos_requ,_s.qua_prov,_s.pos_prov,_s.dist);
+		    if(_r.code !=0) THEN
+		    	_r.code := _r.code - 1100;
+		        RETURN _r;
+		    END IF;
+
+		    IF ((_s.type & 32)=32) THEN -- error detected in submit
+			    _r.code := -1110;
+			    _r.reason := 'Illegal parameters for a quote';
+			    return _r;
+			END IF;
+
+			_r := fpushorder(_r,_s);
+			RETURN _r;
+
+    	WHEN (_state = 'pending') THEN -- execution
+
+    		_wid := fgetowner(_s.own);
+
+	        _s.oid := _s.id;
+	        IF(_s.qtt_requ IS NULL) THEN _s.qtt_requ := 1; END IF;
+	        IF(_s.qtt_prov IS NULL) THEN _s.qtt_prov := 1; END IF;
+	        IF(_s.qtt IS NULL) THEN _s.qtt := 0; END IF;
+
+	        _o := ROW(_s.type,_s.id,_wid,_s.oid,_s.qtt_requ,_s.qua_requ,_s.qtt_prov,_s.qua_prov,_s.qtt,
+	                    box(_s.pos_requ,_s.pos_requ),box(_s.pos_prov,_s.pos_prov),
+	                    _s.dist,earth_get_square(_s.pos_prov,_s.dist))::yorder;
+	        _tx := fproducequote(_o,_s,true);
+
+	        RETURN _r;
+	        
+	    WHEN (_state = 'aborted') THEN -- failure on stack output
+	    	return _r;
+
+    	ELSE
+
+    		RAISE EXCEPTION 'Should not reach this point';
+
+    END CASE;
+    
+END;
 $$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
--- prequote
---------------------------------------------------------------------------------
-CREATE FUNCTION 
-	fsubmitprequote(_own text,_qua_requ text,_qua_prov text)
-	RETURNS yressubmit AS $$	
-DECLARE
-	_r			 yressubmit%rowtype;
-BEGIN
-    _r := fcheckquaown(_own,_qua_requ,_qua_prov);
-    if(_r.diag !=0) THEN
-        return _r;
-    END IF;
-	
-	-- ORDER_BEST 2 NOQTTLIMIT 4 IGNOREOMEGA 8 PREQUOTE 64
-	_r.id := fsubmitorder(2 | 4 | 8 | 64,_own,NULL,_qua_requ,NULL,_qua_prov,NULL,NULL,NULL);
-	_r.diag = 0;
-	
-	RETURN _r;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitprequote(text,text,text) TO role_co;
-
---------------------------------------------------------------------------------
--- all forms
---------------------------------------------------------------------------------
-CREATE FUNCTION 
-	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
-	RETURNS yressubmit AS $$	
-DECLARE
-	_r			 yressubmit%rowtype;
-	_otype      int;
-BEGIN
-    _r := fcheckquaown(_own,_qua_requ,_qua_prov);
-    if(_r.diag !=0) THEN
-        return _r;
-    END IF;
-	
-	_otype := _type & 3;
-	
-	IF((_qtt IS NULL) AND (_qtt_requ IS NULL) AND (_qtt_prov IS NULL)) THEN -- quote first form
-	    _otype := _otype | 4 | 8 | 128; -- NOQTTLIMIT 4 IGNOREOMEGA 8 QUOTE 128
-	ELSIF((_qtt IS NULL) AND (_qtt_requ >0) AND (_qtt_prov >0)) THEN -- quote second form
-	    _otype := _otype | 4 | 128; --  NOQTTLIMIT 4 QUOTE 128
-	ELSIF((_qtt > 0) AND (_qtt_requ >0) AND (_qtt_prov >0) ) THEN -- quote third form	
-	    _otype := _otype | 128; --  QUOTE 128
-	ELSE 
-	    _r.diag := -2;
-	    RETURN _r;
-	END IF;
-	
-	_r.id := fsubmitorder(_otype,_own,NULL,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt,NULL);
-	_r.diag = 0;
-	RETURN _r;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8,int8) TO role_co;
-
---------------------------------------------------------------------------------
--- quote first form -shortcut
---------------------------------------------------------------------------------
-CREATE FUNCTION 
-	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qua_prov text)
-	RETURNS yressubmit AS $$
-DECLARE
-	_r			 yressubmit%rowtype;	
-BEGIN
-	_r := fsubmitquote(_type,_own,_qua_requ,NULL,_qua_prov,NULL,NULL);
-	RETURN _r; 
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,text) TO role_co;
-
---------------------------------------------------------------------------------
--- quote second form -shortcut
---------------------------------------------------------------------------------
-CREATE FUNCTION 
-	fsubmitquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8)
-	RETURNS yressubmit AS $$	
-DECLARE
-	_r			 yressubmit%rowtype;	
-BEGIN
-	_r := fsubmitquote(_type,_own,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,NULL);
-	RETURN _r; 
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fsubmitquote(dtypeorder,text,text,int8,text,int8) TO role_co;
-
-
+/*
+CREATE TYPE yquotebarter AS (
+    type int,
+    qua_requ text,
+    qtt_requ int,
+    qua_prov text,
+    qtt_prov int,
+    qtt int
+); */
+CREATE TYPE yr_quote AS (
+    qtt_reci int8,
+    qtt_give int8
+);
 --------------------------------------------------------------------------------
 -- quote execution at the output of the stack
 --------------------------------------------------------------------------------
-CREATE FUNCTION fproducequote(_ro yresorder,_t tstack,_record boolean) RETURNS yresorder AS $$
+CREATE FUNCTION fproducequote(_ord yorder,_isquote boolean,_isnoqttlimit boolean,_islimit boolean,_isignoreomega boolean) 
+/*
+	_isquote := true; -- (_t.type & 128) = 128
+		it can be a quote or a prequote
+	_isnoqttlimit := false; -- (_t.type & 4) = 4
+		when true the quantity provided is not limited by the stock available
+	_islimit:= (_t.jso->'type')='limit'; -- (_t.type & 3) = 1
+		type of the quoted order
+	_isignoreomega := -- (_t.type & 8) = 8
+*/
+	RETURNS json AS $$
 DECLARE
 	_cnt		int;
 	_cyclemax 	yflow;
@@ -132,13 +228,21 @@ DECLARE
 	_nbmvts		int;
 	_wid		int;
 	_MAXMVTPERTRANS 	int := fgetconst('MAXMVTPERTRANS');
-	_give       text;
+	_barter     text;
+	_paths      text;
+	
+	_qtt_reci   int8 := 0;
+	_qtt_give   int8 := 0;
+	_qtt_prov   int8 := 0;
+	_qtt_requ   int8 := 0;
+	_qtt        int8 := 0;
+
+	_resjso json;
 	
 BEGIN
-	_cnt := fcreate_tmp(_ro.ord);
+	_cnt := fcreate_tmp(_ord);
 	_nbmvts := 0;
-	_ro.json := '';
-	_give := '';
+	_paths := '';
 	
 	LOOP
 		SELECT yflow_max(cycle) INTO _cyclemax FROM _tmp WHERE yflow_is_draft(cycle);
@@ -151,32 +255,32 @@ BEGIN
 		IF(_nbmvts > _MAXMVTPERTRANS) THEN
 			EXIT; 
 		END IF;	
-		
+		/*
 		IF(NOT _firstloop) THEN
-			_ro.json := _ro.json || ',' || chr(10); -- ,\n
+			_paths := _paths || ',' || chr(10); -- ,\n
 		END IF;
-		
+		*/
 		_res := yflow_qtts(_cyclemax);
 		-- _res = [qtt_in,qtt_out,qtt_requ,qtt_prov,qtt]
 		-- _res = [x[f->dim-2].flowr,x[f->dim-1].flowr,x[f->dim-1].qtt_requ,x[f->dim-1].qtt_prov,x[f->dim-1].qtt]
 		
-		_ro.qtt_reci := _ro.qtt_reci + _res[1];
-		_ro.qtt_give := _ro.qtt_give + _res[2];
+		_qtt_reci := _qtt_reci + _res[1];
+		_qtt_give := _qtt_give + _res[2];
 				
-		_ro.json := _ro.json || yflow_to_jsona(_cyclemax);
+		-- _paths := _paths || yflow_to_jsona(_cyclemax);
 
 		-- for a QUOTE, set _ro.qtt_requ,_ro.qtt_prov,_ro.qtt
-		IF((_t.type & 128) = 128) THEN -- QUOTE
+		IF(_isquote) THEN -- QUOTE
 			IF(_firstloop) THEN
-				_ro.qtt_requ := _res[3]; -- qtt_requ
-				_ro.qtt_prov := _res[4]; -- qtt_prov
+				_qtt_requ := _res[3]; -- qtt_requ
+				_qtt_prov := _res[4]; -- qtt_prov
 			END IF;
 		
-			IF((_t.type & 4) = 4) THEN -- NOLIMITQTT
-				_ro.qtt	:= _ro.qtt + _res[5]; -- qtt
+			IF(_isnoqttlimit) THEN -- NOLIMITQTT
+				_qtt	:= _qtt + _res[5]; -- qtt
 			ELSE
 				IF(_firstloop) THEN
-					_ro.qtt		 := _res[5]; -- qtt
+					_qtt		 := _res[5]; -- qtt
 				END IF;
 			END IF;
 		END IF;
@@ -188,7 +292,7 @@ BEGIN
 	
 	for all updates, yflow_reduce is applied except for node with NOQTTLIMIT
 */
-		_freezeOmega := _firstloop AND ((_t.type & (8|128)) = (8|128));
+		_freezeOmega := _firstloop AND _isignoreomega AND _isquote; --((_t.type & (8|128)) = (8|128));
 		UPDATE _tmp SET cycle = yflow_reduce(cycle,_cyclemax,_freezeOmega);
 		_firstloop := false;
 			
@@ -196,90 +300,26 @@ BEGIN
 		
 	END LOOP;
 
-	IF (	(_ro.qtt_requ != 0) 
-		AND ((_t.type & 3) = 1) -- ORDER_LIMIT
-		AND ((_t.type & (128)) = (128)) -- QUOTE
-		AND	((_ro.qtt_give::double precision)	/(_ro.qtt_reci::double precision)) > 
-			((_ro.qtt_prov::double precision)	/(_ro.qtt_requ::double precision))
+	IF (	(_qtt_requ != 0) 
+		AND _islimit AND _isquote
+		AND	((_qtt_give::double precision)	/(_qtt_reci::double precision)) > 
+			((_qtt_prov::double precision)	/(_qtt_requ::double precision))
 	) THEN	
 		RAISE EXCEPTION 'pq: Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
 	END IF;
+/*
+	_paths := '{"qtt_reci":' || _qtt_reci || ',"qtt_give":' || _qtt_give || 
+		',"paths":[' || chr(10) || _paths || chr(10) ||']}';
+			
+	IF((_t.type & (128)) = 128) THEN
+	    _barter := row_to_json(ROW(_t.type&(~3),_t.qua_requ,_qtt_requ,_t.qua_prov,_qtt_prov,_qtt)::yquotebarter);
+        _paths := '{"object":' || row_to_json(_t)::text || ',"quoted":' || _barter || ',"result":' || _paths || '}';
+	ELSE	-- prequote	
+        _paths := '{"object":' || row_to_json(_t)::text || ',"result":' || _paths || '}';
+	END IF;	*/
+	_resjso := row_to_json(ROW(_qtt_reci,_qtt_give)::yr_quote);
 	
-	_ro.json :='{"qtt_requ":' || _ro.qtt_requ || ',"qtt_prov":' || _ro.qtt_prov || ',"qtt":' || _ro.qtt  || 
-		',"qtt_reci":' || _ro.qtt_reci || ',"qtt_give":' || _ro.qtt_give || 
-		',"paths":[' || chr(10) || _ro.json || chr(10) ||']}';
-
-		
-	IF(_record) THEN
-	    INSERT INTO tmvt (	type,json,nbc,nbt,grp,xid,    usr,xoid, own_src,own_dst,
-						    qtt,nat,ack,exhausted,refused,order_created,created
-					     ) 
-		    VALUES       (	_t.type,_ro.json,1,  1,NULL,_t.id,_t.usr,(_ro.ord).oid,_t.own,_t.own,
-						    _ro.qtt,_t.qua_prov,false,false,_ro.err,_t.created,statement_timestamp()
-					     )
-		    RETURNING id INTO _mid;
-	    UPDATE tmvt SET grp = _mid WHERE id = _mid;
-	END IF;
-	
-	RETURN _ro;
+	RETURN _resjso;
 
 END; 
 $$ LANGUAGE PLPGSQL;
-
---------------------------------------------------------------------------------
--- obtain quote directly TODO
---------------------------------------------------------------------------------
-CREATE FUNCTION 
-	fgetquote(_type dtypeorder,_own text,_qua_requ text,_qtt_requ int8,_qua_prov text,_qtt_prov int8,_qtt int8)
-	RETURNS yresorder AS $$	
-DECLARE
-    _rs			 yressubmit%rowtype;
-	_r			 yresorder%rowtype;
-	_ty           int;
-	_t           tstack%rowtype;
-BEGIN
-	_rs := fcheckquote(_type & 3,_own,_qua_requ,_qtt_requ,_qua_prov,_qtt_prov,_qtt);
-	IF(_rs.diag != 0) THEN
-	    _r.err := _rs.diag;
-		RETURN _r;
-	END IF;
-	_ty := _type & ~3;
-
-	IF(
-	    (_ty = (4 | 8 | 64))  OR (_ty = (4 | 8 | 128)) 
-	) THEN 
-	    _qtt_requ := 1;
-	    _qtt_prov := 1;
-	    _qtt := 1;
-	ELSIF(
-	    (_ty = (4 | 128)) AND (_qtt_requ IS NOT NULL) AND (_qtt_prov IS NOT NULL)
-	) THEN
-	    _qtt := 0;
-	ELSIF(
-	    (_ty = (128)) AND (_qtt_requ IS NOT NULL) AND (_qtt_prov IS NOT NULL) AND (_qtt_prov IS NOT NULL)
-	) THEN
-	    _t.oid := 0; -- rien dutout
-	ELSE
-	    _r.err := -100;
-	    RETURN _r;	
-	END IF;
-
-    _t.id  := 0;
-	_t.usr := session_user;
-	_t.own := _own;
-	_t.oid := NULL;
-	_t.type := _type;
-	_t.qua_requ := _qua_requ;
-	_t.qtt_requ := _qtt_requ;
-	_t.qua_prov := _qua_prov;
-	_t.qtt_prov := _qtt_prov;
-	_t.qtt := _qtt;
-	_t.duration := NULL;
-	_t.created := NULL;
-	
-	_r := fproducequote(_t,false);	
-	RETURN _r;
-END; 
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
-GRANT EXECUTE ON FUNCTION  fgetquote(dtypeorder,text,text,int8,text,int8,int8) TO role_co;
-

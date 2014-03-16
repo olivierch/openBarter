@@ -33,7 +33,8 @@ PG_FUNCTION_INFO_V1(yflow_out);
 PG_FUNCTION_INFO_V1(yflow_dim);
 PG_FUNCTION_INFO_V1(yflow_get_maxdim);
 PG_FUNCTION_INFO_V1(yflow_init);
-PG_FUNCTION_INFO_V1(yflow_grow);
+PG_FUNCTION_INFO_V1(yflow_grow_backward);
+PG_FUNCTION_INFO_V1(yflow_grow_forward);
 PG_FUNCTION_INFO_V1(yflow_finish);
 PG_FUNCTION_INFO_V1(yflow_contains_oid);
 PG_FUNCTION_INFO_V1(yflow_match);
@@ -55,7 +56,8 @@ Datum yflow_dim(PG_FUNCTION_ARGS);
 Datum yflow_get_maxdim(PG_FUNCTION_ARGS);
 
 Datum yflow_init(PG_FUNCTION_ARGS);
-Datum yflow_grow(PG_FUNCTION_ARGS);
+Datum yflow_grow_backward(PG_FUNCTION_ARGS);
+Datum yflow_grow_forward(PG_FUNCTION_ARGS);
 Datum yflow_finish(PG_FUNCTION_ARGS);
 Datum yflow_contains_oid(PG_FUNCTION_ARGS);
 Datum yflow_match(PG_FUNCTION_ARGS);
@@ -73,17 +75,18 @@ Datum yflow_to_jsona(PG_FUNCTION_ARGS);
 
 char *yflow_pathToStr(Tflow *yflow);
 
-void		_PG_init(void);
+//void		_PG_init(void);
 void		_PG_fini(void);
 
 static double getOmegaFlow(Tflow *f);
+// static bool _qua_check(int nbmin,HStore *r);
 
 /******************************************************************************
 begin and end functions called when flow.so is loaded
 ******************************************************************************/
-void		_PG_init(void) {
+/*void		_PG_init(void) {
 	return;
-}
+}*/
 void		_PG_fini(void) {
 	return;
 }
@@ -385,10 +388,9 @@ Datum yflow_init(PG_FUNCTION_ARGS) {
 
 }
 /******************************************************************************
- flow_grow(new,debut,path) -> path = new || path avec la distance(new,debut) 
+ flow_grow_backward(new,debut,path) -> path = new || path avec la distance(new,debut) 
 ******************************************************************************/
-
-Datum yflow_grow(PG_FUNCTION_ARGS) {
+Datum yflow_grow_backward(PG_FUNCTION_ARGS) {
 	
 	Datum	dnew = (Datum) PG_GETARG_POINTER(0);
 	Datum	ddebut = (Datum) PG_GETARG_POINTER(1);
@@ -420,6 +422,46 @@ Datum yflow_grow(PG_FUNCTION_ARGS) {
 	result = _yflow_get(&fnew,f,true);
 	result->x[0].proba = yorder_match_proba(&new,&debut);
 	result->x[0].flowr = 0;
+	
+	PG_FREE_IF_COPY(f, 2);
+	PG_RETURN_TFLOW(result);
+
+}
+/******************************************************************************
+ flow_grow_backward(new,debut,path) -> path = new || path avec la distance(new,debut) 
+******************************************************************************/
+Datum yflow_grow_forward(PG_FUNCTION_ARGS) {
+	
+	Datum	dnew = (Datum) PG_GETARG_POINTER(0);
+	Datum	dfin = (Datum) PG_GETARG_POINTER(1);
+	Tflow	*f = PG_GETARG_TFLOW(2);
+	Torder	new,fin;
+	Tfl		fnew;
+	Tflow	*result;
+	short	dim = f->dim;
+	
+	if(dim == 0 )
+    		ereport(ERROR,
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+			errmsg("attempt to extend a yflow that is empty")));
+	
+	yorder_get_order(dfin,&fin);
+	if(f->x[dim-1].id != fin.id )
+    		ereport(ERROR,
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+			errmsg("attempt to grow a yflow with an order %i that is not the end of the flow %s",fin.id,yflow_ndboxToStr(f,false))));
+	
+	yorder_get_order(dnew,&new);		
+	if(!yorder_match(&fin,&new))
+    		ereport(ERROR,
+			(errcode(ERRCODE_PROGRAM_LIMIT_EXCEEDED),
+			errmsg("attempt to grow a yflow with an order that is not matching the end of the flow")));
+
+			
+	yorder_to_fl(&new,&fnew);
+	result = _yflow_get(&fnew,f,false);
+	result->x[dim-1].proba = yorder_match_proba(&fin,&new);
+	result->x[dim-1].flowr = 0;
 	
 	PG_FREE_IF_COPY(f, 2);
 	PG_RETURN_TFLOW(result);
@@ -492,7 +534,7 @@ Datum yflow_contains_oid(PG_FUNCTION_ARGS) {
 	PG_RETURN_BOOL(result);
 }
 /******************************************************************************
- flow_match_order(order,order) -> true when they match 
+ flow_match_order(yorder,yorder) -> true when they match 
 ******************************************************************************/
 Datum yflow_match(PG_FUNCTION_ARGS) {
 	
@@ -512,6 +554,8 @@ Datum yflow_match_quality(PG_FUNCTION_ARGS) {
 	
 	Datum	prov = (Datum) PG_DETOAST_DATUM(PG_GETARG_POINTER(0));
 	Datum	requ = (Datum) PG_DETOAST_DATUM(PG_GETARG_POINTER(1));
+	//HStore *prov = PG_GETARG_HS(0);
+	//HStore *requ = PG_GETARG_HS(1);
 
 	PG_RETURN_BOOL(yorder_match_quality(prov,requ));
 }
@@ -668,6 +712,7 @@ Datum yflow_reduce(PG_FUNCTION_ARGS)
 		// omega is set
 		lastr->qtt_prov = lastf1->qtt_prov;
 		lastr->qtt_requ = lastf1->qtt_requ;
+		
 		// IGNOREOMEGA is reset	
 		if(freezeOmega)
 			lastr->type = lastr->type & (~ORDER_IGNOREOMEGA);	
@@ -830,6 +875,69 @@ Datum yflow_qtts(PG_FUNCTION_ARGS)
 	PG_RETURN_ARRAYTYPE_P(result);
 	
 }
+
+PG_FUNCTION_INFO_V1(yflow_checkquaownpos);
+Datum yflow_checkquaownpos(PG_FUNCTION_ARGS);
+/******************************************************************************
+CREATE FUNCTION yflow_checkquaownpos(_own text, _qua_requ text,_pos_requ point, _qua_prov text, _pos_prov point, _dist float8)
+RETURNS int
+AS 'MODULE_PATHNAME'
+LANGUAGE C IMMUTABLE STRICT;
+******************************************************************************/
+#define TXT_IS_FLAGSET(__txt,__flag) ((yorder_checktxt(__txt) & __flag) == __flag)
+Datum yflow_checkquaownpos(PG_FUNCTION_ARGS) {
+
+    Datum	_own = (Datum) PG_DETOAST_DATUM(PG_GETARG_POINTER(0));
+    Datum	_qua_requ = (Datum) PG_DETOAST_DATUM(PG_GETARG_POINTER(1));
+    // HStore *_qua_requ = PG_GETARG_HS(1);
+    Point	*_pos_requ = (Point *) PG_GETARG_POINTER(2);
+    Datum	_qua_prov = (Datum) PG_DETOAST_DATUM(PG_GETARG_POINTER(3));
+    // HStore *_qua_prov = PG_GETARG_HS(3);
+    Point	*_pos_prov = (Point *) PG_GETARG_POINTER(4);
+    double _dist = PG_GETARG_FLOAT8(5);
+
+    if(! ( 
+           TXT_IS_FLAGSET(_qua_prov,TEXT_NOT_EMPTY) 
+        && TXT_IS_FLAGSET(_qua_requ,TEXT_NOT_EMPTY)
+        && TXT_IS_FLAGSET(_own,TEXT_NOT_EMPTY)
+    )) 
+        PG_RETURN_INT32(-5);
+
+	if(	earth_check_point(_pos_prov)!=0 ) PG_RETURN_INT32(-6);
+	if (earth_check_point(_pos_requ)!=0 ) PG_RETURN_INT32(-7);
+	if (earth_check_dist(_dist)!=0 ) PG_RETURN_INT32(-8);
+	        
+    if(yorder_match_quality(_qua_prov,_qua_requ) 
+        && earth_match_position(_dist,_pos_prov,_pos_requ)
+    ) 
+        PG_RETURN_INT32(-9);
+        
+	PG_RETURN_INT32(0);
+}
+
+/******************************************************************************
+qua correct if number of keys >= nbmin
+******************************************************************************/
+/* static bool _qua_check(int nbmin,HStore *r) {
+	int			cntr = HS_COUNT(r); 
+	
+	return (cntr >= nbmin);
+} 
+
+PG_FUNCTION_INFO_V1(yflow_quacheck);
+Datum yflow_quacheck(PG_FUNCTION_ARGS);
+Datum yflow_quacheck(PG_FUNCTION_ARGS)
+{
+	HStore	*h = PG_GETARG_HS(0);
+	int32	nbmin = PG_GETARG_INT32(1);
+	bool	res;
+
+	res  = _qua_check(nbmin,h);
+
+	PG_FREE_IF_COPY(h, 0);
+	PG_RETURN_BOOL(res);
+}
+*/
 
 
 
