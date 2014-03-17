@@ -1,8 +1,8 @@
 {
    "name": "openbarter",
    "abstract": "Multilateral agreement production engine.",
-   "description": "openBarter is a central limit order book that performs competition on price even if money is not necessary to express them. It is a barter market and allows cyclic exchange between two partners (buyer and seller) or more in a single transaction. It provides a fluidity equivalent to that of a regular market place.",
-   "version": "0.8.2",
+   "description": "openBarter is a central limit order book that performs competition on price even if money is not necessary to express them. It is a barter market allowing cyclic exchange between two partners (buyer and seller) or more in a single transaction. It provides a fluidity equivalent to that of a regular market place.",
+   "version": "0.0.1",
    "maintainer": [
       "Olivier Chaussavoine <olivier.chaussavoine@gmail.com>"
    ],
@@ -11,16 +11,16 @@
    "prereqs": {
       "runtime": {
          "requires": {
-            "plpgsql": 0,
-            "PostgreSQL": "9.2.0"
+            "plpgsql": "1.0",
+            "PostgreSQL": "9.3.2"
          }
       }
    },
    "provides": {
      "openbarter": {
        "file": "src/sql/model.sql",
-       "docfile": "doc/doc-ob.pdf",
-       "version": "0.8.2",
+       "docfile": "doc/doc-ob.odt",
+       "version": "0.0.1",
        "abstract": "Multilateral agreement engine."
      }
    },
@@ -40,7 +40,7 @@
       "url": "http://pgxn.org/meta/spec.txt"
    },
    "tags": [
-      "cyclic exchange","non-bilateral",
+      "cyclic exchange","non-bilateral","mutilateral",
       "central","limit","order","book",
       "barter",
       "market"

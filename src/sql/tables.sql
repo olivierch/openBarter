@@ -30,8 +30,7 @@ INSERT INTO tconst (name,value) VALUES
 	-- if this limit is reached, next cycles are not performed but all others
 	-- are included in the current transaction
 
-	-- it is the version X.Y.Z of the model, not that of the extension
-	('VERSION-X',1),('VERSION-Y',3),('VERSION-Z',0),
+	('VERSION-X',2),('VERSION-Y',0),('VERSION-Z',0),
 
 	('OWNERINSERT',1),		-- boolean when true, owner inserted when not found
 	('QUAPROVUSR',0),		-- boolean when true, the quality provided by a barter is suffixed by user name

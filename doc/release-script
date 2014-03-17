@@ -1,9 +1,10 @@
 #!/bin/bash
 # AUTOMATISATION DES RELEASE
 # **************************
-# modifier VERSION-X,VERSION-Y,VERSION-Z
+# modifier VERSION-X,VERSION-Y,VERSION-Z dans src/sql/tables.sql
+# ici 0.1.3
 # cd openbarter
-# ./doc/release-script 0.1.2 0.1.3 > ~/.bash/do-release_0.1.3
+# ./doc/release-script 0.1.2 > ~/.bash/do-release_0.1.3
 # chmod u+x ~/.bash/do-release_0.1.3
 # do-release_0.1.3
 #
@@ -11,20 +12,50 @@
 #	https://manager.pgxn.org/upload
 #	(olivierch,...)
 #       upload the file ../release/openbarter-0.1.3
-
+if [ "$#" -ne 1 ]; then echo "one parameter required"; exit 1; fi
 last="$1"
-new="$2"
-echo "sed 's,MODULE_VERSION,$new,g' META.json.in > META.json"
-echo "soffice --invisible --norestore --convert-to pdf --outdir ./doc ./doc/*.odt"
-echo "git commit -a -m 'preparation for v$new' "
-echo "git tag -s v$new -m 'release v$new'"
-dirnew="../release/openbarter-$new"
-namenew="openbarter-$new"
+if [ ! -d "doc" ]; then echo "must be run from the root";exit 1; fi
+# lecture de la version dans src/tables.sql
+VERSION=`cat src/sql/tables.sql | grep "('VERSION-X',[0-9].*),('VERSION-Y',[0-9].*),('VERSION-Z',[0-9].*)," | sed "s/('VERSION-[X-Z]',//g" |sed "s/),/ /g" `
+ARR=($VERSION)
+VERSION_X=${ARR[0]}
+VERSION_Y=${ARR[1]}
+VERSION_Z=${ARR[2]}
+NEW_VERSION=`echo $VERSION_X.$VERSION_Y.$VERSION_Z`
+
+echo "cp META.json META.json.orig"
+echo "sed 's,0.0.1,$NEW_VERSION,g' META.json.orig > META.json"
+echo "cp openbarter.control openbarter.control.orig"
+echo "sed 's,0.0.1,$NEW_VERSION,g' openbarter.control.orig > openbarter.control"
+echo "cp src/Makefile src/Makefile.orig"
+echo "cat src/Makefile.orig | sed \"s/flowf--0.1.sql flowf--unpackaged--0.1.sql/flowf--$VERSION_X.$VERSION_Y.sql flowf--unpackaged--$VERSION_X.$VERSION_Y.sql/\" > src/Makefile"
+echo "git add src/Makefile META.json openbarter.control"
+echo "git mv flowf--0.1.sql flowf--$VERSION_X.$VERSION_Y.sql"
+echo "git mv flowf--unpackaged--0.1.sql flowf--unpackaged--$VERSION_X.$VERSION_Y.sql"
+echo "git commit -a -m 'preparation for v$NEW_VERSION' "
+
+echo "git tag -s v$NEW_VERSION -m 'release v$NEW_VERSION'"
+dirnew="../release/openbarter-$NEW_VERSION"
+namenew="openbarter-$NEW_VERSION"
 echo "mkdir -p $dirnew"
-echo "git archive --format=tar --prefix=$namenew/ v$new | gzip -9 > $dirnew/$namenew.tar.gz"
+echo "git archive --format=tar --prefix=$namenew/ v$NEW_VERSION | gzip -9 > $dirnew/$namenew.tar.gz"
 echo "# git archive --format zip --prefix=$namenew/ v$new --output $dirnew/$namenew.zip"
-echo "cp doc/doc-ob.pdf $dirnew/$namenew-doc.pdf"
+echo "soffice --invisible --norestore --convert-to pdf --outdir ./doc ./doc/*.odt"
+for DOC in `ls doc/*.odt`
+do
+	RAD=`echo $DOC | sed "s/doc\/\([^./]*\).odt/\1/"`
+	echo "mv doc/$RAD.pdf $dirnew/$namenew-$RAD.pdf"
+done
 echo "git log --no-merges v$new ^v$last > $dirnew/ChangeLog-$new"
 echo "git shortlog --no-merges v$new ^v$last > $dirnew/ShortLog-$new"
 echo "git diff --stat --summary -M v$last v$new > $dirnew/diffstat-$new"
 echo "git push --tags"
+#
+echo "git mv flowf--$VERSION_X.$VERSION_Y.sql flowf--0.1.sql"
+echo "git mv flowf--unpackaged--$VERSION_X.$VERSION_Y.sql flowf--unpackaged--0.1.sql"
+echo "mv src/Makefile.orig src/Makefile"
+echo "mv openbarter.control.orig openbarter.control"
+echo "mv META.json.orig META.json"
+echo "git add src/Makefile openbarter.control META.json"
+echo "git commit -a -m 'end for v$NEW_VERSION'"
+
