@@ -6,7 +6,7 @@ create schema market;
 set search_path to market;
 
 DROP EXTENSION IF EXISTS flowf;
-CREATE EXTENSION IF NOT EXISTS flowf WITH SCHEMA market VERSION 0.0;
+CREATE EXTENSION flowf WITH VERSION '0.0';
 
 
 \i sql/roles.sql
