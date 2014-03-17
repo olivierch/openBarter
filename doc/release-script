@@ -12,7 +12,7 @@
 #	https://manager.pgxn.org/upload
 #	(olivierch,...)
 #       upload the file ../release/openbarter-0.1.3
-if [ "$#" -ne 1 ]; then echo "one parameter required"; exit 1; fi
+if [ "$#" -ne 1 ]; then echo "one parameter required:the version of the previous release"; exit 1; fi
 last="$1"
 if [ ! -d "doc" ]; then echo "must be run from the root";exit 1; fi
 # lecture de la version dans src/tables.sql
@@ -22,6 +22,7 @@ VERSION_X=${ARR[0]}
 VERSION_Y=${ARR[1]}
 VERSION_Z=${ARR[2]}
 NEW_VERSION=`echo $VERSION_X.$VERSION_Y.$VERSION_Z`
+NEW_VERS=$VERSION_X.$VERSION_Y
 
 echo "cp META.json META.json.orig"
 echo "sed 's,0.0.1,$NEW_VERSION,g' META.json.orig > META.json"
@@ -29,9 +30,11 @@ echo "cp openbarter.control openbarter.control.orig"
 echo "sed 's,0.0.1,$NEW_VERSION,g' openbarter.control.orig > openbarter.control"
 echo "cp src/Makefile src/Makefile.orig"
 echo "cat src/Makefile.orig | sed \"s/flowf--0.1.sql flowf--unpackaged--0.1.sql/flowf--$VERSION_X.$VERSION_Y.sql flowf--unpackaged--$VERSION_X.$VERSION_Y.sql/\" > src/Makefile"
-echo "git add src/Makefile META.json openbarter.control"
-echo "git mv flowf--0.1.sql flowf--$VERSION_X.$VERSION_Y.sql"
-echo "git mv flowf--unpackaged--0.1.sql flowf--unpackaged--$VERSION_X.$VERSION_Y.sql"
+echo "cp src/sql/model.sql src/sql/model.sql.orig"
+echo "cat src/sql/model.sql.orig | sed \"s/flowf WITH SCHEMA market VERSION 0.0/flowf WITH SCHEMA market VERSION $VERSION_X.$VERSION_Y/\" > src/sql/model.sql"
+echo "git add src/Makefile META.json openbarter.control src/sql/model.sql"
+echo "git mv src/flowf--0.1.sql src/flowf--$VERSION_X.$VERSION_Y.sql"
+echo "git mv src/flowf--unpackaged--0.1.sql src/flowf--unpackaged--$VERSION_X.$VERSION_Y.sql"
 echo "git commit -a -m 'preparation for v$NEW_VERSION' "
 
 echo "git tag -s v$NEW_VERSION -m 'release v$NEW_VERSION'"
@@ -46,16 +49,17 @@ do
 	RAD=`echo $DOC | sed "s/doc\/\([^./]*\).odt/\1/"`
 	echo "mv doc/$RAD.pdf $dirnew/$namenew-$RAD.pdf"
 done
-echo "git log --no-merges v$new ^v$last > $dirnew/ChangeLog-$new"
-echo "git shortlog --no-merges v$new ^v$last > $dirnew/ShortLog-$new"
-echo "git diff --stat --summary -M v$last v$new > $dirnew/diffstat-$new"
-echo "git push --tags"
+echo "git log --no-merges v$NEW_VERSION ^v$last > $dirnew/ChangeLog-$NEW_VERSION"
+echo "git shortlog --no-merges v$NEW_VERSION ^v$last > $dirnew/ShortLog-$NEW_VERSION"
+echo "git diff --stat --summary -M v$last v$NEW_VERSION > $dirnew/diffstat-$NEW_VERSION"
+echo "# git push --tags"
 #
-echo "git mv flowf--$VERSION_X.$VERSION_Y.sql flowf--0.1.sql"
-echo "git mv flowf--unpackaged--$VERSION_X.$VERSION_Y.sql flowf--unpackaged--0.1.sql"
+echo "git mv src/flowf--$VERSION_X.$VERSION_Y.sql src/flowf--0.1.sql"
+echo "git mv src/flowf--unpackaged--$VERSION_X.$VERSION_Y.sql src/flowf--unpackaged--0.1.sql"
 echo "mv src/Makefile.orig src/Makefile"
 echo "mv openbarter.control.orig openbarter.control"
 echo "mv META.json.orig META.json"
-echo "git add src/Makefile openbarter.control META.json"
+echo "mv src/sql/model.sql.orig src/sql/model.sql"
+echo "git add src/Makefile openbarter.control META.json src/sql/model.sql"
 echo "git commit -a -m 'end for v$NEW_VERSION'"
 
