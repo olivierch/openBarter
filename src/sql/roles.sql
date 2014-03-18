@@ -10,8 +10,8 @@ SET log_error_verbosity = terse;
 -- drop extension if exists btree_gin cascade;
 -- create extension btree_gin with version '1.0';
 
-drop extension if exists flowf cascade;
-create extension flowf; -- with version '1.1';
+DROP EXTENSION IF EXISTS flowf;
+CREATE EXTENSION flowf WITH VERSION '0.0';
 --------------------------------------------------------------------------------
 
 CREATE FUNCTION _create_role(_role text) RETURNS int AS $$
