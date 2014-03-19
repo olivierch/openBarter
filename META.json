@@ -2,7 +2,7 @@
    "name": "openbarter",
    "abstract": "Multilateral agreement production engine.",
    "description": "openBarter is a central limit order book that performs competition on price even if money is not necessary to express them. It is a barter market allowing cyclic exchange between two partners (buyer and seller) or more in a single transaction. It provides a fluidity equivalent to that of a regular market place.",
-   "version": "2.0.1",
+   "version": "0.0.1",
    "maintainer": [
       "Olivier Chaussavoine <olivier.chaussavoine@gmail.com>"
    ],
@@ -20,7 +20,7 @@
      "openbarter": {
        "file": "src/sql/model.sql",
        "docfile": "doc/doc-ob.odt",
-       "version": "2.0.1",
+       "version": "0.0.1",
        "abstract": "Multilateral agreement engine."
      }
    },
