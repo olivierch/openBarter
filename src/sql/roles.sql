@@ -11,7 +11,7 @@ SET log_error_verbosity = terse;
 -- create extension btree_gin with version '1.0';
 
 DROP EXTENSION IF EXISTS flowf;
-CREATE EXTENSION flowf WITH VERSION '0.1';
+CREATE EXTENSION flowf VERSION '2.0';
 --------------------------------------------------------------------------------
 
 CREATE FUNCTION _create_role(_role text) RETURNS int AS $$
