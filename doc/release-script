@@ -26,13 +26,20 @@ NEW_VERS=$VERSION_X.$VERSION_Y
 
 echo "cp META.json META.json.orig"
 echo "sed 's,0.0.1,$NEW_VERSION,g' META.json.orig > META.json"
+
 echo "cp openbarter.control openbarter.control.orig"
 echo "sed 's,0.0.1,$NEW_VERSION,g' openbarter.control.orig > openbarter.control"
+
 echo "cp src/Makefile src/Makefile.orig"
 echo "cat src/Makefile.orig | sed \"s/flowf--0.1.sql flowf--unpackaged--0.1.sql/flowf--$VERSION_X.$VERSION_Y.sql flowf--unpackaged--$VERSION_X.$VERSION_Y.sql/\" > src/Makefile"
+
+echo "cp src/flowf.control src/flowf.control.orig"
+echo "cat src/flowf.control.orig | sed \"s/0.1/$VERSION_X.$VERSION_Y/\" > src/flowf.control"
+
 echo "cp src/sql/roles.sql src/sql/roles.sql.orig"
 echo "cat src/sql/roles.sql.orig | sed \"s/flowf WITH VERSION '0.1'/flowf VERSION '$VERSION_X.$VERSION_Y'/\" > src/sql/roles.sql"
-echo "git add src/Makefile META.json openbarter.control src/sql/roles.sql"
+
+echo "git add src/Makefile META.json openbarter.control src/sql/roles.sql src/flowf.control"
 echo "git mv src/flowf--0.1.sql src/flowf--$VERSION_X.$VERSION_Y.sql"
 echo "git mv src/flowf--unpackaged--0.1.sql src/flowf--unpackaged--$VERSION_X.$VERSION_Y.sql"
 echo "git commit -a -m 'preparation for v$NEW_VERSION' "
@@ -56,10 +63,13 @@ echo "# git push --tags"
 #
 echo "git mv src/flowf--$VERSION_X.$VERSION_Y.sql src/flowf--0.1.sql"
 echo "git mv src/flowf--unpackaged--$VERSION_X.$VERSION_Y.sql src/flowf--unpackaged--0.1.sql"
+
 echo "mv src/Makefile.orig src/Makefile"
 echo "mv openbarter.control.orig openbarter.control"
 echo "mv META.json.orig META.json"
 echo "mv src/sql/roles.sql.orig src/sql/roles.sql"
-echo "git add src/Makefile openbarter.control META.json src/sql/roles.sql"
+echo "mv src/flowf.control.orig src/flowf.control"
+
+echo "git add src/Makefile openbarter.control META.json src/sql/roles.sql src/flowf.control"
 echo "git commit -a -m 'end for v$NEW_VERSION'"
 
