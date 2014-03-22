@@ -15,7 +15,7 @@ class DbInit(object):
     def __str__(self):
         return self.name+" "+self.login
 
-DB_NAME='test'
+DB_NAME='market'
 DB_USER='olivier'
 DB_PWD=''
 DB_HOST='localhost'

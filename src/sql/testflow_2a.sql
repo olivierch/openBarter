@@ -1,5 +1,5 @@
 drop extension if exists flowf cascade;
-create extension flowf with version '0.1';
+create extension flowf;
 	
 -- yflow ''[(type,id,oid,own,qtt_requ,qtt_prov,qtt,proba), ...]''
 

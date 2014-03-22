@@ -1,5 +1,5 @@
 drop extension if exists flowf cascade;
-create extension flowf with version '0.1';
+create extension flowf;
 
 RESET client_min_messages;
 RESET log_error_verbosity;
