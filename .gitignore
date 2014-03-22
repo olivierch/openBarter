@@ -1,6 +1,7 @@
 *.[oa]
 *.so
 *~
+.~*
 *.pyc
 src/yflowparse.c
 src/yflowscan.c
