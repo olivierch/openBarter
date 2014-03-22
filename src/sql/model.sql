@@ -5,8 +5,8 @@ drop schema if exists market cascade;
 create schema market;
 set search_path to market;
 
-DROP EXTENSION IF EXISTS flowf;
-CREATE EXTENSION flowf WITH VERSION '0.0';
+-- DROP EXTENSION IF EXISTS flowf;
+-- CREATE EXTENSION flowf WITH VERSION '0.1';
 
 
 \i sql/roles.sql

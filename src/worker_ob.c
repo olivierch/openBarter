@@ -35,7 +35,8 @@
 #include "utils/snapmgr.h"
 #include "tcop/utility.h"
 
-#define OB_DOWAIT 1
+#define BGW_OPENCLOSE 1
+#define BGW_CONSUMESTACK 2
 
 // PG_MODULE_MAGIC;
 
@@ -46,7 +47,6 @@ static volatile sig_atomic_t got_sighup = false;
 static volatile sig_atomic_t got_sigterm = false;
 
 /* GUC variable */
-//static int	worker_ob_naptime = 100;
 static char *worker_ob_database = "market";
 
 /* others */
@@ -100,10 +100,12 @@ worker_spi_sighup(SIGNAL_ARGS)
 
 
 static char* _get_worker_function_name(int index) {
-	if(index ==1) 
+	if(index == BGW_OPENCLOSE) 
 		return openclose;
-	else
+	else if(index == BGW_CONSUMESTACK)
 		return consumestack;
+	else
+		elog(FATAL, "bg_worker index unknown");
 }
 
 /*
@@ -156,6 +158,22 @@ initialize_worker_ob(worktable *table)
 	PopActiveSnapshot();
 	CommitTransactionCommand();
 	pgstat_report_activity(STATE_IDLE, NULL);
+}
+
+static void _openclose_vacuum() {
+	/* called in openclose bg_worker */
+	StringInfoData 	buf;
+	int				ret;
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf,"VACUUM FULL");
+
+	ret = SPI_execute(buf.data, false, 0);
+
+	if (ret != SPI_OK_UTILITY) // SPI_OK_UPDATE_RETURNING,SPI_OK_SELECT
+	// TODO CODE DE RETOUR?????
+		elog(FATAL, "cannot execute VACUUM FULL: error code %d",ret);
+	return;
 }
 
 
@@ -280,12 +298,19 @@ worker_ob_main(Datum main_arg)
 			val = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[0],
 											  SPI_tuptable->tupdesc,
 											  1, &isnull));
+			table->dowait = 0;
 			if (!isnull) {
 				//elog(LOG, "%s: execution of %s.%s() returned %d",
 				//	 MyBgworkerEntry->bgw_name,
 				//	 table->schema, table->function_name, val);
-
-				table->dowait = val; //((val & OB_DOWAIT) == OB_DOWAIT);
+				if (val >=0)
+					table->dowait = val;
+				else {
+					// 
+					if((val == -100) && (index == BGW_OPENCLOSE))
+						_openclose_vacuum();
+				
+				} 
 			}
 		}
 

@@ -12,11 +12,18 @@ SELECT _grant_read('tmsgdaysbefore');
 --------------------------------------------------------------------------------
 CREATE FUNCTION openclose() RETURNS int AS $$
 /*
- * This code is executed by the bg_orker doing following:
+ * This code is executed by the bg_worker 1 doing following:
  	while(true)
- 		status := market.worker1()
- 		if (status):
- 			wait(status milliseconds)
+ 		status := market.openclose()
+ 		if (status >=0):
+ 			do_wait := status
+ 		elif status == -100:
+ 			VACUUM FULL
+ 			do_wait := 0
+
+ 		wait(do_wait) milliseconds
+
+
 */
 DECLARE
 	_phase 		int;
@@ -31,7 +38,8 @@ BEGIN
 	_phase := fgetvar('OC_CURRENT_PHASE');
     CASE _phase
 
-    	/* PHASE 0XX */
+    	/* PHASE 0XX BEGIN OF THE DAY
+    	*/
     	WHEN 0 THEN
     		/* creates the timetable */ 
     		PERFORM foc_create_timesum();
@@ -52,16 +60,27 @@ BEGIN
     			PERFORM foc_next(101,'Start opening sequence');
     		END IF;
 
-		/* PHASE 1XX */
+		/* PHASE 1XX -- MARKET OPENED
+		*/
     	WHEN 101 THEN 
-
 			/* open client access  */
+
 		    REVOKE role_co_closed FROM role_client;
 		    GRANT role_co TO role_client;
 
 		    PERFORM foc_next(102,'Client access opened');
 
     	WHEN 102 THEN
+    		/* market is opened to client access:
+    		While in phase,
+    			OC_CURRENT_OPENED <- OC_CURRENT_OPENED % 5
+    			if 0:
+    				delete outdated order and sub-orders from the book
+    				do_wait = 1 minute
+    		else,
+    			phase <- 120
+    		*/
+
     		IF(foc_in_phase(_phase)) THEN
      			UPDATE tvar SET value=((value+1)/5) WHERE name='OC_CURRENT_OPENED' 
      				RETURNING value INTO _cnt ;
@@ -81,14 +100,17 @@ BEGIN
     		END IF;
 
     	WHEN 120 THEN 
+    		/* market closing
 
-    		/* revoke client access */
+    		revoke client access 
+    		*/
 		    REVOKE role_co FROM role_client;
 		    GRANT role_co_closed TO role_client;
 
 		    PERFORM foc_next(121,'Client access revoked');
 
     	WHEN 121 THEN 
+    		/* wait until the stack is compleatly consumed */
 
 		    -- waiting worker2 stack purge
 		    _done := fstackdone();
@@ -101,22 +123,23 @@ BEGIN
 		    	PERFORM foc_next(200,'Last primitives performed');
 		    END IF;
 
-    	/* PHASE 2XX */
+    	/* PHASE 2XX MARKET CLOSED */
     	WHEN 200 THEN 
-
     		/* remove orders of the order book */
+
 			SELECT (o.ord).id,w.name INTO _stock_id,_owner FROM torder o 
 				INNER JOIN town w ON w.id=(o.ord).own
 				WHERE (o.ord).oid = (o.ord).id LIMIT 1;
 
 			IF(FOUND) THEN
 				_rp := fsubmitrmorder(_owner,_stock_id);
-				-- and repeate again
+				-- repeate again until order_book is empty
 			ELSE
 				PERFORM foc_next(201,'Order book is emptied');
 			END IF;
 
     	WHEN 201 THEN 
+    		/* wait until stack is empty */
 
 		    -- waiting worker2 stack purge
 		    _done := fstackdone();
@@ -130,8 +153,8 @@ BEGIN
 		    END IF;
 
     	WHEN 202 THEN 
-
 		    /* tables truncated except tmsg */
+
 			truncate torder;
 			truncate tstack;
 			PERFORM setval('tstack_id_seq',1,false);
@@ -145,10 +168,12 @@ BEGIN
 
     	WHEN 203 THEN 
 
-			VACUUM FULL;
-			PERFORM foc_next(204,'VACUUM FULL is performed');
+			_dowait := -100; -- VACUUM FULL; executed by pg_worker 1 openclose
+			PERFORM foc_next(204,'VACUUM FULL is lauched');
 
     	WHEN 204 THEN
+    		/* wait till the end of the day */
+
     		IF(foc_in_phase(_phase)) THEN
     			_dowait := 60000; -- 1 minute
     			-- wait and test again
@@ -158,7 +183,7 @@ BEGIN
     	ELSE
     		RAISE EXCEPTION 'Should not reach this point';
     END CASE;
-	RETURN _dowait; -- DOWAIT or not
+	RETURN _dowait; -- DOWAIT or VACUUM FULL
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER  set search_path = market,public;
 GRANT EXECUTE ON FUNCTION  openclose() TO role_bo;
@@ -167,9 +192,9 @@ GRANT EXECUTE ON FUNCTION  openclose() TO role_bo;
 CREATE FUNCTION foc_next(_phase int,_msg text) RETURNS void AS $$
 BEGIN
 	PERFORM fsetvar('OC_CURRENT_PHASE',_phase);
-	RAISE LOG 'MARKET PHASE % STARTING: %',_phase,_msg;
+	RAISE LOG 'MARKET PHASE %: %',_phase,_msg;
 END;
-$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+$$ LANGUAGE PLPGSQL SECURITY DEFINER  set search_path = market,public;
 GRANT EXECUTE ON FUNCTION  foc_next(int,text) TO role_bo;
 
 --------------------------------------------------------------------------------

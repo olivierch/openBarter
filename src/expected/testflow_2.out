@@ -1,7 +1,5 @@
---drop extension if exists hstore cascade;
---create extension hstore;
 drop extension if exists flowf cascade;
-create extension flowf with version '1.1';
+create extension flowf with version '0.1';
 -- order limit
 SELECT yflow_show('[(1,1,1,1,10,20,20,7.00),(1,2,2,1,10,20,20,7.00)]'::yflow); -- omega >1
                                       yflow_show                                       
