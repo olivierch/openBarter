@@ -11,8 +11,11 @@ pour modifier la conf, modifier l'import
 
 """
 
-def generate(conf):
-
+def generate(config):
+    ''' dépend de cliquid et conf
+    produit trois fichiers
+    '''
+    conf = config()
     # towner
     fn = os.path.join(cliquid.PATH_DATA,'towner.sql')
     with open(fn,'w') as f:

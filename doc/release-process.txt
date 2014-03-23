@@ -2,16 +2,44 @@
 
 On suppose ici qu'on pas d'une version 0.1.1 à une version 0.1.3
 
-modifier VERSION-X,VERSION-Y,VERSION-Z à 0.1.3 dans src/sql/tables.sql
-s'assurer que les tests sont corrects sur git
+1) modifier VERSION-X,VERSION-Y,VERSION-Z à 0.1.3 dans src/sql/tables.sql
+	faire le dernier commit
 
+2) s'assurer que les tests sont corrects sur git
+	make test
+	make clean
+
+3)
 	# cd openbarter
 	# ./doc/release-script 0.1.1 > ~/.bash/do-release_0.1.3
 	# chmod u+x ~/.bash/do-release_0.1.3
 	# do-release_0.1.3
-	# 
-	#
-	#	chargement sur pgxn
-	#	https://manager.pgxn.org/upload
-	#	(olivierch,...)
-	#       upload the file ../release/openbarter-0.1.3
+	# cd ../release/openbarter-0.1.3
+	# tar -xvzf openbarter-0.1.3.tar.gz
+	# cd openbarter-0.1.3/src
+	# make
+	# make install
+	# psql market < sql/model.sql
+	# sudo su
+	# su postgres
+	# pg_ctl restart
+	# ^D
+	# ^D
+	# make test
+	# git push --tags
+
+3-bis) si on veut revenir (de deux commmits)
+	cd openBarter
+	git reset --hard HEAD~2
+	git tag -d v0.1.3
+	rm -i `pg_config --sharedir`/extension/flowf*
+	rm -i `pg_config --libdir`postgresql/flowf.so (pas utile)
+	rm ../release/openbarter-0.1.3
+
+4)	chargement sur pgxn
+	https://manager.pgxn.org/upload
+	(olivierch,...)
+	télécharger le fichier ../release/openbarter-0.1.3
+
+pour avoir la version de postgre
+pg_config --version

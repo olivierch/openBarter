@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-Framework de tests tu_*
+Framework de tests quote_*
 ***************************************************************************
 
 execution:
@@ -13,7 +13,7 @@ résultats:
 comparaison attendu/obtenu
 
 dans src/test/
-    run.py
+    quote.py
     reset_market.sql
     sql/t_*.sql
     expected/t_*.res
@@ -62,7 +62,7 @@ def tests():
         _fts.sort(lambda x,y: cmp(x,y))
     else:
         _nt = options.test + '.sql'
-        _fts = os.path.join(sqldir,_nt)
+        _fts = os.path.join(curdir,_nt)
         if not os.path.exists(_fts):
             print 'This test \'%s\' was not found' % _fts
             return
@@ -71,7 +71,7 @@ def tests():
 
     _tok,_terr,_num_test = 0,0,0
 
-    prtest.title('running regression tests on %s' % (srvob_conf.DB_NAME,))
+    prtest.title('running regesssion tests on %s' % (srvob_conf.DB_NAME,))
     #print '='*PARLEN
     
     
@@ -132,8 +132,7 @@ SEPARATOR = '\n'+'-'*PARLEN +'\n'
 
 def exec_script(cur,fn,fdr):
     global titre_test
-
-    fn = os.path.join('sql',fn)
+   
     if( not os.path.exists(fn)):
         raise ValueError('The script %s is not found' % fn)
 

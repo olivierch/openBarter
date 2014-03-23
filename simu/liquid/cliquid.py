@@ -1,6 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf8 -*-
 import distrib
+import os.path
 
 DB_NAME='liquid'
 DB_USER='olivier'
@@ -8,8 +9,11 @@ DB_PWD=''
 DB_HOST='localhost'
 DB_PORT=5432
 
-PATH_SRC="/home/olivier/Bureau/ob92/src"
-PATH_DATA="/home/olivier/Bureau/ob92/simu/liquid/data"
+PATH_ICI = os.path.dirname(os.path.abspath(__file__))
+# PATH_SRC="/home/olivier/Bureau/ob92/src"
+PATH_SRC= os.path.join(os.path.dirname(PATH_ICI),'src')
+# PATH_DATA="/home/olivier/Bureau/ob92/simu/liquid/data"
+PATH_DATA=os.path.join(PATH_ICI,'data')
 
 MAX_TOWNER=10000 # maximum number of owners in towner
 MAX_TORDER=1000000 # maximum size of the order book

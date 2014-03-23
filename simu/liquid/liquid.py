@@ -19,16 +19,16 @@ détail:
 
 1) créer towner.sql avec 10000 owner
 2) pour chaque config, 
-    un fichier config_orderbook.sql contenant torder
-    un fichier config_stack.sql contenant tstack
+	un fichier config_orderbook.sql contenant torder
+	un fichier config_stack.sql contenant tstack
 3) liquid.py
-    pour chaque volume
-        charger une partie de config_orderbook.sql
-        charger config_stack.sql
-        vider le stack
-        calculer la liquidité
-    enregister les res
-    
+	pour chaque volume
+		charger une partie de config_orderbook.sql
+		charger config_stack.sql
+		vider le stack
+		calculer la liquidité
+	enregister les res
+	
 les configs sont dans des liquid_conf.py (import liquid_conf as conf)
 les *.sql sont dans cliquid.PATH_DATA
 
@@ -46,27 +46,33 @@ import logging
 import scenarii
 
 logging.basicConfig(level=logging.DEBUG,
-                    format='(%(threadName)-10s) %(message)s',
-                    )
+					format='(%(threadName)-10s) %(message)s',
+					)
 
 """
 import cliquid
 import gen
 def simu(options):
-    if(options.generate):
-        gen.generate()
-        return
-    if(options.test):
-        gen.perftests()
+	if(options.generate):
+		try:
+			conf = getattr(cliquid,options.generate)
+			gen.generate(conf)
+		except ImportError,e:
+			print "this configuration is not defined"
+		return
+	if(options.test):
+		gen.perftests()
+		return
+	print 'give an option'
 	return
 
 from optparse import OptionParser
 def main():
 	usage = """usage: %prog [options]
-	            to change config, modify the import in gen.py"""
+				to change config, modify the import in gen.py"""
 	parser = OptionParser(usage)
 
-	parser.add_option("-g", "--generate",action="store_true", dest="generate",help="generate files",default=False)
+	parser.add_option("-g", "--generate",type="string",action="store",dest="generate",help="the scenario choosen",default=None)
 	parser.add_option("-t", "--test",action="store_true", dest="test",help="make the test",default=False)
 
 	(options, args) = parser.parse_args()

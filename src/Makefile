@@ -7,7 +7,7 @@ DATA = flowf--0.1.sql flowf--unpackaged--0.1.sql
 
 REGRESS = testflow_1 testflow_2 testflow_2a  
 
-EXTRA_CLEAN = yflowparse.c yflowscan.c test/results/*.res test/py/*.pyc ../doc/*.pdf 
+EXTRA_CLEAN = yflowparse.c yflowscan.c test/results/*.res test/py/*.pyc ../doc/*.pdf ../simu/liquid/data/*
 
 PGXS := $(shell pg_config --pgxs)
 include $(PGXS)
@@ -29,7 +29,7 @@ else
 	@$(missing) flex $< $@
 endif
 
-test: installcheck test/py/run.py test/*.sql
+test: installcheck test/py/*.py test/sql/*.sql
 	cd test; python py/run.py; cd ..
 
 doc: 

@@ -8,4 +8,5 @@ src/yflowscan.c
 src/results/
 src/test/results/
 doc/*.pdf
+simu/data/
 
