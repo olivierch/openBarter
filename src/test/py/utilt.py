@@ -43,31 +43,38 @@ import json
 
 class Dumper(object):
 
-    def __init__(self,conf,options):
+    def __init__(self,conf,options,fdr):
         self.options =options
         self.conf = conf
+        self.fdr = fdr
 
-    def torder(self,cur,fdr):
-        fdr.write(SEPARATOR)
-        fdr.write('table: torder\n')
+    def torder(self,cur):
+        self.write(SEPARATOR)
+        self.write('table: torder\n')
         cur.execute('SELECT * FROM market.vord order by id asc')
-        self.cur(cur,fdr)
+        self.cur(cur)
         return
 
-    def cur(self,cur,fdr,_len=10):
-        if(cur is None): return
+    def write(self,txt):
+        if self.fdr:
+            self.fdr.write(txt)
+
+    def cur(self,cur,_len=10):
+        #print cur.description
+        if(cur.description is None): return
+        #print type(cur)
         cols = [e.name for e in cur.description]
         row_format = ('{:>'+str(_len)+'}')*len(cols)
-        fdr.write(row_format.format(*cols)+'\n')
-        fdr.write(row_format.format(*(['+'+'-'*(_len-1)]*len(cols)))+'\n')
+        self.write(row_format.format(*cols)+'\n')
+        self.write(row_format.format(*(['+'+'-'*(_len-1)]*len(cols)))+'\n')
         for res in cur:
-            fdr.write(row_format.format(*res)+'\n')
+            self.write(row_format.format(*res)+'\n')
         return
 
-    def tmsg(self,cur,fdr):
-        fdr.write(SEPARATOR)
-        fdr.write('table: tmsg')
-        fdr.write(SEPARATOR)
+    def tmsg(self,cur):
+        self.write(SEPARATOR)
+        self.write('table: tmsg')
+        self.write(SEPARATOR)
         
         cur.execute('SELECT id,typ,usr,jso FROM market.tmsg  order by id asc')
         for res in cur:
@@ -94,7 +101,7 @@ class Dumper(object):
             else:
                 _msg = str(res)
 
-            fdr.write('\t%i:'%_id+_msg+'\n') 
+            self.write('\t%i:'%_id+_msg+'\n') 
             if self.options.verbose:
                 print jso
         return

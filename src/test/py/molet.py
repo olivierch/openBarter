@@ -193,9 +193,8 @@ class DbData(object):
             self.exception(e,msg="Attempt to rollback while the connection were closed")
 
     def exception(self,e,msg = None):
-        if self.logger is None:
-            raise e
         if msg:
+            print e
             raise MoletException(msg)
         else:
             raise e

@@ -14,7 +14,7 @@ comparaison attendu/obtenu
 
 dans src/test/
     run.py
-    reset_market.sql
+    sql/reset_market.sql
     sql/t_*.sql
     expected/t_*.res
     obtained/t_*.res
@@ -38,9 +38,9 @@ PARLEN=80
 prtest = utilt.PrTest(PARLEN,'=')
 
 titre_test = "UNDEFINED"
-options = None
+#options = None
 
-def tests():
+def tests(options):
     global titre_test    
     
     curdir = os.path.abspath(__file__)
@@ -90,18 +90,18 @@ def tests():
         with open(_fte,'w') as f:        
             cur = None
 
-            exec_script(cur,'reset_market.sql',None)
-            exec_script(cur,file_test,f)
+            dump = utilt.Dumper(srvob_conf.dbBO,options,None)
+            exec_script(dump,'reset_market.sql')
+            dump = utilt.Dumper(srvob_conf.dbBO,options,f)
+            exec_script(dump,file_test)
 
             utilt.wait_for_true(srvob_conf.dbBO,20,"SELECT market.fstackdone()")
-
-            dump = utilt.Dumper(srvob_conf.dbBO,options)
 
             conn = molet.DbData(srvob_conf.dbBO)
             try:
                 with molet.DbCursor(conn) as cur:
-                    dump.torder(cur,f)
-                    dump.tmsg(cur,f)
+                    dump.torder(cur)
+                    dump.tmsg(cur)
 
             finally:
                 conn.close()
@@ -127,12 +127,7 @@ def tests():
         prtest.center('\t%i tests KO, %i passed' % (_terr,_tok))
     prtest.line() 
 
-def get_prefix_file(fm):
-    return '.'.join(fm.split('.')[:-1])
-
-SEPARATOR = '\n'+'-'*PARLEN +'\n' 
-
-def exec_script(cur,fn,fdr):
+def exec_script(dump,fn):
     global titre_test
 
     fn = os.path.join('sql',fn)
@@ -148,32 +143,27 @@ def exec_script(cur,fn,fdr):
             if len(line) == 0:
                 continue
 
+            dump.write(line+'\n')
             if line.startswith('--'):
                 if titre_test is None:
                     titre_test = line
                 elif line.startswith('--USER:'):
                     cur_login = line[7:].strip()
-                if fdr:
-                    fdr.write(line+'\n')
+                
             else:
-
-                if fdr:
-                    fdr.write(line+'\n')
-                execinst(cur_login,line,fdr,cur)
+                execinst(dump,cur_login,line)
     return 
 
-def execinst(cur_login,sql,fdr,cursor):
-    global options
+def execinst(dump,cur_login,sql):
 
     if cur_login == 'admin':
         cur_login = None
     conn = molet.DbData(srvob_conf.dbBO,login = cur_login)
-    dump = utilt.Dumper(srvob_conf.dbBO,options)
     try:
         with molet.DbCursor(conn,exit = True) as _cur:
+            # print sql
             _cur.execute(sql)
-            if fdr:
-                dump.cur(_cur,fdr)
+            dump.cur(_cur)
     finally:
         conn.close()
 '''
@@ -192,7 +182,7 @@ from optparse import OptionParser
 import os
            
 def main():
-    global options
+    #global options
 
     usage = """usage: %prog [options]
                 tests  """ 
@@ -205,7 +195,7 @@ def main():
 
     # um = os.umask(0177) # u=rw,g=,o=
 
-    tests()           
+    tests(options)           
 
 
 if __name__ == "__main__":
