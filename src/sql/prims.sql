@@ -440,7 +440,7 @@ BEGIN
 	        		_t.id,_wid,_t.id,
 	        		_s.qtt_requ,_s.qua_requ,_s.qtt_prov,_s.qua_prov,_s.qtt_prov,
 	                    box('(0,0)'::point,'(0,0)'::point),box('(0,0)'::point,'(0,0)'::point),
-	                    _s.dist,earth_get_square(box('(0,0)'::point,0.0))
+	                    0.0,earth_get_square(box('(0,0)'::point,0.0))
 	             )::yorder;
 
 /*fproducequote(_ord yorder,_isquote boolean,_isnoqttlimit boolean,_islimit boolean,_isignoreomega boolean) 
