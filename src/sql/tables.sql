@@ -47,6 +47,7 @@ create table tvar(
 	PRIMARY KEY (name)
 );
 INSERT INTO tvar (name,value) VALUES ('INSTALLED',0);
+GRANT SELECT ON tvar TO role_com;
 
 --------------------------------------------------------------------------------
 -- TOWNER

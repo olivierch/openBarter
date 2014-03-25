@@ -128,7 +128,7 @@ static bool _test_market_installed() {
 	if(ret == 0)
 		return false;
 
-	resetStringInfo(&buf);
+	initStringInfo(&buf);
 	appendStringInfo(&buf, "select value from market.tvar where name = 'INSTALLED'");	
 	ret = _spi_exec_select_ret_int(buf);
 	if(ret == 0)
