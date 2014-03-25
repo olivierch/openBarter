@@ -15,14 +15,19 @@ BEGIN
     	_r.code := -1;
 	    RETURN _r;
     END IF;
+
     IF(_qua_prov IS NULL) THEN
-	    --IF (NOT yflow_quacheck(_qua_requ,1)) THEN
 	    IF(NOT ((yflow_checktxt(_qua_requ)&1)=1)) THEN
 	    	_r.reason := '_qua_requ is empty string';
 	    	_r.code := -2;
 	    	RETURN _r;
 	    END IF;
     ELSE
+	    IF(_qua_prov = _qua_requ) THEN
+	        	_r.reason := 'qua_prov == qua_requ';
+	        	_r.code := -3; 
+	            return _r;
+	    END IF;
         _i = yflow_checkquaownpos(_own,_qua_requ,_pos_requ,_qua_prov,_pos_prov,_dist);
         IF (_i != 0) THEN 
         	_r.reason := 'rejected by yflow_checkquaownpos';
@@ -30,6 +35,7 @@ BEGIN
             return _r;
         END IF;
     END IF;
+
     
     RETURN _r;
 END; 
@@ -431,7 +437,7 @@ BEGIN
 			_wid := fgetowner(_s.owner);
 			_type := CASE WHEN _s.type='limit' THEN 1 ELSE 2 END;
 	        _o := ROW( _type,
-	        		_s.id,_wid,_s.id,
+	        		_t.id,_wid,_t.id,
 	        		_s.qtt_requ,_s.qua_requ,_s.qtt_prov,_s.qua_prov,_s.qtt_prov,
 	                    box('(0,0)'::point,'(0,0)'::point),box('(0,0)'::point,'(0,0)'::point),
 	                    _s.dist,earth_get_square(box('(0,0)'::point,0.0))

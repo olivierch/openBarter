@@ -25,11 +25,6 @@ create view vord as (SELECT
 	(ord).id,
 	(ord).oid,
                 own,
-
-                
-                
-                
-                
                 (ord).qtt_requ,
                 (ord).qua_requ,
                 CASE WHEN (ord).type=1 THEN 'limit' ELSE 'best' END typ,
@@ -42,6 +37,7 @@ create view vord as (SELECT
                 -- duration 
         FROM market.torder order by (ord).id asc);
 
+select fsetvar('INSTALLED',1);
 select * from fversion();
 \echo model installed.
 

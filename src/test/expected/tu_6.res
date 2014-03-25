@@ -5,6 +5,7 @@
 select  * from market.tvar order by name;
       name     value
 +---------+---------
+ INSTALLED         1
 OC_CURRENT_OPENED         0
 OC_CURRENT_PHASE       102
 STACK_EXECUTED         0

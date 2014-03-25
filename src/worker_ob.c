@@ -35,8 +35,9 @@
 #include "utils/snapmgr.h"
 #include "tcop/utility.h"
 
-#define BGW_OPENCLOSE 1
-#define BGW_CONSUMESTACK 2
+#define BGW_NBWORKERS 2
+#define BGW_OPENCLOSE 0
+static char *worker_names[] = {"openclose","consumestack"};
 
 // PG_MODULE_MAGIC;
 
@@ -50,18 +51,15 @@ static volatile sig_atomic_t got_sigterm = false;
 static char *worker_ob_database = "market";
 
 /* others */
-static char	*openclose = "openclose",
-			*consumestack = "consumestack";
+
 static char *worker_ob_user = "user_bo";
 
 
 
 typedef struct worktable
 {
-	const char *schema;
 	const char *function_name;
-	bool installed;
-	int dowait;
+	int 		dowait;
 } worktable;
 
 /*
@@ -98,77 +96,84 @@ worker_spi_sighup(SIGNAL_ARGS)
 	errno = save_errno;
 }
 
-
-static char* _get_worker_function_name(int index) {
-	if(index == BGW_OPENCLOSE) 
-		return openclose;
-	else if(index == BGW_CONSUMESTACK)
-		return consumestack;
-	else
-		elog(FATAL, "bg_worker index unknown");
-}
-
-/*
- * Initialize workspace for a worker process: create the schema if it doesn't
- * already exist.
- */
-static void
-initialize_worker_ob(worktable *table)
-{
+static int _spi_exec_select_ret_int(StringInfoData buf) {
 	int			ret;
 	int			ntup;
 	bool		isnull;
-	StringInfoData buf;
+
+	ret = SPI_execute(buf.data, true, 1); // read_only -- one row returned
+	pfree(buf.data);
+	if (ret != SPI_OK_SELECT)
+		elog(FATAL, "SPI_execute failed: error code %d", ret);
+
+
+	if (SPI_processed != 1)
+		elog(FATAL, "not a singleton result");
+
+	ntup = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[0],
+									   SPI_tuptable->tupdesc,
+									   1, &isnull));
+	if (isnull)
+		elog(FATAL, "null result");	
+	return ntup;
+}
+
+static bool _test_market_installed() {
+	int			ret;
+	StringInfoData buf;	
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "select count(*) from pg_namespace where nspname = 'market'");
+	ret = _spi_exec_select_ret_int(buf);
+	if(ret == 0)
+		return false;
+
+	resetStringInfo(&buf);
+	appendStringInfo(&buf, "select value from market.tvar where name = 'INSTALLED'");	
+	ret = _spi_exec_select_ret_int(buf);
+	if(ret == 0)
+		return false;
+	return true;
+}
+
+/*
+ */
+static bool
+_worker_ob_installed()
+{
+	bool		installed;
 
 	SetCurrentStatementStartTimestamp();
 	StartTransactionCommand();
 	SPI_connect();
 	PushActiveSnapshot(GetTransactionSnapshot());
-	pgstat_report_activity(STATE_RUNNING, "initializing spi_worker schema");
+	pgstat_report_activity(STATE_RUNNING, "initializing spi_worker");
 
-	/* XXX could we use CREATE SCHEMA IF NOT EXISTS? */
-	initStringInfo(&buf);
-	appendStringInfo(&buf, "select count(*) from pg_namespace where nspname = '%s'",
-					 table->schema);
+	installed = _test_market_installed();
 
-	ret = SPI_execute(buf.data, true, 0);
-	if (ret != SPI_OK_SELECT)
-		elog(FATAL, "SPI_execute failed: error code %d", ret);
-
-	if (SPI_processed != 1)
-		elog(FATAL, "not a singleton result");
-
-	ntup = DatumGetInt64(SPI_getbinval(SPI_tuptable->vals[0],
-									   SPI_tuptable->tupdesc,
-									   1, &isnull));
-	if (isnull)
-		elog(FATAL, "null result");
-
-	if (ntup != 0) {
-		table->installed = true;
-		elog(LOG, "%s function %s.%s installed",
-		 MyBgworkerEntry->bgw_name, table->schema, table->function_name);
-	} else {
-		table->installed = false;
-		elog(LOG, "%s function %s.%s not installed",
-		 MyBgworkerEntry->bgw_name, table->schema, table->function_name);
-	}
+	if (installed) 
+		elog(LOG, "%s starting",MyBgworkerEntry->bgw_name);
+	else 
+		elog(LOG, "%s waiting for installation",MyBgworkerEntry->bgw_name);
 
 	SPI_finish();
 	PopActiveSnapshot();
 	CommitTransactionCommand();
 	pgstat_report_activity(STATE_IDLE, NULL);
+	return installed;
 }
 
 static void _openclose_vacuum() {
-	/* called in openclose bg_worker */
+	/* called by openclose bg_worker */
 	StringInfoData 	buf;
 	int				ret;
 
 	initStringInfo(&buf);
 	appendStringInfo(&buf,"VACUUM FULL");
+	pgstat_report_activity(STATE_RUNNING, buf.data);
 
 	ret = SPI_execute(buf.data, false, 0);
+	pfree(buf.data);
 
 	if (ret != SPI_OK_UTILITY) // SPI_OK_UPDATE_RETURNING,SPI_OK_SELECT
 	// TODO CODE DE RETOUR?????
@@ -183,12 +188,13 @@ worker_ob_main(Datum main_arg)
 	int			index = DatumGetInt32(main_arg);
 	worktable  *table;
 	StringInfoData buf;
+	bool 		installed;
 	//char		function_name[20];	
 
-	table = palloc(sizeof(worktable));
-	table->schema = pstrdup("market"); 
-	//sprintf(function_name, "worker%d", index);
-	table->function_name = pstrdup(_get_worker_function_name(index));
+	table = palloc(sizeof(worktable)); 
+
+	table->function_name = pstrdup(worker_names[index]);
+	table->dowait = 0;
 
 	/* Establish signal handlers before unblocking signals. */
 	pqsignal(SIGHUP, worker_spi_sighup);
@@ -203,23 +209,11 @@ worker_ob_main(Datum main_arg)
 	
 	BackgroundWorkerInitializeConnection(worker_ob_database, worker_ob_user);
 
-
-
-	initialize_worker_ob(table);
-
-	/*
-	 * Quote identifiers passed to us.	Note that this must be done after
-	 * initialize_worker_ob, because that routine assumes the names are not
-	 * quoted.
-	 *
-	 * Note some memory might be leaked here.
-	 */
-	table->schema = quote_identifier(table->schema);
-	table->function_name = quote_identifier(table->function_name);
+	installed = _worker_ob_installed();
 
 	initStringInfo(&buf);
-	appendStringInfo(&buf,"SELECT %s FROM %s.%s()",
-					 table->function_name, table->schema, table->function_name);
+	appendStringInfo(&buf,"SELECT %s FROM market.%s()",
+					 table->function_name, table->function_name);
 
 	/*
 	 * Main loop: do this until the SIGTERM handler tells us to terminate
@@ -230,7 +224,7 @@ worker_ob_main(Datum main_arg)
 		int			rc;
 		int 		_worker_ob_naptime; // = worker_ob_naptime * 1000L;
 
-		if(table->installed) // && !table->dowait)
+		if(installed) // && !table->dowait)
 			_worker_ob_naptime = table->dowait;
 		else
 			_worker_ob_naptime = 1000L; // 1 second		
@@ -240,11 +234,13 @@ worker_ob_main(Datum main_arg)
 		 * necessary, but is awakened if postmaster dies.  That way the
 		 * background process goes away immediately in an emergency.
 		 */
+		 /* done even if _worker_ob_naptime == 0 */
 		rc = WaitLatch(&MyProc->procLatch,
 					   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
 					   _worker_ob_naptime );
 
 		ResetLatch(&MyProc->procLatch);
+
 
 		/* emergency bailout if postmaster has died */
 		if (rc & WL_POSTMASTER_DEATH)
@@ -257,9 +253,9 @@ worker_ob_main(Datum main_arg)
 		{
 			got_sighup = false;
 			ProcessConfigFile(PGC_SIGHUP);
-			initialize_worker_ob(table);
+			installed = _worker_ob_installed();
 		}
-		if(  !table->installed) continue;
+		if(  !installed) continue;
 
 		/*
 		 * Start a transaction on which we can run queries.  Note that each
@@ -287,10 +283,12 @@ worker_ob_main(Datum main_arg)
 		ret = SPI_execute(buf.data, false, 0);
 
 		if (ret != SPI_OK_SELECT) // SPI_OK_UPDATE_RETURNING)
-			elog(FATAL, "cannot execute %s.%s(): error code %d",
-				 table->schema, table->function_name, ret);
+			elog(FATAL, "cannot execute market.%s(): error code %d",
+				 table->function_name, ret);
 
-		if (SPI_processed > 0)
+		if (SPI_processed != 1) // number of tuple returned
+				elog(FATAL, "market.%s() returned %d tuples instead of one",
+				 table->function_name, SPI_processed);
 		{
 			bool		isnull;
 			int32		val;
@@ -300,9 +298,6 @@ worker_ob_main(Datum main_arg)
 											  1, &isnull));
 			table->dowait = 0;
 			if (!isnull) {
-				//elog(LOG, "%s: execution of %s.%s() returned %d",
-				//	 MyBgworkerEntry->bgw_name,
-				//	 table->schema, table->function_name, val);
 				if (val >=0)
 					table->dowait = val;
 				else {
@@ -372,9 +367,9 @@ _PG_init(void)
 	/*
 	 * Now fill in worker-specific data, and do the actual registrations.
 	 */
-	for (i = 1; i <= 2; i++)
+	for (i = 0; i < BGW_NBWORKERS; i++)
 	{
-		snprintf(worker.bgw_name, BGW_MAXLEN, "market.%s", _get_worker_function_name(i));
+		snprintf(worker.bgw_name, BGW_MAXLEN, "market.%s", worker_names[i]);
 		worker.bgw_main_arg = Int32GetDatum(i);
 
 		RegisterBackgroundWorker(&worker);

@@ -128,7 +128,7 @@ BEGIN
     		/* remove orders of the order book */
 
 			SELECT (o.ord).id,w.name INTO _stock_id,_owner FROM torder o 
-				INNER JOIN town w ON w.id=(o.ord).own
+				INNER JOIN towner w ON w.id=(o.ord).own
 				WHERE (o.ord).oid = (o.ord).id LIMIT 1;
 
 			IF(FOUND) THEN
@@ -180,6 +180,7 @@ BEGIN
     		ELSE
     			PERFORM foc_next(0,'End of the day');
     		END IF;
+
     	ELSE
     		RAISE EXCEPTION 'Should not reach this point';
     END CASE;

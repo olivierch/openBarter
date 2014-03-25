@@ -34,6 +34,10 @@ DECLARE
 BEGIN
 	/* the statement LIMIT would not avoid deep exploration if the condition
 	was specified  on Z in the search_backward WHERE condition */
+	-- fails when qua_prov == qua_requ 
+	IF((_ord).qua_prov = (_ord).qua_requ) THEN
+		RAISE EXCEPTION 'quality provided and required are the same: %',_ord;
+	END IF;
 	CREATE TEMPORARY TABLE _tmp ON COMMIT DROP AS (
 		SELECT yflow_finish(Z.debut,Z.path,Z.fin) as cycle FROM (
 			WITH RECURSIVE search_backward(debut,path,fin,depth,cycle) AS(

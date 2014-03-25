@@ -1,7 +1,6 @@
 #!/usr/bin/python
 # -*- coding: utf8 -*-
 import random
-import cliquid
 
 def init():
     random.seed()

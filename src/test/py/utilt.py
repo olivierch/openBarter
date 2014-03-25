@@ -1,6 +1,8 @@
 # -*- coding: utf-8 -*-
 import string
-
+import os.path
+'''---------------------------------------------------------------------------
+---------------------------------------------------------------------------'''
 class PrTest(object):
     ''' results printing '''
     def __init__(self,parlen,sep):
@@ -22,8 +24,9 @@ class PrTest(object):
     def center(self,text):
         print string.center(text,self.parlen)
 
-############################################################################
-''' file comparison '''
+'''---------------------------------------------------------------------------
+    file comparison
+---------------------------------------------------------------------------'''
 import filecmp
 def files_clones(f1,f2):
     #res = filecmp.cmp(f1,f2)
@@ -37,7 +40,8 @@ def md5sum(filename, blocksize=65536):
             hash.update(block)
     return hash.hexdigest()
 
-############################################################################
+'''---------------------------------------------------------------------------
+---------------------------------------------------------------------------'''
 SEPARATOR = '\n'+'-'*80 +'\n'
 import json
 
@@ -48,11 +52,21 @@ class Dumper(object):
         self.conf = conf
         self.fdr = fdr
 
+    def getConf(self):
+        return self.conf
+
     def torder(self,cur):
         self.write(SEPARATOR)
         self.write('table: torder\n')
         cur.execute('SELECT * FROM market.vord order by id asc')
         self.cur(cur)
+        '''
+        yorder not shown:
+            pos_requ box, -- box (point(lat,lon),point(lat,lon))
+            pos_prov box, -- box (point(lat,lon),point(lat,lon))
+            dist    float8,
+            carre_prov box -- carre_prov @> pos_requ 
+        '''
         return
 
     def write(self,txt):
@@ -106,7 +120,9 @@ class Dumper(object):
                 print jso
         return
 
-############################################################################
+'''---------------------------------------------------------------------------
+wait until a command returns true with timeout
+---------------------------------------------------------------------------'''
 import molet
 import time
 def wait_for_true(conf,delai,sql,msg=None):
@@ -138,3 +154,83 @@ def wait_for_true(conf,delai,sql,msg=None):
         if _w > delai: # seconds
             raise ValueError('After %f seconds, %s != True' % (_w,sql))
         time.sleep(_a)
+
+'''---------------------------------------------------------------------------
+executes a script 
+---------------------------------------------------------------------------'''
+def exec_script(dump,dirsql,fn):
+
+    fn = os.path.join(dirsql,fn)
+    if( not os.path.exists(fn)):
+        raise ValueError('The script %s is not found' % fn)
+
+    cur_login = None
+    titre_test = None
+
+    inst = ExecInst(dump)
+
+    with open(fn,'r') as f:        
+        for line in f:
+            line = line.strip()
+            if len(line) == 0:
+                continue
+
+            dump.write(line+'\n')
+
+            if line.startswith('--'):
+                if titre_test is None:
+                    titre_test = line
+                elif line.startswith('--USER:'):
+                    cur_login = line[7:].strip()
+                
+            else:
+                cursor = inst.exe(line,cur_login)
+                dump.cur(cursor)
+
+    inst.close()
+    return titre_test
+
+'''---------------------------------------------------------------------------
+---------------------------------------------------------------------------'''
+class ExecInst(object):
+
+    def __init__(self,dump):
+        self.login = None
+        self.conn = None
+        self.cur = None
+        self.dump = dump
+
+    def exe(self,sql,login):
+        #print login
+        if self.login != login:
+            self.close()
+
+        if self.conn is None:
+            self.login = login
+            _login = None if login == 'admin' else login
+            self.conn = molet.DbData(self.dump.getConf(),login = _login)
+            self.cur = self.conn.con.cursor()
+
+        self.cur.execute(sql)
+
+        return self.cur 
+
+    def close(self):     
+        if not(self.conn is None):
+            if not(self.cur is None):
+                self.cur.close()
+            self.conn.close()
+            self.conn = None
+
+
+def execinst(dump,cur_login,sql):
+
+    if cur_login == 'admin':
+        cur_login = None
+    conn = molet.DbData(dump.getConf(),login = cur_login)
+    try:
+        with molet.DbCursor(conn,exit = True) as _cur:
+            _cur.execute(sql)
+            dump.cur(_cur)
+    finally:
+        conn.close()

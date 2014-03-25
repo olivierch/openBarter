@@ -39,12 +39,14 @@ INSERT INTO tconst (name,value) VALUES
 							-- 1 prod
 	('DEBUG',1);
 
+
 --------------------------------------------------------------------------------
 create table tvar(
 	name dtext UNIQUE not NULL,
 	value	int,
 	PRIMARY KEY (name)
 );
+INSERT INTO tvar (name,value) VALUES ('INSTALLED',0);
 
 --------------------------------------------------------------------------------
 -- TOWNER
