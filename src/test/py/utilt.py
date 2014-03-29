@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import string
 import os.path
+import time, sys
 '''---------------------------------------------------------------------------
 ---------------------------------------------------------------------------'''
 class PrTest(object):
@@ -23,6 +24,29 @@ class PrTest(object):
 
     def center(self,text):
         print string.center(text,self.parlen)
+
+    def progress(self,progress):
+        # update_progress() : Displays or updates a console progress bar
+        ## Accepts a float between 0 and 1. Any int will be converted to a float.
+        ## A value under 0 represents a 'halt'.
+        ## A value at 1 or bigger represents 100%
+        barLength = 20 # Modify this to change the length of the progress bar
+        status = ""
+        if isinstance(progress, int):
+            progress = float(progress)
+        if not isinstance(progress, float):
+            progress = 0
+            status = "error: progress var must be float\r\n"
+        if progress < 0:
+            progress = 0
+            status = "Halt...\r\n"
+        if progress >= 1:
+            progress = 1
+            status = "Done...\r\n"
+        block = int(round(barLength*progress))
+        text = "\r\t\t\t[{0}] {1}% {2}".format( "#"*block + "-"*(barLength-block), progress*100, status)
+        sys.stdout.write(text)
+        sys.stdout.flush()
 
 '''---------------------------------------------------------------------------
     file comparison
@@ -95,10 +119,10 @@ class Dumper(object):
             _id,typ,usr,jso = res
             _jso = json.loads(jso)
             if typ == 'response':
-                if _jso['error']['code']==None:
+                if _jso['error']['code']==0:
                     _msg = 'Primitive id:%i from %s: OK\n' % (_jso['id'],usr)
                 else:
-                    _msg = 'Primitive id:%i from %s: ERROR(%i,%s)\n' % (usr,_jso['id'],
+                    _msg = 'Primitive id:%i from %s: ERROR(%i,%s)\n' % (_jso['id'],usr,
                             _jso['error']['code'],_jso['error']['reason'])
             elif typ == 'exchange':
 
@@ -137,7 +161,6 @@ def wait_for_true(conf,delai,sql,msg=None):
             with molet.DbCursor(conn) as cur:
                 cur.execute(sql)
                 r = cur.fetchone()
-                # print r
                 if r[0] == True:
                     break
         finally:
@@ -154,6 +177,30 @@ def wait_for_true(conf,delai,sql,msg=None):
         if _w > delai: # seconds
             raise ValueError('After %f seconds, %s != True' % (_w,sql))
         time.sleep(_a)
+'''---------------------------------------------------------------------------
+wait for stack empty
+---------------------------------------------------------------------------'''
+def wait_for_empty_stack(conf,prtest):
+    _i = 0;
+    _w = 0;
+    sql = "SELECT name,value FROM market.tvar WHERE name in ('STACK_TOP','STACK_EXECUTED')"
+    while True:
+        _i +=1
+        conn = molet.DbData(conf)
+        try:
+            with molet.DbCursor(conn) as cur:
+                cur.execute(sql)
+                re = {}
+                for r in cur:
+                    re[r[0]] = r[1]
+
+                prtest.progress(float(re['STACK_EXECUTED'])/float(re['STACK_TOP']))
+
+                if re['STACK_TOP'] == re['STACK_EXECUTED']:
+                    break
+        finally:
+            conn.close()
+        time.sleep(2)
 
 '''---------------------------------------------------------------------------
 executes a script 
@@ -211,6 +258,7 @@ class ExecInst(object):
             self.conn = molet.DbData(self.dump.getConf(),login = _login)
             self.cur = self.conn.con.cursor()
 
+        # print sql
         self.cur.execute(sql)
 
         return self.cur 
@@ -234,3 +282,25 @@ def execinst(dump,cur_login,sql):
             dump.cur(_cur)
     finally:
         conn.close()
+
+
+'''---------------------------------------------------------------------------
+---------------------------------------------------------------------------'''   
+from datetime import datetime
+
+class Delai(object):
+    def __init__(self):
+        self.debut = datetime.now()
+
+    def getSecs(self):
+        return self._duree(self.debut,datetime.now())
+
+    def _duree(self,begin,end):
+        """ returns a float; the number of seconds elapsed between begin and end 
+        """
+        if(not isinstance(begin,datetime)): raise ValueError('begin is not datetime object')
+        if(not isinstance(end,datetime)): raise ValueError('end is not datetime object')
+        duration = end - begin
+        secs = duration.days*3600*24 + duration.seconds + duration.microseconds/1000000.
+        return secs
+    

@@ -138,7 +138,10 @@ def tests_tu(options):
 
 import random
 import csv
-MAX_ORDER = 1000
+import simplejson
+import sys
+
+MAX_ORDER = 100000
 def build_ti(options):
     ''' build a .sql file with a bump of submit
     '''
@@ -151,19 +154,18 @@ def build_ti(options):
     QTT_PROV = 10000
 
     prtest.title('generating tests cases for quotes')
-    def gen(nborders,frs,withquote):
+    def gen(nborders,frs):
         for i in range(nborders):
             w = random.randint(1,MAX_OWNER)
             qlt_prov,qlt_requ = distrib.couple(distrib.uniformQlt,MAX_QLT)
             r = random.random()+0.5
             qtt_requ = int(QTT_PROV * r)
-            lb= 'limit' if (random.random()>0.2) else 'best'
+            lb= 'limit' if (random.random()>0.9) else 'best'
             frs.writerow(['admin',lb,'w%i'%w,'q%i'%qlt_requ,qtt_requ,'q%i'%qlt_prov,QTT_PROV])
 
     with open(_frs,'w') as f:
         spamwriter = csv.writer(f)
-        gen(MAX_ORDER,spamwriter,False)
-        gen(30,spamwriter,True)
+        gen(MAX_ORDER,spamwriter)
 
     molet.removeFile(os.path.join(expecteddir,'test_ti.res'),ignoreWarning = True)
     prtest.center('done, test_ti.res removed')
@@ -171,8 +173,158 @@ def build_ti(options):
 
 def test_ti(options):
 
+    _reset,titre_test = options.test_ti_reset,''
+
     curdir,sqldir,resultsdir,expecteddir = get_paths()
-    prtest.title('running tests on database "%s"' % (srvob_conf.DB_NAME,))
+    prtest.title('running test_ti on database "%s"' % (srvob_conf.DB_NAME,))
+
+    dump = utilt.Dumper(srvob_conf.dbBO,options,None)
+    if _reset:
+        print '\tReset: Clearing market ...'
+        titre_test = utilt.exec_script(dump,sqldir,'reset_market.sql')
+        print '\t\tDone'
+
+    fn = os.path.join(sqldir,'test_ti.csv')
+    if( not os.path.exists(fn)):
+        raise ValueError('The data %s is not found' % fn)
+
+    with open(fn,'r') as f:
+        _nbtest = 0
+        for row in f:
+            _nbtest +=1 
+
+    cur_login = None
+    titre_test = None
+
+    inst = utilt.ExecInst(dump)
+
+    
+    user = None
+    fmtorder = "SELECT * from market.fsubmitorder('%s','%s','%s',%s,'%s',%s)" 
+    fmtquote = "SELECT * from market.fsubmitquote('%s','%s','%s',%s,'%s',%s)"
+
+    fmtjsosr  = '''SELECT jso from market.tmsg 
+        where json_extract_path_text(jso,'id')::int=%i and typ='response' '''
+
+    fmtjsose  = """SELECT json_extract_path_text(jso,'orde','id')::int id,
+        sum(json_extract_path_text(jso,'mvt_from','qtt')::bigint) qtt_prov,
+        sum(json_extract_path_text(jso,'mvt_to','qtt')::bigint) qtt_requ
+        from market.tmsg 
+        where json_extract_path_text(jso,'orig')::int=%i
+        and json_extract_path_text(jso,'orde','id')::int=%i
+        and typ='exchange' group by json_extract_path_text(jso,'orde','id')::int """
+    '''
+    the order that produced the exchange has the qualities expected 
+    '''
+    i= 0
+    if _reset:
+        print '\tSubmission: sending a series of %i tests where a random set of arguments' % _nbtest
+        print '\t\tis used to submit a quote, then an order'
+        with open(fn,'r') as f:
+            
+            spamreader = csv.reader(f)
+            
+            compte = utilt.Delai()
+            for row in spamreader:
+                user = row[0]
+                params = tuple(row[1:])
+
+                cursor = inst.exe( fmtquote % params,user)
+                cursor = inst.exe( fmtorder % params,user)
+                i +=1
+                if i % 100 == 0:
+                    prtest.progress(i/float(_nbtest))
+
+        delai = compte.getSecs()
+
+        print '\t\t%i quote & order primitives in %f seconds' % (_nbtest*2,delai)
+        print '\tExecution: Waiting for end of execution ...'
+        #utilt.wait_for_true(srvob_conf.dbBO,1000,"SELECT market.fstackdone()",prtest=prtest)
+        utilt.wait_for_empty_stack(srvob_conf.dbBO,prtest)
+        delai = compte.getSecs()
+        print '\t\t Done: mean time per primitive %f seconds' % (delai/(_nbtest*2),) 
+        
+      
+
+    
+    fmtiter = '''SELECT json_extract_path_text(jso,'id')::int id,json_extract_path_text(jso,'primitive','type') typ 
+        from market.tmsg where typ='response' and json_extract_path_text(jso,'primitive','kind')='quote' 
+        order by id asc limit 10 offset %i''' 
+    i = 0
+    _notnull,_ko,_limit,_limitko = 0,0,0,0
+    print '\tChecking: identity of quote result and order result for each %i test cases' % _nbtest
+    print '\t\tusing the content of market.tmsg'
+    while True:   
+        cursor = inst.exe( fmtiter % i,user)
+       
+        vec = []
+        for re in cursor:
+            vec.append(re)
+            
+        l = len(vec)
+
+        if l == 0: 
+            break
+
+        for idq,_type in vec:
+            i += 1
+            if _type == 'limit':
+                _limit += 1
+
+            # result of the quote for idq
+            _cur = inst.exe(fmtjsosr %idq,user)
+            res = _cur.fetchone() 
+            res_quote =simplejson.loads(res[0])
+            expected = res_quote['result']['qtt_give'],res_quote['result']['qtt_reci']
+
+            #result of the order for idq+1
+            _cur = inst.exe(fmtjsose %(idq+1,idq+1),user) 
+            res = _cur.fetchone()
+
+            if res is None:
+                result = 0,0
+            else:
+                ido_,qtt_prov_,qtt_reci_ = res
+                result = qtt_prov_,qtt_reci_
+                _notnull +=1
+                if _type == 'limit':
+                    if float(expected[0])/float(expected[1]) < float(qtt_prov_)/float(qtt_reci_):
+                        _limitko +=1
+
+            if result != expected:
+                _ko += 1
+                print idq,res,res_quote
+
+            if i %100 == 0:
+                prtest.progress(i/float(_nbtest))
+                '''
+                if i == 100:
+                    print '\t\t.',
+                else:
+                    print '.',
+                sys.stdout.flush()
+                
+                if(_ko != 0): _errs = ' - %i errors' %_ko
+                else: _errs = ''
+                print ('\t\t%i quote & order\t%i quotes returned a result %s' % (i-_ko,_notnull,_errs))
+                '''
+    prtest.title('Results of %i checkings' % i)
+    if(_ko == 0 and _limitko == 0):
+        print '\tall checks ok'
+
+    print '\t\t%i orders returned a result different from the previous quote' % _ko
+    print '\t\t%i limit orders returned a result where the limit is not observed' % _limitko
+
+
+
+
+    inst.close()
+    return titre_test
+
+def test_ti_old(options):
+
+    curdir,sqldir,resultsdir,expecteddir = get_paths()
+    prtest.title('running test_ti on database "%s"' % (srvob_conf.DB_NAME,))
 
     dump = utilt.Dumper(srvob_conf.dbBO,options,None)
     titre_test = utilt.exec_script(dump,sqldir,'reset_market.sql')
@@ -193,29 +345,67 @@ def test_ti(options):
         usr = None
         fmtorder = "SELECT * from market.fsubmitorder('%s','%s','%s',%s,'%s',%s)" 
         fmtquote = "SELECT * from market.fsubmitquote('%s','%s','%s',%s,'%s',%s)"
+        fmtjsosr  = "SELECT jso from market.tmsg where json_extract_path_text(jso,'id')::int=%i and typ='response'"
+        fmtjsose  = """SELECT json_extract_path_text(jso,'orde','id')::int id,
+            sum(json_extract_path_text(jso,'mvt_from','qtt')::bigint) qtt_prov,
+            sum(json_extract_path_text(jso,'mvt_to','qtt')::bigint) qtt_requ
+            from market.tmsg 
+            where json_extract_path_text(jso,'orde','id')::int=%i 
+            and typ='exchange' group by json_extract_path_text(jso,'orde','id')::int """
+        '''
+        the order that produced the exchange has the qualities expected 
+        '''
+        _notnull,_ko = 0,0
         for row in spamreader:
             i += 1
-            
-            if i < 20: #i < MAX_ORDER:
-                cursor = inst.exe( fmtorder % tuple(row[1:]),row[0])
-            else:
-                cursor = inst.exe( fmtquote % tuple(row[1:]),row[0])
-                id,err = cursor.fetchone()
-                if err != '(0,)':
-                    raise ValueError('Order returned an error "%s"' % err)
-                utilt.wait_for_true(srvob_conf.dbBO,20,"SELECT market.fstackdone()")
-                print id
-                cursor = inst.exe('SELECT * from market.tmsg')
-                print cursor.fetchone()
+            user = row[0]
+            params = tuple(row[1:])
 
-            if i >30:
-                break
+            cursor = inst.exe( fmtquote % params,user)
+            idq,err = cursor.fetchone()
+            if err != '(0,)':
+                raise ValueError('Quote returned an error "%s"' % err)
+            utilt.wait_for_true(srvob_conf.dbBO,20,"SELECT market.fstackdone()")
+            cursor = inst.exe(fmtjsosr %idq,user)
+            res = cursor.fetchone() # result of the quote
+            res_quote =simplejson.loads(res[0])
+            expected = res_quote['result']['qtt_give'],res_quote['result']['qtt_reci']
+            #print res_quote
+            #print ''
+
+            cursor = inst.exe( fmtorder % params,user)
+            ido,err = cursor.fetchone()
+            if err != '(0,)':
+                raise ValueError('Order returned an error "%s"' % err)
+            utilt.wait_for_true(srvob_conf.dbBO,20,"SELECT market.fstackdone()")
+            cursor = inst.exe(fmtjsose %ido,user)
+            res = cursor.fetchone()
+
+            if res is None:
+                result = 0,0
+            else:
+                ido_,qtt_prov_,qtt_reci_ = res
+                result = qtt_prov_,qtt_reci_
+                _notnull +=1
+
+            if result != expected:
+                _ko += 1
+                print qtt_prov_,qtt_reci_,res_quote
+
+            if i %100 == 0:
+                if(_ko != 0): _errs = ' - %i errors' %_ko
+                else: _errs = ''
+                print ('\t%i quote & order - %i quotes returned a result %s' % (i-_ko,_notnull,_errs))
+
+    if(_ko == 0):
+        prtest.title(' all %i tests passed' % i) 
+    else:
+        prtest.title('%i checked %i tests failed' % (i,_ko)) 
 
 
     inst.close()
     return titre_test
 
-    prtest.line()
 
 
 '''---------------------------------------------------------------------------
@@ -233,8 +423,9 @@ def main():
     parser.add_option("-t","--test",action="store",type="string",dest="test",help="test",
         default= None)
     parser.add_option("-v","--verbose",action="store_true",dest="verbose",help="verbose",default=False)
-    parser.add_option("-b","--build",action="store_true",dest="build",help="build",default=False)
+    parser.add_option("-b","--build",action="store_true",dest="build",help="generates random test cases for test_ti",default=False)
     parser.add_option("-i","--ti",action="store_true",dest="test_ti",help="execute test_ti",default=False)
+    parser.add_option("-r","--reset",action="store_true",dest="test_ti_reset",help="clean before execution test_ti",default=False)
     (options, args) = parser.parse_args()
 
     # um = os.umask(0177) # u=rw,g=,o=

@@ -187,7 +187,7 @@ BEGIN
 
 	        _ir := insertorder(_s.owner,_o,_t.usr,_t.submitted,'1 day');
         
-	        RETURN ROW(_t.id,NULL,_t.jso,
+	        RETURN ROW(_t.id,_r,_t.jso,
 				row_to_json(ROW(_o.id,_o.qtt,_o.qua_prov,_s.owner,_t.usr)::yj_stock),
 				NULL
 	        	)::yj_primitive;
@@ -284,7 +284,7 @@ BEGIN
 
 	        _ir := insertorder(_s.owner,_o,_s.usr,_s.submitted,_op.duration);
         
-	        RETURN ROW(_t.id,NULL,_t.jso,NULL,NULL)::yj_primitive;
+	        RETURN ROW(_t.id,_r,_t.jso,NULL,NULL)::yj_primitive;
 
     	ELSE
     		RAISE EXCEPTION 'Should not reach this point';
@@ -367,14 +367,14 @@ BEGIN
 			IF (NOT FOUND) THEN
 					_r.code := -301;
 					_r.reason := 'the stock is not in the order book';
-					RETURN ROW(_t.id,_r,_t.json,NULL,NULL)::yj_primitive;
+					RETURN ROW(_t.id,_r,_t.jso,NULL,NULL)::yj_primitive;
 			END IF;
 
 		    -- delete order and sub-orders from the book
 		    DELETE FROM torder o WHERE (o.ord).oid = _yo.oid;
         
         	-- id,error,primitive,result
-	        RETURN ROW(_t.id,NULL,_t.json,
+	        RETURN ROW(_t.id,_r,_t.jso,
 	        	ROW((_op.ord).id,(_op.ord).qtt,(_op.ord).qua_prov,_s.owner,_op.usr)::yj_stock,
 	        	ROW((_op.ord).qua_prov,(_op.ord).qtt)::yj_value
 	        	)::yj_primitive;
@@ -440,14 +440,14 @@ BEGIN
 	        		_t.id,_wid,_t.id,
 	        		_s.qtt_requ,_s.qua_requ,_s.qtt_prov,_s.qua_prov,_s.qtt_prov,
 	                    box('(0,0)'::point,'(0,0)'::point),box('(0,0)'::point,'(0,0)'::point),
-	                    0.0,earth_get_square(box('(0,0)'::point,0.0))
+	                    0.0,earth_get_square('(0,0)'::point,0.0)
 	             )::yorder;
 
 /*fproducequote(_ord yorder,_isquote boolean,_isnoqttlimit boolean,_islimit boolean,_isignoreomega boolean) 
 */
 	        _json_res := fproducequote(_o,true,false,_s.type='limit',false);
         
-	        RETURN ROW(_t.id,NULL,_t.json,_tx,NULL,NULL)::yj_primitive;
+	        RETURN ROW(_t.id,_r,_t.jso,_json_res,NULL)::yj_primitive;
 
     	ELSE
     		RAISE EXCEPTION 'Should not reach this point';

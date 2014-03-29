@@ -133,7 +133,7 @@ class DbCursor(object):
     def __enter__(self):
         self.cur = self.dbData.getCursor(dic = self.dic)
         return self.cur
-        
+       
     def __exit__(self, type, value, traceback):
         exit = self.exit
 
@@ -145,10 +145,11 @@ class DbCursor(object):
             exit = True
         else:
             self.dbData.rollback()
-            self.dbData.exception(value,msg='An exception occured while using the cursor')
+            self.dbData.exception(value,msg='An exception occured while using the cursor',tipe=type,triceback=traceback)
             #return False  # on propage l'exception
         return exit
 
+import traceback
 class DbData(object):
     ''' DbData(db com.srvob_conf.DbInti(),dic = False,autocommit = True)
     db defines DSN. 
@@ -192,9 +193,9 @@ class DbData(object):
         except psycopg2.InterfaceError,e:
             self.exception(e,msg="Attempt to rollback while the connection were closed")
 
-    def exception(self,e,msg = None):
+    def exception(self,e,msg = None,tipe = None,triceback = None):
         if msg:
-            print e
+            print e,tipe,traceback.print_tb(triceback)
             raise MoletException(msg)
         else:
             raise e

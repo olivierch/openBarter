@@ -128,7 +128,7 @@ BEGIN
 
 		_resflow := fexecute_flow(_cyclemax);
 		
-		_cnt := foncreatecycle(_resflow);
+		_cnt := foncreatecycle(_o,_resflow);
 	
 		_fmvtids := _fmvtids || _resflow.mvts;
 		
@@ -156,7 +156,7 @@ END;
 $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
-CREATE FUNCTION foncreatecycle(_r yresflow) RETURNS int AS $$
+CREATE FUNCTION foncreatecycle(_orig yorder,_r yresflow) RETURNS int AS $$
 DECLARE
 
 	_usr_src    text;
@@ -207,7 +207,8 @@ BEGIN
                     _r.nats[_iprev],
                     _r.owns[_iprev],
                     _r.usrs[_iprev]
-                    )::yj_stock
+                    )::yj_stock,
+                _orig.id -- orig
                 )::yj_mvt),
             _usr_src,statement_timestamp());
 

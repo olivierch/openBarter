@@ -335,7 +335,8 @@ CREATE TYPE yj_mvt AS (
 	orde yj_ω, 
 	stock    yj_stock,
 	mvt_from yj_stock,
-	mvt_to   yj_stock
+	mvt_to   yj_stock,
+	orig int
 );
   
 CREATE TYPE yj_order AS (
