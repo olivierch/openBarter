@@ -48,13 +48,16 @@ DECLARE
 	_s			tstack%rowtype;
 	_res 		yj_primitive;
 	_cnt 		int;
+	_txt		text;
+	_detail		text;
+	_ctx 		text;
 BEGIN
 	DELETE FROM tstack 
 		WHERE id IN (SELECT id FROM tstack ORDER BY id ASC LIMIT 1) 
 	RETURNING * INTO _s;
 
 	IF(NOT FOUND) THEN
-		RETURN 10; -- OB_DOWAIT 10 milliseconds
+		RETURN 20; -- OB_DOWAIT 20 milliseconds
 	END IF;
 
 	_res := fprocessprimitive('execute',_s);
@@ -65,6 +68,16 @@ BEGIN
     UPDATE tvar SET value=_s.id WHERE name = 'STACK_EXECUTED';
 
 	RETURN 0;
+
+EXCEPTION WHEN OTHERS THEN
+		GET STACKED DIAGNOSTICS 
+			_txt = MESSAGE_TEXT,
+			_detail = PG_EXCEPTION_DETAIL,
+			_ctx = PG_EXCEPTION_CONTEXT;
+
+		RAISE WARNING 'market.consumestack() failed:''%'' ''%'' ''%''',_txt,_detail,_ctx;
+	RETURN 0;
+
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER set search_path = market;
 GRANT EXECUTE ON FUNCTION  consumestack() TO role_bo;

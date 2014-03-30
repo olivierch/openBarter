@@ -3,7 +3,7 @@ MODULE_big = flowf
 OBJS = flowm.o yflow.o yflowparse.o yorder.o flowc.o earthrad.o worker_ob.o
 
 EXTENSION = flowf
-DATA = flowf--0.1.sql flowf--unpackaged--0.1.sql
+DATA = flowf--2.1.sql flowf--unpackaged--2.1.sql
 
 REGRESS = testflow_1 testflow_2 testflow_2a  
 
