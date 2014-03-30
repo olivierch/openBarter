@@ -20,7 +20,7 @@
      "openbarter": {
        "file": "src/sql/model.sql",
        "docfile": "doc/doc-ob.odt",
-       "version": "2.1.0",
+       "version": "0.0.1",
        "abstract": "Multilateral agreement engine."
      }
    },
