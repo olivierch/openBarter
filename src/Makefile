@@ -31,6 +31,7 @@ endif
 
 test: installcheck test/py/*.py test/sql/*.sql
 	cd test; python py/run.py; cd ..
+	cd test; python py/run.py -i -r;cd ..
 
 doc: 
 	soffice --invisible --norestore --convert-to pdf --outdir ../doc ../doc/*.odt

@@ -30,7 +30,7 @@ class PrTest(object):
         ## Accepts a float between 0 and 1. Any int will be converted to a float.
         ## A value under 0 represents a 'halt'.
         ## A value at 1 or bigger represents 100%
-        barLength = 20 # Modify this to change the length of the progress bar
+        barLength = 40 # Modify this to change the length of the progress bar
         status = ""
         if isinstance(progress, int):
             progress = float(progress)

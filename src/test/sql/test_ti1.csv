@@ -1,0 +1,3 @@
+admin,limit,w1,q1,500,q2,10000
+admin,limit,w2,q2,500,q3,10000
+admin,limit,w3,q3,500,q1,10000

@@ -141,7 +141,7 @@ import csv
 import simplejson
 import sys
 
-MAX_ORDER = 100000
+MAX_ORDER = 100
 def build_ti(options):
     ''' build a .sql file with a bump of submit
     '''
@@ -189,9 +189,17 @@ def test_ti(options):
         raise ValueError('The data %s is not found' % fn)
 
     with open(fn,'r') as f:
+        spamreader = csv.reader(f)
+        values_prov = {}
         _nbtest = 0
-        for row in f:
+        for row in spamreader:
             _nbtest +=1 
+            qua_prov,qtt_prov = row[5],row[6]
+            if not qua_prov in values_prov.keys():
+                values_prov[qua_prov] = 0
+            values_prov[qua_prov] = values_prov[qua_prov] + int(qtt_prov)
+
+    #print values_prov
 
     cur_login = None
     titre_test = None
@@ -228,6 +236,7 @@ def test_ti(options):
             for row in spamreader:
                 user = row[0]
                 params = tuple(row[1:])
+                
 
                 cursor = inst.exe( fmtquote % params,user)
                 cursor = inst.exe( fmtorder % params,user)
@@ -244,9 +253,6 @@ def test_ti(options):
         delai = compte.getSecs()
         print '\t\t Done: mean time per primitive %f seconds' % (delai/(_nbtest*2),) 
         
-      
-
-    
     fmtiter = '''SELECT json_extract_path_text(jso,'id')::int id,json_extract_path_text(jso,'primitive','type') typ 
         from market.tmsg where typ='response' and json_extract_path_text(jso,'primitive','kind')='quote' 
         order by id asc limit 10 offset %i''' 
@@ -308,18 +314,58 @@ def test_ti(options):
                 else: _errs = ''
                 print ('\t\t%i quote & order\t%i quotes returned a result %s' % (i-_ko,_notnull,_errs))
                 '''
-    prtest.title('Results of %i checkings' % i)
-    if(_ko == 0 and _limitko == 0):
-        print '\tall checks ok'
+    _valuesko = check_values(inst,values_prov,user)
+    prtest.title('Results checkings')
 
-    print '\t\t%i orders returned a result different from the previous quote' % _ko
-    print '\t\t%i limit orders returned a result where the limit is not observed' % _limitko
+    print ''
+    print '\t\t%i\torders returned a result different from the previous quote' % _ko
+    print '\t\t\twith the same arguments\n'
 
+    print '\t\t%i\tlimit orders returned a result where the limit is not observed\n' % _limitko
+    print '\t\t%i\tqualities where the quantity is not preserved by the market\n' % _valuesko
 
+    prtest.line()
 
-
+    if(_ko == 0 and _limitko == 0 and _valuesko == 0):
+        prtest.center('\tAll %i tests passed' % i)
+    else:
+        prtest.center('\tSome of %i tests failed' % (i,))
+    prtest.line() 
+    
     inst.close()
     return titre_test
+
+def check_values(inst,values_input,user):
+    '''
+    Values_input is for each quality, the sum of quantities submitted to the market
+    Values_remain is for each quality, the sum of quantities remaining in the order book
+    Values_output is for each quality, the sum of quantities of mvt_from.qtt of tmsg
+    Checks that for each quality q:
+        Values_input[q] ==  Values_remain[q] + Values_output[q]
+    '''
+    sql = "select (ord).qua_prov,sum((ord).qtt) from market.torder where (ord).oid=(ord).id group by (ord).qua_prov"
+    cursor = inst.exe( sql,user)
+    values_remain = {}
+    for qua_prov,qtt in cursor:
+        values_remain[qua_prov] = qtt
+
+    sql = '''select json_extract_path_text(jso,'mvt_from','nat'),sum(json_extract_path_text(jso,'mvt_from','qtt')::bigint)
+    from market.tmsg where typ='exchange'
+    group by json_extract_path_text(jso,'mvt_from','nat')
+    '''
+    cursor = inst.exe( sql,user)
+    values_output = {}
+    for qua_prov,qtt in cursor:
+        values_output[qua_prov] = qtt
+    
+    _errs = 0
+    for qua,vin in values_input.iteritems():
+        vexpect = values_output.get(qua,0)+values_remain.get(qua,0)
+        if vin != vexpect:
+            print qua,vin,values_output.get(qua,0),values_remain.get(qua,0)
+            _errs += 1
+    # print '%i errors'% _errs
+    return _errs
 
 def test_ti_old(options):
 
