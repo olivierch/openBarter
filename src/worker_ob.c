@@ -36,8 +36,10 @@
 #include "tcop/utility.h"
 
 #define BGW_NBWORKERS 2
-#define BGW_OPENCLOSE 0
 static char *worker_names[] = {"openclose","consumestack"};
+ 
+#define BGW_OPENCLOSE 0
+#define BGW_CONSUMESTACK 1
 
 // PG_MODULE_MAGIC;
 
@@ -51,10 +53,8 @@ static volatile sig_atomic_t got_sigterm = false;
 static char *worker_ob_database = "market";
 
 /* others */
-
 static char *worker_ob_user = "user_bo";
-
-
+/* two connexions are allowed for this user */
 
 typedef struct worktable
 {
@@ -162,24 +162,32 @@ _worker_ob_installed()
 	pgstat_report_activity(STATE_IDLE, NULL);
 	return installed;
 }
-
+/*
 static void _openclose_vacuum() {
-	/* called by openclose bg_worker */
+	// called by openclose bg_worker 
 	StringInfoData 	buf;
 	int				ret;
 
 	initStringInfo(&buf);
 	appendStringInfo(&buf,"VACUUM FULL");
 	pgstat_report_activity(STATE_RUNNING, buf.data);
+	elog(LOG, "vacuum full starting");
 
-	ret = SPI_execute(buf.data, false, 0);
+
+	ret = SPI_exec(buf.data, 0); */
+	/* fails with an exception:
+	ERROR:  VACUUM cannot be executed from a function or multi-command string
+	CONTEXT:  SQL statement "VACUUM FULL"
+	*/
+	/*
 	pfree(buf.data);
+	elog(LOG, "vacuum full stopped an returned  %d",ret);
 
 	if (ret != SPI_OK_UTILITY) // SPI_OK_UPDATE_RETURNING,SPI_OK_SELECT
 	// TODO CODE DE RETOUR?????
 		elog(FATAL, "cannot execute VACUUM FULL: error code %d",ret);
 	return;
-}
+} */
 
 
 static void
@@ -188,8 +196,7 @@ worker_ob_main(Datum main_arg)
 	int			index = DatumGetInt32(main_arg);
 	worktable  *table;
 	StringInfoData buf;
-	bool 		installed;
-	//char		function_name[20];	
+	bool 		installed;	
 
 	table = palloc(sizeof(worktable)); 
 
@@ -203,7 +210,7 @@ worker_ob_main(Datum main_arg)
 	/* We're now ready to receive signals */
 	BackgroundWorkerUnblockSignals();
 
-	/* Connect to our database */
+	/* Connect to the database */
 	if(!(worker_ob_database && *worker_ob_database))
 		elog(FATAL, "database name undefined");
 	
@@ -235,6 +242,7 @@ worker_ob_main(Datum main_arg)
 		 * background process goes away immediately in an emergency.
 		 */
 		 /* done even if _worker_ob_naptime == 0 */
+		// elog(LOG, "%s start waiting for %i",table->function_name,_worker_ob_naptime);
 		rc = WaitLatch(&MyProc->procLatch,
 					   WL_LATCH_SET | WL_TIMEOUT | WL_POSTMASTER_DEATH,
 					   _worker_ob_naptime );
@@ -289,6 +297,7 @@ worker_ob_main(Datum main_arg)
 		if (SPI_processed != 1) // number of tuple returned
 				elog(FATAL, "market.%s() returned %d tuples instead of one",
 				 table->function_name, SPI_processed);
+			
 		{
 			bool		isnull;
 			int32		val;
@@ -296,17 +305,20 @@ worker_ob_main(Datum main_arg)
 			val = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[0],
 											  SPI_tuptable->tupdesc,
 											  1, &isnull));
+			
+			if (isnull) 
+				elog(FATAL, "market.%s() returned null",table->function_name);
+
 			table->dowait = 0;
-			if (!isnull) {
-				if (val >=0)
-					table->dowait = val;
-				else {
-					// 
-					if((val == -100) && (index == BGW_OPENCLOSE))
-						_openclose_vacuum();
-				
-				} 
+			if (val >=0) 
+				table->dowait = val;
+			else {
+				if ((index == BGW_OPENCLOSE) && (val == -100))
+					; // _openclose_vacuum();
+				else 
+					elog(FATAL, "market.%s() returned illegal <0",table->function_name);
 			}
+
 		}
 
 		/*

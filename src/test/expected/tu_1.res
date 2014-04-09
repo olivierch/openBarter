@@ -2,11 +2,10 @@
 ---------------------------------------------------------
 --variables
 --USER:admin
-select  * from market.tvar order by name;
+select  * from market.tvar where name != 'OC_CURRENT_OPENED' order by name;
       name     value
 +---------+---------
  INSTALLED         1
-OC_CURRENT_OPENED         0
 OC_CURRENT_PHASE       102
 STACK_EXECUTED         0
  STACK_TOP         0

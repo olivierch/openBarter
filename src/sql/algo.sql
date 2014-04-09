@@ -5,7 +5,7 @@
 It is the central query of openbarter
 
 for an order O fcreate_tmp creates a temporary table _tmp of objects.
-Each object represents a chain of orders - a flows - going to O. 
+Each object represents a possible chain of orders - a 'flow' - going to O. 
 
 The table has columns
 	debut 	the first order of the path
@@ -85,15 +85,12 @@ CREATE TYPE yresflow AS (
 
 --------------------------------------------------------------------------------
 
-CREATE FUNCTION insertorder(_owner dtext,_o yorder,_usr dtext,_created timestamp,_duration interval) RETURNS int AS $$
+CREATE FUNCTION insertorder(_owner dtext,_o yorder,_usr dtext,_created timestamp,_duration interval) 
+	RETURNS int AS $$
 DECLARE
 
 	_fmvtids	int[];
-	-- _first_mvt 	int;
-	-- _err		int;
-	--_flows		json[]:= ARRAY[]::json[];
 	_cyclemax 	yflow;
-    -- _mvts       int[];
     _res        int8[];
 	_MAXMVTPERTRANS 	int := fgetconst('MAXMVTPERTRANS');
 	_nbmvts		int := 0;
@@ -145,7 +142,8 @@ BEGIN
 	AND	((_qtt_give::double precision)	/(_qtt_reci::double precision)) > 
 		((_o.qtt_prov::double precision)	/(_o.qtt_requ::double precision))
 	) THEN
-		RAISE EXCEPTION 'pb: Omega of the flows obtained is not limited by the order limit' USING ERRCODE='YA003';
+		RAISE EXCEPTION 'pb: Omega of the flows obtained is not limited by the order limit' 
+			USING ERRCODE='YA003';
 	END IF;
 	-- set the number of movements in this transaction
 	-- UPDATE tmvt SET nbt= array_length(_fmvtids,1) WHERE id = ANY (_fmvtids);

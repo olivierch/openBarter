@@ -96,7 +96,7 @@ DECLARE
 	_tr text;
 BEGIN
     _tablem := _table;
-	LOOP -- remplace les points par des tirets
+	LOOP -- remplaces dots by underscores
 	    _res := position('.' in _tablem);
 	    EXIT WHEN _res=0;
 	    _tl := substring(_tablem for _res-1);
@@ -121,5 +121,5 @@ BEGIN
 	RETURN;
 END; 
 $$ LANGUAGE PLPGSQL;
---SELECT _grant_read('tconst');
+--GRANT SELECT ON tconst TO role_com;
 

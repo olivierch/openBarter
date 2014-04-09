@@ -9,7 +9,7 @@ create domain dqtt AS int8 check( VALUE>0);
 create domain dtext AS text check( char_length(VALUE)>0);
 
 --------------------------------------------------------------------------------
--- main constants of the model
+-- Main constants of the model
 --------------------------------------------------------------------------------
 create table tconst(
 	name dtext UNIQUE not NULL,
@@ -19,8 +19,6 @@ create table tconst(
 GRANT SELECT ON tconst TO role_com;
 
 --------------------------------------------------------------------------------
-/* for booleans, 0 == false and !=0 == true
-*/
 INSERT INTO tconst (name,value) VALUES 
 	('MAXCYCLE',64), 		-- must be less than yflow_get_maxdim()
 
@@ -32,12 +30,13 @@ INSERT INTO tconst (name,value) VALUES
 
 	('VERSION-X',2),('VERSION-Y',1),('VERSION-Z',0),
 
-	('OWNERINSERT',1),		-- boolean when true, owner inserted when not found
-	('QUAPROVUSR',0),		-- boolean when true, the quality provided by a barter is suffixed by user name
+	--  booleans, 0 == false and !=0 == true
+
+	('QUAPROVUSR',0),		-- when true, the quality provided by a barter is suffixed by user name
 							-- 1 prod
-	('OWNUSR',0),			-- boolean when true, the owner is suffixed by user name
+	('OWNUSR',0),			-- when true, the owner is suffixed by user name
 							-- 1 prod
-	('DEBUG',1);
+	('DEBUG',1);			-- 
 
 
 --------------------------------------------------------------------------------
@@ -46,7 +45,9 @@ create table tvar(
 	value	int,
 	PRIMARY KEY (name)
 );
-INSERT INTO tvar (name,value) VALUES ('INSTALLED',0);
+-- btree index tvar_pkey on name
+INSERT INTO tvar (name,value) 
+	VALUES ('INSTALLED',0); -- set to 1 when the model is installed
 GRANT SELECT ON tvar TO role_com;
 
 --------------------------------------------------------------------------------
@@ -57,29 +58,52 @@ create table towner (
     name dtext UNIQUE not NULL,
     PRIMARY KEY (id)
 );
-comment on table towner is 'owners of values exchanged';
+
+comment on table towner 			is 'owners of values exchanged';
+comment on column towner.id 		is 'id of this owner';
+comment on column towner.name 		is 'the name of the owner';
+
 alter sequence towner_id_seq owned by towner.id;
 create index towner_name_idx on towner(name);
 SELECT _reference_time('towner');
-SELECT _grant_read('towner');
+GRANT SELECT ON towner TO role_com;
+--------------------------------------------------------------------------------
 
+--------------------------------------------------------------------------------
+CREATE FUNCTION fgetowner(_name text) RETURNS int AS $$
+DECLARE
+	_wid 			int;
+BEGIN
+	LOOP
+		SELECT id INTO _wid FROM towner WHERE name=_name;
+		IF found THEN
+			return _wid;
+		END IF;
+
+		BEGIN
+			INSERT INTO towner (name) VALUES (_name) RETURNING id INTO _wid;
+			return _wid;
+		EXCEPTION WHEN unique_violation THEN
+			NULL;
+		END;
+	END LOOP;
+END;
+$$ LANGUAGE PLPGSQL;
+--------------------------------------------------------------------------------
+-- MOVEMENTS
+--------------------------------------------------------------------------------
+CREATE SEQUENCE tmvt_id_seq;
 --------------------------------------------------------------------------------
 -- ORDER BOOK
 --------------------------------------------------------------------------------
 -- type = type_flow | type_primitive <<8 | type_mode <<16
-create domain dtypeorder AS int check(VALUE >=0 AND VALUE < 16777215); --((1<<24)-1)
-
+create domain dtypeorder AS int check(VALUE >=0 AND VALUE < ((1<<24)-1)); 
 -- type_flow &3  1 order limit,2 order best
--- type_flow &12 bit set for c calculations 
+-- type_flow &12 bit reserved for c internal calculations 
 --    4 no qttlimit
 --    8 ignoreomega
 -- yorder.type is a type_flow = type & 255
 
--- type_primitive
--- 1 	order
--- 2    rmorder
--- 3    quote
--- 4    prequote
 
 CREATE TYPE eordertype AS ENUM ('best','limit');
 CREATE TYPE eprimitivetype AS ENUM ('order','childorder','rmorder','quote','prequote');
@@ -92,13 +116,13 @@ create table torder (
     updated timestamp,
     duration interval
 );
-comment on table torder is 'Order book';
-comment on column torder.usr is 'user that inserted the order ';
-comment on column torder.ord is 'the order';
+comment on table torder is 			'Order book';
+comment on column torder.usr is 	'user that inserted the order ';
+comment on column torder.ord is 	'the order';
 comment on column torder.created is 'time when the order was put on the stack';
 comment on column torder.updated is 'time when the (quantity) of the order was updated by the order book';
 comment on column torder.duration is 'the life time of the order';
-SELECT _grant_read('torder');
+GRANT SELECT ON torder TO role_com;
 
 create index torder_qua_prov_idx on torder(((ord).qua_prov)); -- using gin(((ord).qua_prov) text_ops);
 create index torder_id_idx on torder(((ord).id));
@@ -111,7 +135,7 @@ select (o.ord).id as id,(o.ord).type as type,w.name as own,(o.ord).oid as oid,
 		(o.ord).qtt_prov as qtt_prov,(o.ord).qua_prov as qua_prov,
 		(o.ord).qtt as qtt, o.created as created, o.updated as updated
 from torder o left join towner w on ((o.ord).own=w.id) where o.usr=session_user;
-SELECT _grant_read('vorder');
+GRANT SELECT ON vorder TO role_com;
 
 -- sans dates ni filtre sur usr
 create view vorder2 as
@@ -120,7 +144,7 @@ select (o.ord).id as id,(o.ord).type as type,w.name as own,(o.ord).oid as oid,
 		(o.ord).qtt_prov as qtt_prov,(o.ord).qua_prov as qua_prov,
 		(o.ord).qtt as qtt
 from torder o left join towner w on ((o.ord).own=w.id);
-SELECT _grant_read('vorder2');
+GRANT SELECT ON vorder2 TO role_com;
 
 -- only parent for all users
 create view vbarter as
@@ -129,7 +153,7 @@ select (o.ord).id as id,(o.ord).type as type,o.usr as user,w.name as own,
 		(o.ord).qtt_prov as qtt_prov,(o.ord).qua_prov as qua_prov,
 		(o.ord).qtt as qtt, o.created as created, o.updated as updated
 from torder o left join towner w on ((o.ord).own=w.id) where (o.ord).oid=(o.ord).id;
-SELECT _grant_read('vbarter');
+GRANT SELECT ON vbarter TO role_com;
 
 -- parent and childs for all users, used with vmvto
 create view vordero as 
@@ -150,141 +174,6 @@ comment on column vordero.expected_ω is 'the ω of the order';
 comment on column vordero.oid is 'for a child-order, the id of the parent-order';
 
 --------------------------------------------------------------------------------
-
---------------------------------------------------------------------------------
-CREATE FUNCTION fgetowner(_name text) RETURNS int AS $$
-DECLARE
-	_wid int;
-	_OWNERINSERT 	boolean := fgetconst('OWNERINSERT')=1;
-BEGIN
-	LOOP
-		SELECT id INTO _wid FROM towner WHERE name=_name;
-		IF found THEN
-			return _wid;
-		END IF;
-		IF (NOT _OWNERINSERT) THEN
-			RAISE EXCEPTION 'The owner does not exist' USING ERRCODE='YU001';
-		END IF;
-		BEGIN
-			INSERT INTO towner (name) VALUES (_name) RETURNING id INTO _wid;
-			-- RAISE NOTICE 'owner % created',_name;
-			return _wid;
-		EXCEPTION WHEN unique_violation THEN
-			NULL;--
-		END;
-	END LOOP;
-END;
-$$ LANGUAGE PLPGSQL;
-
---------------------------------------------------------------------------------
--- TMVT
--- id,nbc,nbt,grp,xid,usr_src,usr_dst,xoid,own_src,own_dst,qtt,nat,ack,exhausted,order_created,created
---------------------------------------------------------------------------------
-/*
-create table tmvt (
-	id serial UNIQUE not NULL,
-	nbc int default NULL, 
-	nbt int default NULL, 
-	grp int default NULL,
-	xid int default NULL,
-	usr_src text default NULL,
-	usr_dst text default NULL,
-	xoid int default NULL,
-	own_src text default NULL, 
-	own_dst text default NULL,
-	qtt int8 default NULL,
-	nat text default NULL,
-	ack	boolean default NULL,
-	cack boolean default NULL,
-	exhausted boolean default NULL,
-	order_created timestamp default NULL,
-	created	timestamp default NULL,
-	om_exp double precision default NULL,
-	om_rea double precision default NULL,
-
-	CONSTRAINT ctmvt_grp FOREIGN KEY (grp) references tmvt(id) ON UPDATE CASCADE
-);
-
-GRANT SELECT ON tmvt TO role_com;
-
-comment on table tmvt is 'Records ownership changes';
-
-comment on column tmvt.nbc is 'number of movements of the exchange cycle';
-comment on column tmvt.nbt is 'number of movements of the transaction containing several exchange cycles';
-comment on column tmvt.grp is 'references the first movement of the exchange';
-comment on column tmvt.xid is 'references the order.id';
-comment on column tmvt.usr_src is 'usr provider';
-comment on column tmvt.usr_dst is 'usr receiver';
-comment on column tmvt.xoid is 'references the order.oid';
-comment on column tmvt.own_src is 'owner provider';
-comment on column tmvt.own_dst is 'owner receiver';
-comment on column tmvt.qtt is 'quantity of the value moved';
-comment on column tmvt.nat is 'quality of the value moved';
-comment on column tmvt.ack is 'set when movement has been acknowledged';
-comment on column tmvt.cack is 'set when the cycle has been acknowledged';
-comment on column tmvt.exhausted is 'set when the movement exhausted the order providing the value';
-comment on column tmvt.om_exp is 'ω expected by the order';
-comment on column tmvt.om_rea is 'real ω of movement';
-
-alter sequence tmvt_id_seq owned by tmvt.id;
-GRANT SELECT ON tmvt_id_seq TO role_com;
-
-create index tmvt_grp_idx on tmvt(grp);
-create index tmvt_nat_idx on tmvt(nat);
-create index tmvt_own_src_idx on tmvt(own_src);
-create index tmvt_own_dst_idx on tmvt(own_dst);
-
-CREATE VIEW vmvt AS select * from tmvt;
-GRANT SELECT ON vmvt TO role_com;
-
-CREATE VIEW vmvt_tu AS select  id,nbc,grp,xid,xoid,own_src,own_dst,qtt,nat,ack,cack,exhausted from tmvt;
-GRANT SELECT ON vmvt_tu TO role_com;
-
-create view vmvto as 
-    select  id,grp,
-    usr_src as from_usr,
-    own_src as from_own,
-    qtt::text || ' ' || nat as value,
-    usr_dst as to_usr,
-    own_dst as to_own,
-    to_char(om_exp, 'FM999.9999990') as expected_ω,
-    to_char(om_rea, 'FM999.9999990') as actual_ω,
-    ack 
-    from tmvt where cack is NULL order by id asc;
-GRANT SELECT ON vmvto TO role_com;
-*/
-CREATE SEQUENCE tmvt_id_seq;
-
---------------------------------------------------------------------------------
--- STACK id,usr,kind,jso,submitted
---------------------------------------------------------------------------------
-create table tstack ( 
-    id serial UNIQUE not NULL,
-    usr dtext,
-    kind eprimitivetype,
-    jso 	json, -- representation of the primitive
-    submitted timestamp not NULL,
-    PRIMARY KEY (id)
-);
-
-comment on table tstack is 'Records the stack of primitives';
-comment on column tstack.id is 'id of this primitive';
-comment on column tstack.usr is 'user submitting the primitive';
-comment on column tstack.kind is 'type of primitive';
-comment on column tstack.jso is 'primitive payload';
-comment on column tstack.submitted is 'timestamp when the primitive was successfully submitted';
-
-alter sequence tstack_id_seq owned by tstack.id;
-
-GRANT SELECT ON tstack TO role_com;
-SELECT fifo_init('tstack');
-GRANT SELECT ON tstack_id_seq TO role_com;
-
-
---------------------------------------------------------------------------------	
-CREATE TYPE eprimphase AS ENUM ('submit', 'execute');
-
---------------------------------------------------------------------------------
 -- MSG
 --------------------------------------------------------------------------------
 CREATE TYPE emsgtype AS ENUM ('response', 'exchange');
@@ -297,11 +186,11 @@ create table tmsg (
 	created	timestamp not NULL 
 );
 alter sequence tmsg_id_seq owned by tmsg.id;	
-SELECT _grant_read('tmsg');
-SELECT _grant_read('tmsg_id_seq');
+GRANT SELECT ON tmsg TO role_com;
+GRANT SELECT ON tmsg_id_seq TO role_com;
 SELECT fifo_init('tmsg');
 CREATE VIEW vmsg AS select * from tmsg WHERE usr = session_user;
-SELECT _grant_read('vmsg');
+GRANT SELECT ON vmsg TO role_com;
 
 --------------------------------------------------------------------------------
 CREATE TYPE yj_error AS (

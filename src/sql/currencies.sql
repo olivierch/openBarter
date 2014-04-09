@@ -1,7 +1,7 @@
 CREATE TABLE townauth (
 	name text
 );
-SELECT _grant_read('townauth');
+GRANT SELECT ON townauth TO role_com;
 
 COPY townauth (name) FROM stdin;
 google.com
@@ -11,7 +11,7 @@ google.com
 CREATE TABLE tcurrency (
    name text
 );
-SELECT _grant_read('tcurrency');
+GRANT SELECT ON tcurrency TO role_com;
 
 COPY tcurrency (name) FROM stdin;
 ADP

@@ -2,7 +2,7 @@
 ---------------------------------------------------------
 --variables
 --USER:admin
-select  * from market.tvar order by name; 
+select  * from market.tvar where name != 'OC_CURRENT_OPENED' order by name; 
 ---------------------------------------------------------
 --USER:test_clienta
 --SELECT * FROM fsubmitorder(type,owner,qua_requ,qtt_requ,qua_prov,qtt_prov);

@@ -1,10 +1,11 @@
 \set ECHO none
+\set ON_ERROR_STOP on
 
 /* script executed for the whole cluster */
 
 SET client_min_messages = warning;
 SET log_error_verbosity = terse;
-
+BEGIN;
 /* flowf extension */
 
 -- drop extension if exists btree_gin cascade;
@@ -70,7 +71,8 @@ GRANT role_com TO role_bo;
 
 SELECT _create_role('user_bo');
 GRANT role_bo TO user_bo;
--- two connections are allowed for user_bo
+-- two connections are allowed for background_workers
+-- BGW_OPENCLOSE and BGW_CONSUMESTACK
 ALTER ROLE user_bo WITH LOGIN CONNECTION LIMIT 2;
 
 
@@ -90,6 +92,8 @@ GRANT role_client TO test_clientc;
 select _create_role('test_clientd');
 ALTER ROLE test_clientd WITH login;
 GRANT role_client TO test_clientd;
+COMMIT;
+
 
 
 
