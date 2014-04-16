@@ -34,6 +34,7 @@ import srvob_conf
 import molet
 import utilt
 import test_ti
+import test_volume
 import sys
 
 PARLEN=80
@@ -42,7 +43,7 @@ prtest = utilt.PrTest(PARLEN,'=')
 def tests_tu(options):
     titre_test = "UNDEFINED"  
     
-    curdir,sqldir,resultsdir,expecteddir = test_ti.get_paths()
+    curdir,sqldir,resultsdir,expecteddir = utilt.get_paths()
 
     try:
         utilt.wait_for_true(srvob_conf.dbBO,0.1,"SELECT value=102,value FROM market.tvar WHERE name='OC_CURRENT_PHASE'",
@@ -140,8 +141,8 @@ def main():
     parser.add_option("-b","--build",dest="build",type="int",help="generates random test cases for test_ti",default=0)
     parser.add_option("-i","--ti",action="store_true",dest="test_ti",help="execute test_ti",default=False)
     parser.add_option("-r","--reset",action="store_true",dest="test_ti_reset",help="clean before execution test_ti",default=False)
-    #parser.add_option("-x","--x",dest="cst",type="int",help="test",default=1)
-    
+
+   
     (options, args) = parser.parse_args()
 
     # um = os.umask(0177) # u=rw,g=,o=

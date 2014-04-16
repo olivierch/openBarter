@@ -16,17 +16,7 @@ import distrib
 
 PARLEN=80
 prtest = utilt.PrTest(PARLEN,'=')
-
-def get_paths():
-    curdir = os.path.abspath(__file__)
-    curdir = os.path.dirname(curdir)
-    curdir = os.path.dirname(curdir)
-    sqldir = os.path.join(curdir,'sql')
-    resultsdir,expecteddir = os.path.join(curdir,'results'),os.path.join(curdir,'expected')
-    molet.mkdir(resultsdir,ignoreWarning = True)
-    molet.mkdir(expecteddir,ignoreWarning = True)
-    tup = (curdir,sqldir,resultsdir,expecteddir)
-    return tup    
+   
 
 import random
 import csv
@@ -40,7 +30,7 @@ def build_ti(options):
     #print options.build
     #return
     #conf = srvob_conf.dbBO
-    curdir,sqldir,resultsdir,expecteddir = get_paths()
+    curdir,sqldir,resultsdir,expecteddir = utilt.get_paths()
     _frs = os.path.join(sqldir,'test_ti.csv')
 
     MAX_OWNER = 10
@@ -80,7 +70,7 @@ def test_ti(options):
 
     _reset,titre_test = options.test_ti_reset,''
 
-    curdir,sqldir,resultsdir,expecteddir = get_paths()
+    curdir,sqldir,resultsdir,expecteddir = utilt.get_paths()
     prtest.title('running test_ti on database "%s"' % (srvob_conf.DB_NAME,))
 
     dump = utilt.Dumper(srvob_conf.dbBO,options,None)
@@ -265,16 +255,21 @@ def check_values(inst,values_input,user):
     
     _errs = 0
     for qua,vin in values_input.iteritems():
-        vexpect = values_output.get(qua,0)+values_remain.get(qua,0)
-        if vin != vexpect:
-            print qua,vin,values_output.get(qua,0),values_remain.get(qua,0)
+        _out = values_output.get(qua,None)
+        _remain = values_remain.get(qua,None)
+        if _out is None or _remain is None:
             _errs += 1
-    # print '%i errors'% _errs
+            continue
+
+        if vin != (_out+ _remain):
+            print qua,vin,_out,_remain
+            _errs += 1
+
     return _errs
 
 def test_ti_old(options):
 
-    curdir,sqldir,resultsdir,expecteddir = get_paths()
+    curdir,sqldir,resultsdir,expecteddir = utilt.get_paths()
     prtest.title('running test_ti on database "%s"' % (srvob_conf.DB_NAME,))
 
     dump = utilt.Dumper(srvob_conf.dbBO,options,None)

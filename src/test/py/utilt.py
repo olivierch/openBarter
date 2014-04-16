@@ -2,6 +2,20 @@
 import string
 import os.path
 import time, sys
+import molet
+
+
+def get_paths():
+    curdir = os.path.abspath(__file__)
+    curdir = os.path.dirname(curdir)
+    curdir = os.path.dirname(curdir)
+    sqldir = os.path.join(curdir,'sql')
+    resultsdir,expecteddir = os.path.join(curdir,'results'),os.path.join(curdir,'expected')
+    molet.mkdir(resultsdir,ignoreWarning = True)
+    molet.mkdir(expecteddir,ignoreWarning = True)
+    tup = (curdir,sqldir,resultsdir,expecteddir)
+    return tup 
+
 '''---------------------------------------------------------------------------
 ---------------------------------------------------------------------------'''
 class PrTest(object):
