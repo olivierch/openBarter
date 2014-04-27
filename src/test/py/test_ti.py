@@ -1,5 +1,10 @@
 # -*- coding: utf-8 -*-
+'''
+Packages required
+apt-get install python-psycopg2
+ sudo easy_install simplejson
 
+'''
 import sys,os,time,logging
 import psycopg2
 import psycopg2.extensions
@@ -266,88 +271,3 @@ def check_values(inst,values_input,user):
             _errs += 1
 
     return _errs
-
-def test_ti_old(options):
-
-    curdir,sqldir,resultsdir,expecteddir = utilt.get_paths()
-    prtest.title('running test_ti on database "%s"' % (srvob_conf.DB_NAME,))
-
-    dump = utilt.Dumper(srvob_conf.dbBO,options,None)
-    titre_test = utilt.exec_script(dump,sqldir,'reset_market.sql')
-
-    fn = os.path.join(sqldir,'test_ti.csv')
-    if( not os.path.exists(fn)):
-        raise ValueError('The data %s is not found' % fn)
-
-    cur_login = None
-    titre_test = None
-
-    inst = utilt.ExecInst(dump)
-    quote = False
-
-    with open(fn,'r') as f:
-        spamreader = csv.reader(f)
-        i= 0
-        usr = None
-        fmtorder = "SELECT * from market.fsubmitorder('%s','%s','%s',%s,'%s',%s)" 
-        fmtquote = "SELECT * from market.fsubmitquote('%s','%s','%s',%s,'%s',%s)"
-        fmtjsosr  = "SELECT jso from market.tmsg where json_extract_path_text(jso,'id')::int=%i and typ='response'"
-        fmtjsose  = """SELECT json_extract_path_text(jso,'orde','id')::int id,
-            sum(json_extract_path_text(jso,'mvt_from','qtt')::bigint) qtt_prov,
-            sum(json_extract_path_text(jso,'mvt_to','qtt')::bigint) qtt_requ
-            from market.tmsg 
-            where json_extract_path_text(jso,'orde','id')::int=%i 
-            and typ='exchange' group by json_extract_path_text(jso,'orde','id')::int """
-        '''
-        the order that produced the exchange has the qualities expected 
-        '''
-        _notnull,_ko = 0,0
-        for row in spamreader:
-            i += 1
-            user = row[0]
-            params = tuple(row[1:])
-
-            cursor = inst.exe( fmtquote % params,user)
-            idq,err = cursor.fetchone()
-            if err != '(0,)':
-                raise ValueError('Quote returned an error "%s"' % err)
-            utilt.wait_for_true(srvob_conf.dbBO,20,"SELECT market.fstackdone()")
-            cursor = inst.exe(fmtjsosr %idq,user)
-            res = cursor.fetchone() # result of the quote
-            res_quote =simplejson.loads(res[0])
-            expected = res_quote['result']['qtt_give'],res_quote['result']['qtt_reci']
-            #print res_quote
-            #print ''
-
-            cursor = inst.exe( fmtorder % params,user)
-            ido,err = cursor.fetchone()
-            if err != '(0,)':
-                raise ValueError('Order returned an error "%s"' % err)
-            utilt.wait_for_true(srvob_conf.dbBO,20,"SELECT market.fstackdone()")
-            cursor = inst.exe(fmtjsose %ido,user)
-            res = cursor.fetchone()
-
-            if res is None:
-                result = 0,0
-            else:
-                ido_,qtt_prov_,qtt_reci_ = res
-                result = qtt_prov_,qtt_reci_
-                _notnull +=1
-
-            if result != expected:
-                _ko += 1
-                print qtt_prov_,qtt_reci_,res_quote
-
-            if i %100 == 0:
-                if(_ko != 0): _errs = ' - %i errors' %_ko
-                else: _errs = ''
-                print ('\t%i quote & order - %i quotes returned a result %s' % (i-_ko,_notnull,_errs))
-
-    if(_ko == 0):
-        prtest.title(' all %i tests passed' % i) 
-    else:
-        prtest.title('%i checked %i tests failed' % (i,_ko)) 
-
-
-    inst.close()
-    return titre_test

@@ -17,7 +17,7 @@ yflowparse.o: yflowscan.c
 yflowparse.c: yflowparse.y
 
 ifdef BISON
-	$(BISON) $(BISONFLAGS) -o $@ $<
+	$(BISON) $(BISONFLAGS) --name-prefix=yflow_yy  -o $@ $<
 else
 	@$(missing) bison $< $@
 endif

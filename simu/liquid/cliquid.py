@@ -10,9 +10,7 @@ DB_HOST='localhost'
 DB_PORT=5432
 
 PATH_ICI = os.path.dirname(os.path.abspath(__file__))
-# PATH_SRC="/home/olivier/Bureau/ob92/src"
 PATH_SRC= os.path.join(os.path.dirname(PATH_ICI),'src')
-# PATH_DATA="/home/olivier/Bureau/ob92/simu/liquid/data"
 PATH_DATA=os.path.join(PATH_ICI,'data')
 
 MAX_TOWNER=10000 # maximum number of owners in towner

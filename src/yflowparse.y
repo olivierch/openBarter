@@ -2,7 +2,7 @@
 
 /* contrib/yflow/yflowparse.y */
 
-#define YYPARSE_PARAM resultat  /* need this to pass a pointer (void *) to yyparse */
+// #define YYPARSE_PARAM resultat  /* need this to pass a pointer (void *) to yyparse */
 // #define YYSTYPE char *
 #define YYDEBUG 1
 
@@ -10,14 +10,7 @@
 
 #include "wolf.h"
 
-/*
- * Bison doesn't allocate anything that needs to live across parser calls,
- * so we can easily have it use palloc instead of malloc.  This prevents
- * memory leaks if we error out during parsing.  Note this only works with
- * bison >= 2.0.  However, in bison 1.875 the default is to use alloca()
- * if possible, so there's not really much problem anyhow, at least if
- * you're building with gcc.
- */
+
 #define YYMALLOC palloc
 #define YYFREE   pfree
 extern int 	yflow_yylex(void);
@@ -25,15 +18,16 @@ extern int 	yflow_yylex(void);
 static char 	*scanbuf;
 static int	scanbuflen;
 
-void 	yflow_yyerror(const char *message);
-int 	yflow_yyparse(void *resultat);
+extern int	yflow_yyparse(Tflow **resultat);
+extern void yflow_yyerror(Tflow **resultat, const char *message);
 
 
 %}
 
 /* BISON Declarations */
+%parse-param {Tflow **resultat}
 %expect 0
-%name-prefix="yflow_yy"
+// %name-prefix="yflow_yy"
 
 %union {
   char * text;

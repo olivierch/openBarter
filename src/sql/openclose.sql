@@ -281,7 +281,7 @@ DECLARE
     _cnt        int;
 BEGIN
 
-    DROP TABLE IF EXISTS timesum;
+    -- DROP TABLE IF EXISTS timesum;
 
     SELECT count(*) INTO STRICT _cnt FROM tdelay;
 

@@ -46,7 +46,7 @@ visplot_graph ="""
         var chart = new google.visualization.LineChart(document.getElementById('chart_%s'));
         chart.draw(data, options);
 """
-#PATH_DATA = "/home/olivier/Bureau/ob92/simu/liquid/test"
+
 PATH_DATA = cliquid.PATH_DATA
 def makeHtml(content):
     fn = os.path.join(PATH_DATA,'result.html')
@@ -55,8 +55,7 @@ def makeHtml(content):
 
 def makeGraph(title,arr,unite):
     return (visplot_graph % (arr,title,unite,title))
-
-        
+       
 def makeVis(prefix):
 
     fils = []

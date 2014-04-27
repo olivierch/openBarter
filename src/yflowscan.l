@@ -63,7 +63,7 @@ static int yflow_flex_fatal(const char *msg);
 %%
 
 void
-yflow_yyerror(const char *message)
+yflow_yyerror(Tflow **resultat, const char *message)
 {
 	if (*yflow_yytext == YY_END_OF_BUFFER_CHAR)
 	{

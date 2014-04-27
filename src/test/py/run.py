@@ -34,7 +34,7 @@ import srvob_conf
 import molet
 import utilt
 import test_ti
-import test_volume
+
 import sys
 
 PARLEN=80
