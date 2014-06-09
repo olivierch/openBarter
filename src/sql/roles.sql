@@ -36,6 +36,7 @@ $$ LANGUAGE PLPGSQL;
 	             |\-> role_co_closed
 	             |
 	              \-> role_bo---->user_bo
+	                          \-->user_vacuum 
 	
 	access by clients can be disabled/enabled with a single command:
 		REVOKE role_co FROM role_client
@@ -62,7 +63,7 @@ SELECT _create_role('role_co_closed'); -- when market is closed
 GRANT role_com TO role_co_closed;
 
 SELECT _create_role('role_client');
-GRANT role_co_closed TO role_client;         -- maket phase 101
+GRANT role_co TO role_client;         -- maket phase 102
 
 -- role_com ---> role_bo----> user_bo
 
@@ -76,23 +77,27 @@ GRANT role_bo TO user_bo;
 -- BGW_OPENCLOSE and BGW_CONSUMESTACK
 ALTER ROLE user_bo WITH LOGIN CONNECTION LIMIT 2;
 
-
 --------------------------------------------------------------------------------
-select _create_role('test_clienta');
-ALTER ROLE test_clienta WITH login;
-GRANT role_client TO test_clienta;
 
-select _create_role('test_clientb');
-ALTER ROLE test_clientb WITH login;
-GRANT role_client TO test_clientb;
+CREATE FUNCTION create_client(_role text) RETURNS int AS $$
+BEGIN
+	BEGIN 
+		EXECUTE 'CREATE ROLE ' || _role; 
+	EXCEPTION WHEN duplicate_object THEN
+		RETURN 0;	
+	END;
+	EXECUTE 'ALTER ROLE ' || _role || ' NOSUPERUSER NOCREATEDB NOCREATEROLE INHERIT NOREPLICATION';
+	EXECUTE 'ALTER ROLE  ' || _role || ' WITH LOGIN';
+	EXECUTE 'GRANT role_client TO ' || _role;	
+	RETURN 1;
+END; 
+$$ LANGUAGE PLPGSQL;
+--------------------------------------------------------------------------------
 
-select _create_role('test_clientc');
-ALTER ROLE test_clientc WITH login;
-GRANT role_client TO test_clientc;
-
-select _create_role('test_clientd');
-ALTER ROLE test_clientd WITH login;
-GRANT role_client TO test_clientd;
+select create_client('test_clienta');
+select create_client('test_clientb');
+select create_client('test_clientc');
+select create_client('test_clientd');
 -- COMMIT;
 
 

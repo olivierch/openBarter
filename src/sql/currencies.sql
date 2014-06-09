@@ -3,8 +3,9 @@ CREATE TABLE townauth (
 );
 GRANT SELECT ON townauth TO role_com;
 
+
 COPY townauth (name) FROM stdin;
-google.com
+openbarter.org
 \.
 
 

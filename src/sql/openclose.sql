@@ -13,7 +13,9 @@ They are just special operations waiting until the end of the current gphase.
 */
 --------------------------------------------------------------------------------
 INSERT INTO tvar(name,value) VALUES 
-    ('OC_CURRENT_PHASE',101);  -- phase of the market when it's model is settled
+    ('OC_CURRENT_PHASE',102),  -- phase of the market when it's model is settled
+    ('OC_BGW_CONSUMESTACK_ACTIVE',1),
+    ('OC_BGW_OPENCLOSE_ACTIVE',0);
 
 CREATE TABLE tmsgdaysbefore(LIKE tmsg);
 GRANT SELECT ON tmsgdaysbefore TO role_com;
@@ -53,6 +55,12 @@ DECLARE
 
 BEGIN
 
+    IF(fgetvar('OC_BGW_OPENCLOSE_ACTIVE')=0) THEN
+        _dowait := 60000; 
+        -- waits one minute before testing again
+        RETURN _dowait;
+    END IF;
+
     _phase := fgetvar('OC_CURRENT_PHASE');
 
     CASE _phase
@@ -73,7 +81,15 @@ BEGIN
 
             PERFORM foc_next(1,'tmsg archived');
 
-        WHEN 1 THEN -- waiting for opening
+        WHEN 1 THEN -- asking for VACUUM FULL execution
+            _dowait := 60000;  -- 1 minute
+            -- vacuum.bash should be called
+            
+        WHEN 2 THEN -- VACUUM FULL execution
+            _dowait := 60000;  -- 1 minute
+
+        WHEN 3 THEN -- waiting for opening
+            -- vacuum.bash is finished
 
             IF(foc_in_gphase(_phase)) THEN
                 _dowait := 60000; -- 1 minute
@@ -167,12 +183,8 @@ BEGIN
 
             PERFORM foc_next(203,'tables torder,tsack,tmvt,towner are truncated');
 
-        WHEN 203 THEN -- asking for VACUUM FULL execution
 
-            _dowait := -100; 
-            PERFORM foc_next(204,'VACUUM FULL is lauched');
-
-        WHEN 204 THEN -- waiting till the end of the day 
+        WHEN 203 THEN -- waiting till the end of the day 
 
             IF(foc_in_gphase(_phase)) THEN
                 _dowait := 60000; -- 1 minute
@@ -193,7 +205,85 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER  set search_path = market,public;
 GRANT EXECUTE ON FUNCTION  openclose() TO role_bo;
+-------------------------------------------------------------------------------
+CREATE FUNCTION fstart_phases(_start int) RETURNS text AS $$
+/* */
+DECLARE
+    _txt    text;
+    _phase  int;
+BEGIN
+    _phase := fgetvar('OC_CURRENT_PHASE');
+    IF( _start = 1 ) THEN   
 
+        IF( fgetconst('DEBUG')!= 0) THEN
+            RAISE EXCEPTION 'Cannot be started while DEBUG=True';
+        END IF;
+ 
+        IF(fgetconst('QUAPROVUSR')= 0) THEN
+            RAISE EXCEPTION 'Cannot be started while QUAPROVUSR=0';
+        END IF; 
+
+        IF(fgetconst('OWNUSR')= 0) THEN
+            RAISE EXCEPTION 'Cannot be started while OWNUSR=0';
+        END IF;
+
+        IF(fgetvar('OC_BGW_OPENCLOSE_ACTIVE')!=0) THEN
+            RETURN 'Already started OC_BGW_OPENCLOSE_ACTIVE=true';
+        END IF;
+
+        UPDATE tvar set VALUE=1 WHERE name = 'OC_BGW_OPENCLOSE_ACTIVE';
+        _txt := 'Started - ' || fget_settings();
+    ELSIF (_start = -1 ) THEN
+
+
+        IF(fgetvar('OC_BGW_OPENCLOSE_ACTIVE')=0) THEN
+            RETURN 'Already stopped OC_BGW_OPENCLOSE_ACTIVE=false';
+        END IF;
+
+        UPDATE tvar set VALUE=0 WHERE name = 'OC_BGW_OPENCLOSE_ACTIVE';
+        _txt := 'Stopped - ' || fget_settings();
+    ELSE
+        _txt := fget_settings();   
+    END IF;
+
+    RETURN _txt;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER  set search_path = market,public;
+-------------------------------------------------------------------------------
+CREATE FUNCTION fget_settings() RETURNS text AS $$
+/* */
+DECLARE
+    _txt    text;
+BEGIN
+    _txt := 'OC_CURRENT_PHASE=' || fgetvar('OC_CURRENT_PHASE') || ' -  QUAPROVUSR=' || fgetconst('QUAPROVUSR') || ' - OWNUSR=' || fgetconst('OWNUSR') || ' - OC_BGW_OPENCLOSE_ACTIVE=' || fgetvar('OC_BGW_OPENCLOSE_ACTIVE') || ' - OC_BGW_CONSUMESTACK_ACTIVE=' || fgetvar('OC_BGW_CONSUMESTACK_ACTIVE') || ' - DEBUG=' || fgetconst('DEBUG');
+    RETURN _txt;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER  set search_path = market,public;
+-------------------------------------------------------------------------------
+CREATE FUNCTION fset_debug(_debug boolean) RETURNS text AS $$
+/* */
+DECLARE
+    _txt    text;
+BEGIN
+
+    IF(fgetvar('OC_BGW_OPENCLOSE_ACTIVE')!=0) THEN
+        RAISE EXCEPTION 'select start_phases(-1) must be called first';
+    END IF;
+    
+    IF(_debug) THEN
+        UPDATE tconst set VALUE=0 WHERE name in ('QUAPROVUSR','OWNUSR');
+        UPDATE tconst set VALUE=1 WHERE name = 'DEBUG';
+        UPDATE tvar   set VALUE=1 WHERE name = 'OC_BGW_CONSUMESTACK_ACTIVE';   
+        _txt := 'Test conditions set. ' || fget_settings();
+    ELSE
+        UPDATE tconst set VALUE=1 WHERE name in ('QUAPROVUSR','OWNUSR');
+        UPDATE tconst set VALUE=0 WHERE name = 'DEBUG';
+        UPDATE tvar   set VALUE=1 WHERE name = 'OC_BGW_CONSUMESTACK_ACTIVE';   
+        _txt := 'Test conditions reset.' || fget_settings();
+    END IF;
+    RETURN _txt;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER  set search_path = market,public;
 -------------------------------------------------------------------------------
 CREATE FUNCTION foc_next(_phase int,_msg text) RETURNS void AS $$
 BEGIN
@@ -227,6 +317,36 @@ BEGIN
 END; 
 $$ LANGUAGE PLPGSQL SECURITY DEFINER  set search_path = market,public;
 GRANT EXECUTE ON FUNCTION  foc_clean_outdated_orders() TO role_bo;
+
+--------------------------------------------------------------------------------
+/* used by vacuum.bash that 
+while foc_start_vacuum(true) != 2
+    wait
+VACUUM FULL
+foc_start_vacuum(false)
+*/
+
+CREATE FUNCTION foc_start_vacuum(_start boolean) RETURNS int AS $$
+DECLARE
+    _ret  int := 0;
+    _phase int;
+BEGIN
+    _phase := fgetvar('OC_CURRENT_PHASE');
+    IF ( _start) THEN
+        IF (_phase = 1) THEN
+            PERFORM foc_next(2,'VACUUM started');
+            _ret := 2;
+        END IF;
+    ELSE
+        IF (_phase = 2) THEN
+            PERFORM foc_next(3,'VACUUM performed');
+        END IF;
+    END IF;
+
+    RETURN _ret; 
+END; 
+$$ LANGUAGE PLPGSQL set search_path = market,public;
+
 
 --------------------------------------------------------------------------------
 CREATE VIEW vmsg3 AS WITH t AS (SELECT * from tmsg WHERE usr = session_user

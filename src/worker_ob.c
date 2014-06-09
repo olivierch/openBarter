@@ -135,6 +135,18 @@ static bool _test_market_installed() {
 		return false;
 	return true;
 }
+/*
+static bool _test_bgw_active() {
+	int				ret;
+	StringInfoData 	buf;	
+
+	initStringInfo(&buf);
+	appendStringInfo(&buf, "select value from market.tvar where name = 'OC_BGW_ACTIVE'");	
+	ret = _spi_exec_select_ret_int(buf);
+	if(ret == 0)
+		return false;
+	return true;
+} */
 
 /*
  */
@@ -162,32 +174,11 @@ _worker_ob_installed()
 	pgstat_report_activity(STATE_IDLE, NULL);
 	return installed;
 }
-/*
-static void _openclose_vacuum() {
-	// called by openclose bg_worker 
-	StringInfoData 	buf;
-	int				ret;
 
-	initStringInfo(&buf);
-	appendStringInfo(&buf,"VACUUM FULL");
-	pgstat_report_activity(STATE_RUNNING, buf.data);
-	elog(LOG, "vacuum full starting");
-
-
-	ret = SPI_exec(buf.data, 0); */
-	/* fails with an exception:
+	/* "VACUUM FULL" fails with an exception:
 	ERROR:  VACUUM cannot be executed from a function or multi-command string
 	CONTEXT:  SQL statement "VACUUM FULL"
 	*/
-	/*
-	pfree(buf.data);
-	elog(LOG, "vacuum full stopped an returned  %d",ret);
-
-	if (ret != SPI_OK_UTILITY) // SPI_OK_UPDATE_RETURNING,SPI_OK_SELECT
-	// TODO CODE DE RETOUR?????
-		elog(FATAL, "cannot execute VACUUM FULL: error code %d",ret);
-	return;
-} */
 
 
 static void
@@ -230,6 +221,7 @@ worker_ob_main(Datum main_arg)
 		int			ret;
 		int			rc;
 		int 		_worker_ob_naptime; // = worker_ob_naptime * 1000L;
+		//bool 		bgw_active;
 
 		if(installed) // && !table->dowait)
 			_worker_ob_naptime = table->dowait;
@@ -285,40 +277,44 @@ worker_ob_main(Datum main_arg)
 		StartTransactionCommand();
 		SPI_connect();
 		PushActiveSnapshot(GetTransactionSnapshot());
-		pgstat_report_activity(STATE_RUNNING, buf.data);
+		//bgw_active = _test_bgw_active();
 
-		/* We can now execute queries via SPI */
-		ret = SPI_execute(buf.data, false, 0);
+		if (true) { // bgw_active) {
+			pgstat_report_activity(STATE_RUNNING, buf.data);
 
-		if (ret != SPI_OK_SELECT) // SPI_OK_UPDATE_RETURNING)
-			elog(FATAL, "cannot execute market.%s(): error code %d",
-				 table->function_name, ret);
+			/* We can now execute queries via SPI */
+			ret = SPI_execute(buf.data, false, 0);
 
-		if (SPI_processed != 1) // number of tuple returned
-				elog(FATAL, "market.%s() returned %d tuples instead of one",
-				 table->function_name, SPI_processed);
-			
-		{
-			bool		isnull;
-			int32		val;
+			if (ret != SPI_OK_SELECT) // SPI_OK_UPDATE_RETURNING)
+				elog(FATAL, "cannot execute market.%s(): error code %d",
+					 table->function_name, ret);
 
-			val = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[0],
-											  SPI_tuptable->tupdesc,
-											  1, &isnull));
-			
-			if (isnull) 
-				elog(FATAL, "market.%s() returned null",table->function_name);
+			if (SPI_processed != 1) // number of tuple returned
+					elog(FATAL, "market.%s() returned %d tuples instead of one",
+					 table->function_name, SPI_processed);
+				
+			{
+				bool		isnull;
+				int32		val;
 
-			table->dowait = 0;
-			if (val >=0) 
-				table->dowait = val;
-			else {
-				if ((index == BGW_OPENCLOSE) && (val == -100))
-					; // _openclose_vacuum();
-				else 
-					elog(FATAL, "market.%s() returned illegal <0",table->function_name);
+				val = DatumGetInt32(SPI_getbinval(SPI_tuptable->vals[0],
+												  SPI_tuptable->tupdesc,
+												  1, &isnull));
+				
+				if (isnull) 
+					elog(FATAL, "market.%s() returned null",table->function_name);
+
+				table->dowait = 0;
+				if (val >=0) 
+					table->dowait = val;
+				else {
+					if ((index == BGW_OPENCLOSE) && (val == -100))
+						; // _openclose_vacuum();
+					else 
+						elog(FATAL, "market.%s() returned illegal <0",table->function_name);
+				}
+
 			}
-
 		}
 
 		/*

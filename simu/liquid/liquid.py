@@ -52,11 +52,13 @@ logging.basicConfig(level=logging.DEBUG,
 """
 import cliquid
 import gen
+
 def simu(options):
 	if(options.generate):
 		try:
-			conf = getattr(cliquid,options.generate)
-			gen.generate(conf)
+			for _conf in ('Basic10','Basic100','Basic1000'):
+				conf = getattr(cliquid,_conf)
+				gen.generate(conf)
 		except ImportError,e:
 			print "this configuration is not defined"
 		return

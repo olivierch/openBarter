@@ -64,6 +64,9 @@ BEGIN
 		RAISE EXCEPTION 'Primitive cannot be pushed due to error %: %',_r.code,_r.reason;
 	END IF; 
 
+	-- acquires a lock on STACK_TOP, a UNIQUE index is set on name required for the lock
+	SELECT value INTO _tid FROM tvar WHERE name = 'STACK_TOP' FOR UPDATE;
+
     INSERT INTO tstack(usr,kind,jso,submitted)
     	VALUES (session_user,_kind,_jso,statement_timestamp())
     RETURNING id into _tid;
@@ -100,7 +103,15 @@ DECLARE
 	_txt		text;
 	_detail		text;
 	_ctx 		text;
+	_dowait	    int;
 BEGIN
+
+    IF(fgetvar('OC_BGW_CONSUMESTACK_ACTIVE')=0) THEN
+        _dowait := 60000; 
+        -- waits one minute before testing again
+        RETURN _dowait;
+    END IF;
+
 	DELETE FROM tstack 
 		WHERE id IN (SELECT id FROM tstack ORDER BY id ASC LIMIT 1) 
 	RETURNING * INTO _s;
@@ -127,7 +138,7 @@ EXCEPTION WHEN OTHERS THEN
 			_ctx = PG_EXCEPTION_CONTEXT;
 
 		RAISE WARNING 'market.consumestack() failed:''%'' ''%'' ''%''',_txt,_detail,_ctx;
-		RAISE WARNING 'for fprocessprimitive(%)',_s;
+		RAISE WARNING 'while fprocessprimitive(%)',_s;
 		
 	RETURN 0;
 

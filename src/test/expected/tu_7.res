@@ -6,6 +6,8 @@ select  * from market.tvar where name != 'OC_CURRENT_OPENED' order by name;
       name     value
 +---------+---------
  INSTALLED         1
+OC_BGW_CONSUMESTACK_ACTIVE         1
+OC_BGW_OPENCLOSE_ACTIVE         0
 OC_CURRENT_PHASE       102
 STACK_EXECUTED         0
  STACK_TOP         0

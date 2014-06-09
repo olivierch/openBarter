@@ -443,6 +443,16 @@ END;
 $$ LANGUAGE PLPGSQL;
 --------------------------------------------------------------------------------
 CREATE FUNCTION  fcheckquaprovusr(_r yj_error,_qua_prov dtext,_usr dtext) RETURNS yj_error AS $$
+/* check the form of quality's name
+when QUAPROVUSR: 
+
+	prefix@suffix 
+		the suffix is the user's name
+	prefix
+		is a currency
+else:
+	no check 
+*/
 DECLARE
 	_QUAPROVUSR boolean := fgetconst('QUAPROVUSR')=1;
 	_p int;
@@ -472,7 +482,7 @@ BEGIN
 	END IF;
 
 	_suffix := substring(_qua_prov FROM (_p+1));
-	_suffix := replace(_suffix,'.','_'); 	-- change . to _
+	-- _suffix := replace(_suffix,'.','_'); 	-- change . to _
 
 	-- it must be the username
 	IF ( _suffix!= _usr) THEN
@@ -481,12 +491,19 @@ BEGIN
 		RETURN _r;
 	END IF;
 
-	RETURN _r;
+	RETURN _r; -- _r unchanged
 END; 
 $$ LANGUAGE PLPGSQL;
 
 --------------------------------------------------------------------------------
 CREATE FUNCTION fchecknameowner(_r yj_error,_name dtext,_usr dtext) RETURNS yj_error AS $$
+/* check the form of owner's name
+when OWNUSR: 
+	prefix@suffix 
+		the suffix is the user's name, or a well know auth provider
+else:
+	no check 
+*/
 DECLARE
 	_p 			int;
 	_OWNUSR 	boolean := fgetconst('OWNUSR')=1;
@@ -507,9 +524,9 @@ BEGIN
 		RETURN _r; --well known auth provider
 	END IF;
 	-- change . to _
-	_suffix := replace(_suffix,'.','_');
+	-- _suffix := replace(_suffix,'.','_');
 	IF ( _suffix= _usr) THEN
-		RETURN _r; -- owners name suffixed by users name
+		RETURN _r; -- owners name suffixed by users name, _r unchanged
 	END IF;
 	_r.code := -21;
 	_r.reason := 'if the owner name is not prefixed by a well know provider, it must be prefixed by user name';			

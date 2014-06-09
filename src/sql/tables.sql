@@ -36,7 +36,8 @@ INSERT INTO tconst (name,value) VALUES
 							-- 1 prod
 	('OWNUSR',0),			-- when true, the owner is suffixed by user name
 							-- 1 prod
-	('DEBUG',1);			-- 
+	('DEBUG',1);
+	-- 
 
 
 --------------------------------------------------------------------------------
@@ -191,6 +192,41 @@ GRANT SELECT ON tmsg_id_seq TO role_com;
 SELECT fifo_init('tmsg');
 CREATE VIEW vmsg AS select * from tmsg WHERE usr = session_user;
 GRANT SELECT ON vmsg TO role_com;
+
+
+CREATE FUNCTION fmtmvt(_j json) RETURNS text AS $$
+DECLARE
+	_r	 text;
+BEGIN
+	_r := json_extract_path_text(_j,'own') || ' (' || json_extract_path_text(_j,'qtt') || ' ' || json_extract_path_text(_j,'nat') || ')';
+	RETURN _r;
+END; 
+$$ LANGUAGE PLPGSQL SECURITY DEFINER;
+
+-- DROP VIEW IF EXISTS vmsg_mvt;
+CREATE VIEW vmsg_mvt AS SELECT 
+json_extract_path_text(jso,'cycle')::int as grp,
+json_extract_path_text(jso,'mvt_from','id')::int as mvt_from_id,
+json_extract_path_text(jso,'stock','own') as own,
+fmtmvt(json_extract_path(jso,'mvt_from')) as gives,
+fmtmvt(json_extract_path(jso,'mvt_to')) as receives,
+id as msg_id,
+json_extract_path_text(jso,'orde','id')::int as order_id,
+json_extract_path_text(jso,'stock','id')::int as stock_id,
+json_extract_path_text(jso,'orig')::int as orig_id,
+-- json_extract_path_text(jso,'stock','qtt')::bigint as stock_remain
+json_extract_path_text(jso,'stock','qtt') || ' ' || json_extract_path_text(jso,'mvt_from','nat') as stock_remains
+ from tmsg WHERE typ='exchange' and usr = session_user order by id;
+
+CREATE VIEW vmsg_resp AS SELECT 
+json_extract_path_text(jso,'id')::int as msg_id,
+created::date as date,
+CASE WHEN (json_extract_path_text(jso,'error','reason') IS NULL)THEN '' ELSE json_extract_path_text(jso,'error','reason') END as error,
+json_extract_path_text(jso,'primitive','owner') as owner,
+json_extract_path_text(jso,'primitive','kind') as primitive,
+json_extract_path_text(jso,'result','id') as prim_id,
+json_extract_path_text(jso,'value') as value
+ from tmsg WHERE typ='response' and usr = session_user order by id;
 
 --------------------------------------------------------------------------------
 CREATE TYPE yj_error AS (

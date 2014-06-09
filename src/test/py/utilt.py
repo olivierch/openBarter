@@ -175,6 +175,7 @@ def wait_for_true(conf,delai,sql,msg=None):
             with molet.DbCursor(conn) as cur:
                 cur.execute(sql)
                 r = cur.fetchone()
+                # print r
                 if r[0] == True:
                     break
         finally:

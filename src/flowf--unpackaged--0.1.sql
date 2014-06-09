@@ -1,3 +1,3 @@
-/* contrib/flow/flow--unpackaged--1.1.sql */
+/* contrib/flow/flow--unpackaged--0.1.sql */
 
 

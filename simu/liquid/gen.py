@@ -5,6 +5,7 @@ import os
 #import cliquid_basic as conf
 import random
 import distrib
+import molet
 """
 pour modifier la conf, modifier l'import
 
@@ -17,11 +18,13 @@ def generate(config):
     '''
     conf = config()
     # towner
+    molet.mkdir(cliquid.PATH_DATA,ignoreWarning=True)
     fn = os.path.join(cliquid.PATH_DATA,'towner.sql')
-    with open(fn,'w') as f:
-        for i in range(cliquid.MAX_TOWNER):
-            j = i+1
-            f.write('%i\town%i\t2013-02-10 16:24:01.651649\t\N\n' % (j,j))
+    if(not os.path.exists(fn)):
+        with open(fn,'w') as f:
+            for i in range(cliquid.MAX_TOWNER):
+                j = i+1
+                f.write('%i\town%i\t2013-02-10 16:24:01.651649\t\N\n' % (j,j))
       
     # torder     
     fn = os.path.join(cliquid.PATH_DATA,'torder_'+conf.CONF_NAME+'.sql')
@@ -32,9 +35,9 @@ def generate(config):
             qlt_prov,qlt_requ = conf.coupleQlt(conf.distribQlt,conf.MAX_QLT)
             r = random.random()+0.5
             qtt_requ = int(cliquid.QTT_PROV * r) # proba(QTT_PROV/qtt_requ < 1) = 0.5
-            line = "%s\t(1,%i,%i,%i,%i,qlt%i,%i,qlt%i,%i)\t2013-02-10 16:24:01.651649\t\N\n" 
-            f.write(line % (cliquid.DB_USER,j,w,j,qtt_requ,qlt_requ,cliquid.QTT_PROV,qlt_prov,cliquid.QTT_PROV))   
-
+            #line = "%s\t(1,%i,%i,%i,%i,qlt%i,%i,qlt%i,%i)\t2013-02-10 16:24:01.651649\t\N\n"    
+            line = "%s\t(2,%i,%i,%i,%i,qlt%i,%i,qlt%i,%i,\"(0,0),(0,0)\",\"(0,0),(0,0)\",0,\"(1.5707963267949,3.14159265358979),(-1.5707963267949,-3.14159265358979)\")\t2014-04-29 19:40:44.382527\t2014-04-29 19:40:44.448502\n"
+            f.write(line % (cliquid.DB_USER,j,w,j,qtt_requ,qlt_requ,cliquid.QTT_PROV,qlt_prov,cliquid.QTT_PROV))
     # tstack
     fn = os.path.join(cliquid.PATH_DATA,'tstack_'+conf.CONF_NAME+'.sql')
     with open(fn,'w') as f:

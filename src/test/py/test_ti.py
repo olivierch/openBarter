@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 '''
 Packages required
-apt-get install python-psycopg2
+ apt-get install python-psycopg2
  sudo easy_install simplejson
-
 '''
 import sys,os,time,logging
 import psycopg2

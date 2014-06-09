@@ -4,12 +4,12 @@ Results presented here are produced by version 7.0.1 of openBarter.
 They were obtained to observe variations of foor indicators for different size of the order book:
 the mean execution time of an order (delay), 
 the number of movements per cycle (nbcycle),
-fluidity of the market is a measurement of it's capacity to drain values out of the order book (fluidity),
+fluidity of the market as a measurement of it's capacity to drain values out of the order book (fluidity),
 the ratio between omega produced by movements and minimum omega required by the corresponding order (gain).
 
-The order book is filled with barter limit orders where the ratio qtt_prov/qtt_requ is chosen randomly using a continuous uniform distribution between 0.5 and 1.5, and where the quantity provided (qtt_prov) is 10 000. The order book is filled by producing first a big book with the desired statistic, then extracting the beginning of the book to obtain the chosen size. For this given size, results presented are the means of values obtained by submitting 1000 barter limit orders. This set of order submitted is the same for all size.
+The order book is filled with barter limit orders where the ratio qtt_prov/qtt_requ is chosen randomly using a continuous uniform distribution between 0.5 and 1.5, and where the quantity provided (qtt_prov) is 10 000. The order book is filled by producing first a big book with the desired statistic, then extracting the beginning of the book to obtain the chosen size. For this given size, results presented are the means of values obtained by submitting 1000 barter limit orders. This set of order submitted is the same for all sizes.
 
-The fluidity of the market is defined as the ratio between the output flow of values produced by movements and the input flow of values offered by orders submitted to the order book. Flows of value are obtained by summing quantities of values for all qualities. The input flow is 10 000 * 1000 orders, and the output flow is the sum of quantities moved.  
+The fluidity of the market is defined as the ratio between the output flow of values produced by movements and the input flow of values offered by orders submitted to the order book. Flows of value are obtained by summing quantities of values for all qualities. Consequently, the input flow is 10 000 * 1000 orders, and the output flow is the sum of quantities moved.  
 
 result_1.html
 
